@@ -1,0 +1,15 @@
+﻿<Properties>
+  <MonoDevelop.Ide.Workspace ActiveConfiguration="Debug" />
+  <MonoDevelop.Ide.Workbench ActiveDocument="QuickDc/DcEngine.cs">
+    <Files>
+      <File FileName="QuickDc/Managers/SearchManager.cs" Line="83" Column="24" />
+      <File FileName="QuickDc/WebServer/DCHTTPConnector.cs" Line="202" Column="61" />
+      <File FileName="QuickDc/Connections/TransferConnection.cs" Line="50" Column="10" />
+      <File FileName="QuickDc/DcEngine.cs" Line="1" Column="1" />
+    </Files>
+  </MonoDevelop.Ide.Workbench>
+  <MonoDevelop.Ide.DebuggingService.Breakpoints>
+    <BreakpointStore />
+  </MonoDevelop.Ide.DebuggingService.Breakpoints>
+  <MonoDevelop.Ide.DebuggingService.PinnedWatches />
+</Properties>
