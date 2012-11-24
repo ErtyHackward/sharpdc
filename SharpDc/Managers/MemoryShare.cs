@@ -3,6 +3,8 @@
 //  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012
 //  licensed under the LGPL
 //  -------------------------------------------------------------
+
+using System;
 using System.Collections.Generic;
 using System.IO;
 using SharpDc.Interfaces;
@@ -36,6 +38,14 @@ namespace SharpDc.Managers
             get { return _totalFiles; }
         }
 
+        public event System.EventHandler TotalSharedChanged;
+
+        protected virtual void OnTotalSharedChanged()
+        {
+            var handler = TotalSharedChanged;
+            if (handler != null) handler(this, EventArgs.Empty);
+        }
+
         public void AddFile(ContentItem item)
         {
             lock (_tthIndex)
@@ -44,6 +54,7 @@ namespace SharpDc.Managers
                 _totalShared += item.Magnet.Size;
                 _totalFiles++;
             }
+            OnTotalSharedChanged();
         }
 
         /// <summary>
@@ -104,6 +115,8 @@ namespace SharpDc.Managers
         /// </summary>
         public void Reload()
         {
+            var shared = _totalShared;
+
             lock (_tthIndex)
             {
                 var list = new List<string>(_tthIndex.Keys);
@@ -113,9 +126,16 @@ namespace SharpDc.Managers
                     var item = _tthIndex[tth];
 
                     if (!File.Exists(item.SystemPath))
+                    {
                         _tthIndex.Remove(tth);
+                        _totalShared -= item.Magnet.Size;
+                    }
                 }
             }
+
+            if (_totalShared != shared)
+                OnTotalSharedChanged();
+
         }
 
         /// <summary>
@@ -129,6 +149,10 @@ namespace SharpDc.Managers
                 _totalFiles = 0;
                 _totalShared = 0;
             }
+
+            OnTotalSharedChanged();
         }
+
+        
     }
 }

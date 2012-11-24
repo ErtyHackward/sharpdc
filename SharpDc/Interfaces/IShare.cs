@@ -3,6 +3,8 @@
 //  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012
 //  licensed under the LGPL
 //  -------------------------------------------------------------
+
+using System;
 using System.Collections.Generic;
 using SharpDc.Managers;
 
@@ -10,6 +12,8 @@ namespace SharpDc.Interfaces
 {
     public interface IShare
     {
+        event EventHandler TotalSharedChanged;
+
         /// <summary>
         /// Gets total amount of bytes in the share
         /// </summary>

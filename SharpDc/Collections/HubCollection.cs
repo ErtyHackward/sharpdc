@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using SharpDc.Connections;
 using SharpDc.Events;
+using SharpDc.Structs;
 
 namespace SharpDc.Collections
 {

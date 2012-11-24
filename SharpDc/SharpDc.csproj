@@ -46,7 +46,6 @@
     <Compile Include="Connections\TcpConnection.cs" />
     <Compile Include="Connections\TransferConnection.cs" />
     <Compile Include="Connections\UdpConnection.cs" />
-    <Compile Include="Connections\UploadItem.cs" />
     <Compile Include="DcEngine.cs" />
     <Compile Include="EngineSettings.cs" />
     <Compile Include="EngineSettingType.cs" />
@@ -55,8 +54,12 @@
     <Compile Include="Events\DownloadItemNeededEventArgs.cs" />
     <Compile Include="Events\EngineSettingsEventArgs.cs" />
     <Compile Include="Events\HubsChangedEventArgs.cs" />
+    <Compile Include="Events\IncomingConnectionRequestEventArgs.cs" />
     <Compile Include="Events\MessageEventArgs.cs" />
+    <Compile Include="Events\OutgoingConnectionRequestEventArgs.cs" />
+    <Compile Include="Events\PasswordRequiredEventArgs.cs" />
     <Compile Include="Events\ProtocolEventArgs.cs" />
+    <Compile Include="Events\SearchRequestEventArgs.cs" />
     <Compile Include="Events\SegmentEventArgs.cs" />
     <Compile Include="Events\SourceEventArgs.cs" />
     <Compile Include="Events\TransferAuthorizationEventArgs.cs" />
@@ -92,6 +95,7 @@
     <Compile Include="Messages\MaxedOutMessage.cs" />
     <Compile Include="Messages\MyINFOMessage.cs" />
     <Compile Include="Messages\MyNickMessage.cs" />
+    <Compile Include="Messages\MyPassMessage.cs" />
     <Compile Include="Messages\SearchMessage.cs" />
     <Compile Include="Messages\SupportsMessage.cs" />
     <Compile Include="Messages\ValidateNickMessage.cs" />
@@ -103,11 +107,13 @@
     <Compile Include="Structs\DcStream.cs" />
     <Compile Include="Structs\DownloadItem.cs" />
     <Compile Include="Structs\DownloadItemsGroup.cs" />
+    <Compile Include="Structs\HubSettings.cs" />
     <Compile Include="Structs\Magnet.cs" />
     <Compile Include="Structs\SegmentInfo.cs" />
     <Compile Include="Structs\Source.cs" />
     <Compile Include="Structs\SpeedAverage.cs" />
     <Compile Include="Structs\TagInfo.cs" />
+    <Compile Include="Structs\UploadItem.cs" />
     <Compile Include="Structs\UserInfo.cs" />
     <Compile Include="Utils.cs" />
     <Compile Include="WebServer\Request.cs" />

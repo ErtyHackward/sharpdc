@@ -1,4 +1,4 @@
-﻿//  -------------------------------------------------------------
+//  -------------------------------------------------------------
 //  SharpDc project 
 //  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012
 //  licensed under the LGPL
@@ -11,7 +11,7 @@ using System.Linq;
 using SharpDc.Logging;
 using SharpDc.Managers;
 
-namespace SharpDc.Connections
+namespace SharpDc.Structs
 {
     public class UploadItem : IDisposable
     {

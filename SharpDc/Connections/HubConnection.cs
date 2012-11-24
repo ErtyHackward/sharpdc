@@ -19,6 +19,7 @@ namespace SharpDc.Connections
         private string _dataBuffer;
         private UserInfo _currentUser;
         private bool _active;
+        private HubSettings _settings;
 
         /// <summary>
         /// Contains public information of this client
@@ -34,8 +35,12 @@ namespace SharpDc.Connections
             set { _currentUser = value; }
         }
 
-        public HubSettings Settings { get; set; }
-        
+        public HubSettings Settings
+        {
+            get { return _settings; }
+            set { _settings = value; }
+        }
+
         /// <summary>
         /// Indicates if this hub is connected and able to work
         /// </summary>
@@ -108,6 +113,17 @@ namespace SharpDc.Connections
         private void OnOutgoingConnectionRequest(OutgoingConnectionRequestEventArgs e)
         {
             var handler = OutgoingConnectionRequest;
+            if (handler != null) handler(this, e);
+        }
+
+        /// <summary>
+        /// Occurs when no password is set and it is requested by the hub
+        /// </summary>
+        public event EventHandler<PasswordRequiredEventArgs> PasswordRequired;
+
+        private void OnPasswordRequired(PasswordRequiredEventArgs e)
+        {
+            var handler = PasswordRequired;
             if (handler != null) handler(this, e);
         }
 
@@ -213,6 +229,11 @@ namespace SharpDc.Connections
 
                                 }
                                 break;
+                            case "$GetPass":
+                                {
+                                    OnMessageGetPass();
+                                }
+                                break;
                         }
                     }
                     catch (Exception x)
@@ -228,6 +249,26 @@ namespace SharpDc.Connections
             }
 
 
+        }
+
+        private void OnMessageGetPass()
+        {
+            if (string.IsNullOrEmpty(_settings.Password))
+            {
+                var ea = new PasswordRequiredEventArgs();
+                OnPasswordRequired(ea);
+                _settings.Password = ea.Password;
+            }
+
+            if (!string.IsNullOrEmpty(_settings.Password))
+            {
+                SendAsync(new MyPassMessage { Password = _settings.Password }.Raw);
+                Logger.Info("Password sent...");
+            }
+            else
+            {
+                Logger.Error("No password is supplied. Unable to log in.");
+            }
         }
 
         private void OnMessageSearch(ref SearchMessage searchMessage)
@@ -266,7 +307,8 @@ namespace SharpDc.Connections
                 Nickname = _currentUser.Nickname,
                 Tag = string.Format("<{0},M:{1},H:{2},S:{3}{4}>", TagInfo.Version, Settings.PassiveMode ? "P":"A", "0/0/0", "100", string.IsNullOrEmpty(TagInfo.City)?"":",C:"+TagInfo.City ), 
                 Connection=TagInfo.Connection, 
-                Flag = TagInfo.Flag
+                Flag = TagInfo.Flag,
+                Share = _currentUser.Share
             };
 
             SendMessage(new VersionMessage().Raw);
@@ -280,43 +322,5 @@ namespace SharpDc.Connections
                 Active = true;
             }
         }
-    }
-
-    public class OutgoingConnectionRequestEventArgs : EventArgs
-    {
-        public ConnectToMeMessage Message { get; set; }
-    }
-
-    public class IncomingConnectionRequestEventArgs : EventArgs
-    {
-        public RevConnectToMeMessage Message { get; set; }
-
-        /// <summary>
-        /// Set this field to our local address, if null or empty connection will not be established
-        /// </summary>
-        public string LocalAddress { get; set; }
-    }
-
-    public class SearchRequestEventArgs : EventArgs
-    {
-        public SearchMessage Message { get; set; }
-    }
-
-    public struct HubSettings
-    {
-        public string HubAddress;
-        public bool GetUsersList;
-        public string HubName;
-        public string Nickname;
-
-        /// <summary>
-        /// Mode of the hub
-        /// </summary>
-        public bool PassiveMode;
-
-        /// <summary>
-        /// Address and port to connect other users to
-        /// </summary>
-        public string LocalEndPoint;
     }
 }

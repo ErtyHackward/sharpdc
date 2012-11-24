@@ -135,9 +135,22 @@ namespace SharpDc
         public IShare Share
         {
             get { return _share; }
-            set { _share = value; }
-        }
+            set {
 
+                if (_share != null)
+                {
+                    _share.TotalSharedChanged -= ShareTotalSharedChanged;
+                }
+
+                _share = value;
+
+                if (_share != null)
+                {
+                    _share.TotalSharedChanged += ShareTotalSharedChanged;
+                }
+
+            }
+        }
         #endregion
 
         #region Events
@@ -714,6 +727,16 @@ namespace SharpDc
             {
                 Logger.Info("Engine deactivated");
                 OnActiveStatusChanged();
+            }
+        }
+
+        void ShareTotalSharedChanged(object sender, EventArgs e)
+        {
+            foreach (var hub in Hubs)
+            {
+                var userInfo = hub.CurrentUser;
+                userInfo.Share = _share.TotalShared;
+                hub.CurrentUser = userInfo;
             }
         }
 
