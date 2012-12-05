@@ -4,6 +4,7 @@
 //  licensed under the LGPL
 //  -------------------------------------------------------------
 using System;
+using System.ComponentModel;
 using System.Net.Sockets;
 using System.Text;
 using SharpDc.Events;
@@ -35,6 +36,11 @@ namespace SharpDc.Connections
         private readonly object _disposeSync = new object();
 
         private TransferDirection _direction;
+
+        /// <summary>
+        /// Indicates that this connection uses one slot
+        /// </summary>
+        public bool SlotUsed { get; private set; }
 
         public TransferDirection Direction
         {
@@ -137,6 +143,18 @@ namespace SharpDc.Connections
             var e = new TransferErrorEventArgs { ErrorType = errorType };
             OnError(e);
             return e.Handled;
+        }
+
+        /// <summary>
+        /// Occurs when transfer want to upload something to a user
+        /// Allows to cancel upload
+        /// </summary>
+        public event EventHandler<CancelEventArgs> SlotRequest;
+
+        protected virtual void OnSlotRequest(CancelEventArgs e)
+        {
+            var handler = SlotRequest;
+            if (handler != null) handler(this, e);
         }
 
         #endregion
@@ -426,6 +444,22 @@ namespace SharpDc.Connections
                     reqItem.Magnet = new Magnet { FileName = adcgetMessage.Request };
                 }
             }
+
+            if (!SlotUsed)
+            {
+                var ea = new CancelEventArgs();
+                OnSlotRequest(ea);
+
+                if (ea.Cancel)
+                {
+                    Logger.Info("Can't start upload to {0}, no slots available", Source);
+                    SendMessage(new MaxedOutMessage().Raw);
+                    return;
+                }
+
+                SlotUsed = true;
+            }
+
 
             if (UploadItem == null || UploadItem.Content.Magnet.TTH != reqItem.Magnet.TTH)
             {
