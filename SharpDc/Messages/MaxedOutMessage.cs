@@ -7,7 +7,6 @@ namespace SharpDc.Messages
 {
     public struct MaxedOutMessage : IStringMessage
     {
-
         public string Raw
         {
             get { return "$MaxedOut"; }

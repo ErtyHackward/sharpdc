@@ -38,7 +38,10 @@ namespace SharpDc.Connections
         public HubSettings Settings
         {
             get { return _settings; }
-            set { _settings = value; }
+            set { 
+                _settings = value;
+                _currentUser.Nickname = _settings.Nickname;
+            }
         }
 
         /// <summary>
@@ -131,7 +134,6 @@ namespace SharpDc.Connections
 
         public HubConnection(HubSettings settings) : base(settings.HubAddress){
             Settings = settings;
-            _currentUser.Nickname = settings.Nickname;
             ConnectionStatusChanged += HubConnectionConnectionStatusChanged;
         }
 

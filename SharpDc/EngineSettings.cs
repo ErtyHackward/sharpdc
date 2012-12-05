@@ -128,7 +128,7 @@ namespace SharpDc
         }
 
         /// <summary>
-        /// Limit for maximum upload threads (Slots)
+        /// Limit for maximum upload threads (Slots), 0 means unlimited
         /// </summary>
         public int MaxUploadThreads
         {

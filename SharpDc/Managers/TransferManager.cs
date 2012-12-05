@@ -127,6 +127,14 @@ namespace SharpDc.Managers
             }
         }
 
+        public int GetUsedSlotsCount()
+        {
+            lock (_synRoot)
+            {
+                return _connections.Count(t => t.SlotUsed);
+            }
+        }
+
         public void AddTransfer(TransferConnection transfer)
         {
             lock (_synRoot)
@@ -140,9 +148,48 @@ namespace SharpDc.Managers
             transfer.DownloadItemNeeded += TransferDownloadItemNeeded;
             transfer.Authorization += TransferAuthorizationHandler;
             transfer.Error += TransferError;
+            transfer.SlotRequest += TransferSlotRequest;
 
             OnTransferAdded(new TransferEventArgs { Transfer = transfer });
 
+        }
+
+        void TransferConnectionStatusChanged(object sender, ConnectionStatusEventArgs e)
+        {
+            if (e.Status == ConnectionStatus.Disconnected)
+            {
+                var transfer = (TransferConnection)sender;
+                lock (_synRoot)
+                {
+                    _connections.Remove(transfer);
+
+                    if (transfer.Direction == TransferDirection.Upload)
+                        _uploadThreadsCount--;
+                    if (transfer.Direction == TransferDirection.Download)
+                        _downloadThreadsCount--;
+                }
+
+                transfer.ConnectionStatusChanged -= TransferConnectionStatusChanged;
+                transfer.UploadItemNeeded -= TransferUploadItemNeeded;
+                transfer.DirectionChanged -= TransferDirectionChanged;
+                transfer.DownloadItemNeeded -= TransferDownloadItemNeeded;
+                transfer.Authorization -= TransferAuthorizationHandler;
+                transfer.Error -= TransferError;
+                transfer.SlotRequest -= TransferSlotRequest;
+
+                OnTransferRemoved(new TransferEventArgs { Transfer = transfer, Exception = e.Exception });
+            }
+        }
+
+        void TransferSlotRequest(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            if (_engine.Settings.MaxUploadThreads == 0)
+                return;
+
+            if (GetUsedSlotsCount() >= _engine.Settings.MaxUploadThreads)
+            {
+                e.Cancel = true;
+            }
         }
 
         void TransferUploadItemNeeded(object sender, UploadItemNeededEventArgs e)
@@ -239,31 +286,6 @@ namespace SharpDc.Managers
 
         }
 
-        void TransferConnectionStatusChanged(object sender, ConnectionStatusEventArgs e)
-        {
-            if (e.Status == ConnectionStatus.Disconnected)
-            {
-                var transfer = (TransferConnection) sender;
-                lock (_synRoot)
-                {
-                    _connections.Remove(transfer);
-
-                    if (transfer.Direction == TransferDirection.Upload)
-                        _uploadThreadsCount--;
-                    if (transfer.Direction == TransferDirection.Download)
-                        _downloadThreadsCount--;
-                }
-
-                transfer.UploadItemNeeded -= TransferUploadItemNeeded;
-                transfer.DirectionChanged -= TransferDirectionChanged;
-                transfer.DownloadItemNeeded -= TransferDownloadItemNeeded;
-                transfer.Authorization -= TransferAuthorizationHandler;
-                transfer.Error -= TransferError;
-                
-                OnTransferRemoved(new TransferEventArgs {Transfer = transfer, Exception = e.Exception});
-            }
-        }
-
         void TransferAuthorizationHandler(object sender, TransferAuthorizationEventArgs e)
         {
             var sw = Stopwatch.StartNew();
@@ -302,10 +324,7 @@ namespace SharpDc.Managers
                         Logger.Info("Disconnecting old transfer {0}", source);
                     }
                     swMsg.Stop();
-
-
-
-
+                    
                     var ea = new TransferManagerAuthorizationEventArgs
                     {
                         Connection = (TransferConnection)sender,

@@ -101,6 +101,7 @@
     <Compile Include="Messages\ValidateNickMessage.cs" />
     <Compile Include="Messages\VersionMessage.cs" />
     <Compile Include="NullStorageContainer.cs" />
+    <Compile Include="PerfLimit.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Connections\TcpConnectionListener.cs" />
     <Compile Include="FileStorageContainer.cs" />
