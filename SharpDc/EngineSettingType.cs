@@ -25,6 +25,7 @@ namespace SharpDc
         SearchAlternativesInterval,
         TcpBacklog,
         TcpReceiveBufferSize,
-        FileReadBufferSize
+        FileReadBufferSize,
+        ConnectionsLimit
     }
 }
