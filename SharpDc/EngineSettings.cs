@@ -33,7 +33,8 @@ namespace SharpDc
         private int _tcpBackLog;
         private int _tcpReceiveBufferSize;
         private int _fileReadBufferSize;
-        
+        private int _connectionsLimit;
+
         /// <summary>
         /// Occurs when some setting is changed
         /// </summary>
@@ -44,6 +45,23 @@ namespace SharpDc
         {
             EventHandler<EngineSettingsEventArgs> handler = Changed;
             if (handler != null) handler(this, new EngineSettingsEventArgs(st));
+        }
+
+
+        /// <summary>
+        /// Maximum amount of connections allowed, 0 - unlimited
+        /// </summary>
+        public int ConnectionsLimit
+        {
+            get { return _connectionsLimit; }
+            set
+            {
+                if (_connectionsLimit != value)
+                {
+                    _connectionsLimit = value;
+                    OnChanged(EngineSettingType.ConnectionsLimit);
+                }
+            }
         }
 
         /// <summary>
@@ -377,7 +395,7 @@ namespace SharpDc
                                _searchAlternativesInterval = 5,
                                _tcpBackLog = 10,
                                _tcpReceiveBufferSize = 64 * 1024,
-                               _fileReadBufferSize = 100 * 1024
+                               _fileReadBufferSize = 64 * 1024
                            };
             }
         }

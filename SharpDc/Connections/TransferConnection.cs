@@ -483,7 +483,7 @@ namespace SharpDc.Connections
 
             if (_readBuffer == null)
             {
-                _readBuffer = new byte[1024*100];
+                _readBuffer = new byte[1024 * 64];
             }
 
             if (adcgetMessage.Start + adcgetMessage.Length > UploadItem.Content.Magnet.Size)
@@ -640,7 +640,9 @@ namespace SharpDc.Connections
 
         public override void Dispose()
         {
-            _disposed = true;
+            if (_disposed) 
+                return;
+
             _readBuffer = null;
             ReleaseSegment();
             DownloadItem = null;
@@ -651,6 +653,8 @@ namespace SharpDc.Connections
             }
 
             DisconnectAsync();
+            _disposed = true;
+
         }
     }
 

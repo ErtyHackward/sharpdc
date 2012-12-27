@@ -43,7 +43,7 @@ namespace SharpDc
 
             private const string fileSizeFormat = "fs";
 
-            private static readonly string[] letters = new[] { " B", " KB", " MB", " GB", " TB", " PB" };
+            private static readonly string[] letters = new[] { " B", " KiB", " MiB", " GiB", " TiB", " PiB" };
 
             public string Format(string format, object arg, IFormatProvider formatProvider)
             {

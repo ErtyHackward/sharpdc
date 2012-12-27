@@ -77,15 +77,41 @@ namespace SharpDc.Connections
         private readonly SpeedAverage _uploadSpeed = new SpeedAverage(10);
         private readonly SpeedAverage _downloadSpeed = new SpeedAverage(10);
 
+        /// <summary>
+        /// Gets an object to obtain upload speed
+        /// </summary>
         public SpeedAverage UploadSpeed
         {
             get { return _uploadSpeed; }
         }
         
+        /// <summary>
+        /// Gets an object to obtain download speed
+        /// </summary>
         public SpeedAverage DownloadSpeed
         {
             get { return _downloadSpeed; }
         }
+        
+        /// <summary>
+        /// Allows to control global tcpConnection upload speed limit
+        /// </summary>
+        public static SpeedLimiter UploadSpeedLimitGlobal { get; private set; }
+
+        /// <summary>
+        /// Allows to control global tcpConnection download speed limit
+        /// </summary>
+        public static SpeedLimiter DownloadSpeedLimitGlobal { get; private set; }
+
+        /// <summary>
+        /// Allows to control this tcpConnection upload speed limit
+        /// </summary>
+        public SpeedLimiter UploadSpeedLimit { get; private set; }
+
+        /// <summary>
+        /// Allows to control this tcpConnection download speed limit
+        /// </summary>
+        public SpeedLimiter DownloadSpeedLimit { get; private set; }
 
         /// <summary>
         /// Gets or sets current connection buffer size
@@ -107,11 +133,25 @@ namespace SharpDc.Connections
 
         #endregion
 
+        static TcpConnection()
+        {
+            UploadSpeedLimitGlobal = new SpeedLimiter();
+            DownloadSpeedLimitGlobal = new SpeedLimiter();
+        }
+
+        private void Initialize()
+        {
+            ConnectionBufferSize = DefaultConnectionBufferSize;
+
+            UploadSpeedLimit = new SpeedLimiter();
+            DownloadSpeedLimit = new SpeedLimiter();
+        }
+
         protected TcpConnection(string address) : this(ParseAddress(address)) { }
 
         protected TcpConnection(IPEndPoint remoteEndPoint)
         {
-            ConnectionBufferSize = DefaultConnectionBufferSize;
+            Initialize();
             RemoteEndPoint = remoteEndPoint;
             _connectionStatus = ConnectionStatus.Disconnected;
         }
@@ -121,7 +161,7 @@ namespace SharpDc.Connections
             if (socket == null) 
                 throw new ArgumentNullException("socket");
 
-            ConnectionBufferSize = DefaultConnectionBufferSize;
+            Initialize();
 
             _socket = socket;
             _socket.SendTimeout = SendTimeout;
@@ -162,6 +202,9 @@ namespace SharpDc.Connections
 
         public void DisconnectAsync()
         {
+            if (_connectionStatus == Events.ConnectionStatus.Disconnected)
+                return;
+
             if (!_closingSocket)
             {
                 _closingSocket = true;
@@ -235,6 +278,8 @@ namespace SharpDc.Connections
                     _downloadSpeed.Update(bytesReceived);
                     _lastUpdate = DateTime.Now;
                     ParseRaw(_connectionBuffer, bytesReceived);
+                    DownloadSpeedLimit.Update(bytesReceived);
+                    DownloadSpeedLimitGlobal.Update(bytesReceived);
                 }
 
                 SetConnectionStatus(ConnectionStatus.Disconnected);
@@ -256,7 +301,11 @@ namespace SharpDc.Connections
                 lock (_sendLock)
                 {
                     if (_socket != null)
+                    {
                         _socket.Send(buffer, offset, length, SocketFlags.None);
+                        UploadSpeedLimit.Update(length);
+                        UploadSpeedLimitGlobal.Update(length);
+                    }
                     else
                     {
                         SetConnectionStatus(ConnectionStatus.Disconnected);
@@ -272,10 +321,20 @@ namespace SharpDc.Connections
 
         public void SendRaw(byte[] buffer, int length)
         {
-            begin:
+        begin:
+
+            Stopwatch timeout = Stopwatch.StartNew();
+
             while (_sendThreadActive)
-                Thread.Yield();
-            
+            {
+                Thread.Sleep(0);
+                if (timeout.ElapsedMilliseconds > 5000)
+                {
+                    Logger.Error("Too long send thread active...");
+                    throw new TimeoutException();
+                }
+            }
+
             Monitor.Enter(_delayedMessages);
 
             if (_delayedMessages.Count > 0)

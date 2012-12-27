@@ -359,8 +359,12 @@ namespace SharpDc
         {
             foreach (var hub in Hubs)
             {
-                if (hub.ConnectionStatus == ConnectionStatus.Disconnected && hub.LastEventTime.AddSeconds(Settings.ReconnectTimeout) < DateTime.Now)
+                if (hub.ConnectionStatus == ConnectionStatus.Disconnected &&
+                    hub.LastEventTime.AddSeconds(Settings.ReconnectTimeout) < DateTime.Now)
+                {
+                    Logger.Info("{0}: Hub inactivity timeout reached [{1}]. Reconnecting", hub.Settings.HubName, Settings.ReconnectTimeout);
                     hub.ConnectAsync();
+                }
             }
             
             // no need to do anything before we have at least one connection
@@ -423,6 +427,8 @@ namespace SharpDc
                 e.Transfer.IncomingMessage -= IncomingMessageHandler;
                 e.Transfer.OutgoingMessage -= OutgoingMessageHandler;
             }
+
+            e.Transfer.Dispose();
         }
 
         void TransferManagerTransferAdded(object sender, TransferEventArgs e)
@@ -455,6 +461,14 @@ namespace SharpDc
         {
             if (e.Socket.Connected)
             {
+                var connLimit = Settings.ConnectionsLimit;
+
+                if (connLimit != 0 && TransferManager.TransfersCount >= connLimit)
+                {
+                    Logger.Info("Connection limit {0} reached, dropping incoming connection", connLimit);
+                    return;
+                }
+
                 e.Handled = true;
                 var transfer = new TransferConnection(e.Socket);
                 TransferManager.AddTransfer(transfer);
@@ -666,10 +680,24 @@ namespace SharpDc
 
             if (ea.Cancel)
                 return;
-            
-            var transfer = new TransferConnection(e.Message.Address);
+
+            TransferConnection transfer;
+            try
+            {
+                transfer = new TransferConnection(e.Message.Address);
+            }
+            catch (Exception x)
+            {
+                Logger.Error("Unable to create outgoing transfer thread {0}", x.Message);
+                return;
+            }
+
             TransferManager.AddTransfer(transfer);
-            transfer.FirstMessages = new[] { new MyNickMessage { Nickname = hubConnection.Settings.Nickname }.Raw, new LockMessage { ExtendedProtocol = true }.Raw };
+            transfer.FirstMessages = new[]
+                                             {
+                                                 new MyNickMessage { Nickname = hubConnection.Settings.Nickname }.Raw,
+                                                 new LockMessage { ExtendedProtocol = true }.Raw
+                                             };
             transfer.ConnectAsync();
         }
 

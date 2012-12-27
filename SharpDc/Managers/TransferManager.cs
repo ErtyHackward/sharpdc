@@ -56,6 +56,14 @@ namespace SharpDc.Managers
             }
         }
 
+        /// <summary>
+        /// Gets total connections count
+        /// </summary>
+        public int TransfersCount
+        {
+            get { return _connections.Count; }
+        }
+
         #region Event 
 
         public event EventHandler<UploadItemErrorEventArgs> Error;

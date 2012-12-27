@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using SharpDc.Logging;
 using SharpDc.Managers;
 
@@ -15,6 +16,8 @@ namespace SharpDc.Structs
 {
     public class UploadItem : IDisposable
     {
+        public static int UploadItemsCount;
+        
         private static readonly ILogger Logger = LogManager.GetLogger();
 
         public ContentItem Content { get; set; }
@@ -65,7 +68,10 @@ namespace SharpDc.Structs
         {
             var openSw = Stopwatch.StartNew();
             if (_fileStream == null)
+            {
                 _fileStream = new FileStream(Content.SystemPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, FileStreamReadBufferSize, false);
+                Interlocked.Increment(ref UploadItemsCount);
+            }
             openSw.Stop();
 
             if (openSw.ElapsedMilliseconds > 1000)
@@ -112,6 +118,7 @@ namespace SharpDc.Structs
                             {
                                 _fileStream.Dispose();
                                 _fileStream = null;
+                                Interlocked.Decrement(ref UploadItemsCount);
                             }
 
                             return InternalRead(array, start, count);
@@ -134,10 +141,14 @@ namespace SharpDc.Structs
 
         public void Dispose()
         {
-            if (_fileStream != null)
+            lock (_syncRoot)
             {
-                _fileStream.Dispose();
-                _fileStream = null;
+                if (_fileStream != null)
+                {
+                    _fileStream.Dispose();
+                    _fileStream = null;
+                    Interlocked.Decrement(ref UploadItemsCount);
+                }
             }
             OnDisposed();
         }

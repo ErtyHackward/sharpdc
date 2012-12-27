@@ -83,10 +83,14 @@ namespace SharpDc.Connections
                 {
                     var socket = _listenSocket.Accept();
                     var ea = new IncomingConnectionEventArgs { Socket = socket };
-                    OnIncomingConnection(ea);
+
+                    using (var pl = new PerfLimit("Tcp connection listener connection handle"))
+                        OnIncomingConnection(ea);
+
                     if (!ea.Handled)
                     {
-                        socket.Close();                        
+                        using (var pl = new PerfLimit("Tcp connection listener close"))
+                            socket.Close();                        
                     }
                 }
                 catch (ObjectDisposedException)
