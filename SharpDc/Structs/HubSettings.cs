@@ -35,5 +35,11 @@ namespace SharpDc.Structs
         /// Address and port to connect other users to
         /// </summary>
         public string LocalEndPoint;
+
+        /// <summary>
+        /// Allows to use fake share amount
+        /// Don't use it
+        /// </summary>
+        public long FakeShare;
     }
 }
