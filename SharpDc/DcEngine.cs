@@ -825,9 +825,32 @@ namespace SharpDc
             }
         }
 
+        /// <summary>
+        /// Asynchronously starts all hub connections
+        /// If we have more than 20 connections each of them will start gradually with small delay
+        /// </summary>
         public void Connect()
         {
-            Hubs.ForEach(h => h.ConnectAsync());
+            if (Hubs.Count < 20)
+            {
+                Hubs.ForEach(h => h.ConnectAsync());
+            }
+            else
+            {
+                new ThreadStart(delegate {
+                    
+                    // start new connections gradually
+
+                    var list = new List<HubConnection>(Hubs);
+
+                    for (int i = 0; i < list.Count; i++)
+                    {
+                        list[i].ConnectAsync();
+                        Thread.Sleep(200);
+                    }
+                    
+                }).BeginInvoke(null, null);
+            }
         }
 
         /// <summary>

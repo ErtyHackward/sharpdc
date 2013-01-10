@@ -310,7 +310,7 @@ namespace SharpDc.Connections
                 Tag = string.Format("<{0},M:{1},H:{2},S:{3}{4}>", TagInfo.Version, Settings.PassiveMode ? "P":"A", "0/0/0", "100", string.IsNullOrEmpty(TagInfo.City)?"":",C:"+TagInfo.City ), 
                 Connection=TagInfo.Connection, 
                 Flag = TagInfo.Flag,
-                Share = _currentUser.Share
+                Share = _settings.FakeShare == 0 ? _currentUser.Share : _settings.FakeShare
             };
 
             SendMessage(new VersionMessage().Raw);
