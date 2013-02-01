@@ -410,7 +410,7 @@ namespace SharpDc
                 Monitor.Exit(_updateTimer);
             }
 
-            if (sw.ElapsedMilliseconds > 500)
+            if (sw.ElapsedMilliseconds > 300)
                 Logger.Warn("Slow engine update Total:{0}ms R:{1}ms T:{2}ms S:{3}ms", sw.ElapsedMilliseconds, swRequest.ElapsedMilliseconds, swTransfers.ElapsedMilliseconds, swSearches.ElapsedMilliseconds);
         }
 
