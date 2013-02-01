@@ -30,7 +30,16 @@ namespace SharpDc.Messages
         {
             KeyMessage km;
 
-            var encoding = Encoding.GetEncoding(1251);
+            Encoding encoding;
+
+            try
+            {
+                encoding = Encoding.GetEncoding(1251);
+            }
+            catch (Exception)
+            {
+                encoding = Encoding.ASCII;
+            }
 
             var lck = _raw.Replace("$Lock ", "");
             var iPos = lck.IndexOf(" Pk=", 1);
