@@ -232,6 +232,7 @@ namespace SharpDc
             SearchManager = new SearchManager(this);
             DownloadManager = new DownloadManager(this);
             DownloadManager.DownloadAdding += DownloadManagerDownloadAdding;
+            DownloadManager.DownloadCompleted += DownloadManager_DownloadCompleted;
 
             TransferManager = new TransferManager(this);
             TransferManager.TransferAdded += TransferManagerTransferAdded;
@@ -309,6 +310,14 @@ namespace SharpDc
                 FileHelper.AllocateFile(path, e.DownloadItem.Magnet.Size);
             }
 
+        }
+
+        void DownloadManager_DownloadCompleted(object sender, DownloadCompletedEventArgs e)
+        {
+            if (Share != null)
+            {
+                
+            }
         }
 
         /// <summary>
@@ -465,7 +474,7 @@ namespace SharpDc
 
                 if (connLimit != 0 && TransferManager.TransfersCount >= connLimit)
                 {
-                    Logger.Info("Connection limit {0} reached, dropping incoming connection", connLimit);
+                    Logger.Warn("Connection limit {0} reached, dropping incoming connection", connLimit);
                     return;
                 }
 
@@ -601,6 +610,8 @@ namespace SharpDc
             e.Hub.IncomingConnectionRequest -= HubConnectionRequest;
             e.Hub.OutgoingConnectionRequest -= HubOutgoingConnectionRequest;
             e.Hub.SearchRequest -= HubSearchRequest;
+            e.Hub.PassiveSearchResult -= HubPassiveSearchResult;
+            e.Hub.OwnIpReceived -= Hub_OwnIpReceived;
 
             if (Settings.DumpHubProtocolMessages)
             {
@@ -615,6 +626,8 @@ namespace SharpDc
             e.Hub.IncomingConnectionRequest += HubConnectionRequest;
             e.Hub.OutgoingConnectionRequest += HubOutgoingConnectionRequest;
             e.Hub.SearchRequest += HubSearchRequest;
+            e.Hub.PassiveSearchResult += HubPassiveSearchResult;
+            e.Hub.OwnIpReceived += Hub_OwnIpReceived;
 
             if (Settings.DumpHubProtocolMessages)
             {
@@ -624,6 +637,17 @@ namespace SharpDc
 
             if (e.Hub.TagInfo == null)
                 e.Hub.TagInfo = TagInfo;
+        }
+
+        void Hub_OwnIpReceived(object sender, EventArgs e)
+        {
+            var hub = (HubConnection)sender;
+            LocalAddress = hub.CurrentUser.IP;
+        }
+
+        void HubPassiveSearchResult(object sender, SearchResultEventArgs e)
+        {
+            SearchManager.InjectResult(e.Message);
         }
         
         void HubSearchRequest(object sender, SearchRequestEventArgs e)
@@ -776,7 +800,7 @@ namespace SharpDc
         /// <param name="magnet">Magnet-link to search file</param>
         /// <param name="savePath">optional complete file path to be saved</param>
         /// <param name="sources">optional set of sources to use</param>
-        public void DownloadFile(Magnet magnet, string savePath = null, IEnumerable<Source> sources = null)
+        public DownloadItem DownloadFile(Magnet magnet, string savePath = null, IEnumerable<Source> sources = null)
         {
             if (string.IsNullOrEmpty(savePath))
             {
@@ -812,17 +836,38 @@ namespace SharpDc
                 di.Sources.AddRange(result.Sources);
             }
 
+            
             if (DownloadManager.AddDownload(di) && Active)
             {
                 if (di.Sources.Count == 0)
                 {
-                    SearchManager.Search(di);
+                    lock (DownloadManager.SyncRoot)
+                        SearchManager.Search(di);
                 }
                 else
                 {
                     TransferManager.RequestTransfers(di);
                 }
             }
+
+            return di;
+        }
+
+        /// <summary>
+        /// Stops download process and removes download
+        /// </summary>
+        /// <param name="di"></param>
+        public void RemoveDownload(DownloadItem di)
+        {
+            di.Priority = DownloadPriority.Pause;
+            TransferManager.StopTransfers(di);
+
+            while (di.ActiveSegmentsCount > 0)
+            {
+                Thread.Sleep(0);
+            }
+
+            DownloadManager.RemoveDownload(di);
         }
 
         /// <summary>

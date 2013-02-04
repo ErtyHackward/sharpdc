@@ -117,13 +117,16 @@ namespace SharpDc.Collections
         /// </summary>
         /// <param name="hubAddress"></param>
         /// <param name="nickname"></param>
-        public void Add(string hubAddress, string nickname)
+        public HubConnection Add(string hubAddress, string nickname)
         {
-            Add(new HubConnection(new HubSettings { 
-                HubAddress = hubAddress, 
-                HubName = hubAddress, 
-                Nickname = nickname 
-            }));
+            var hub = new HubConnection(new HubSettings
+                {
+                    HubAddress = hubAddress,
+                    HubName = hubAddress,
+                    Nickname = nickname
+                });
+            Add(hub);
+            return hub;
         }
 
         /// <summary>

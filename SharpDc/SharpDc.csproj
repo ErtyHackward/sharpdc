@@ -39,6 +39,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="BufferedFileStorageContainer.cs" />
     <Compile Include="Collections\HubCollection.cs" />
     <Compile Include="Collections\ObservableList.cs" />
     <Compile Include="Collections\SourceList.cs" />
@@ -96,8 +97,10 @@
     <Compile Include="Messages\MyINFOMessage.cs" />
     <Compile Include="Messages\MyNickMessage.cs" />
     <Compile Include="Messages\MyPassMessage.cs" />
+    <Compile Include="Messages\QuitMessage.cs" />
     <Compile Include="Messages\SearchMessage.cs" />
     <Compile Include="Messages\SupportsMessage.cs" />
+    <Compile Include="Messages\UserIPMessage.cs" />
     <Compile Include="Messages\ValidateNickMessage.cs" />
     <Compile Include="Messages\VersionMessage.cs" />
     <Compile Include="NullStorageContainer.cs" />

@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.IO;
 using SharpDc.Events;
 using SharpDc.Interfaces;
+using SharpDc.Logging;
 using SharpDc.Messages;
 using SharpDc.Structs;
 
@@ -15,6 +16,8 @@ namespace SharpDc.Managers
 {
     public class SearchManager
     {
+        private static readonly ILogger Logger = LogManager.GetLogger();
+
         private readonly DcEngine _engine;
 
         private readonly List<ISearchResult> _results = new List<ISearchResult>();
@@ -60,6 +63,8 @@ namespace SharpDc.Managers
         {
             var resultMagnet = new Magnet(resultMsg.HubName, resultMsg.FileSize, Path.GetFileName(resultMsg.FileName));
             var resultSource = new Source { UserNickname = resultMsg.Nickname, HubAddress = resultMsg.HubAddress };
+
+            Logger.Info("Found source {0}", resultSource);
 
             HubSearchResult result;
 
@@ -189,6 +194,8 @@ namespace SharpDc.Managers
 
                     if (string.IsNullOrEmpty(search.SearchAddress))
                         search.SearchAddress = "Hub:" + h.Settings.Nickname;
+
+                    Logger.Info("Search for " + search.SearchRequest);
 
                     h.SendMessage(search.Raw);
                 }

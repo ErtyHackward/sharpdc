@@ -4,138 +4,130 @@
 //  licensed under the LGPL
 //  -------------------------------------------------------------
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using SharpDc.Interfaces;
 using SharpDc.Structs;
 
 namespace SharpDc
 {
+    /// <summary>
+    /// Provides a container that stores all data in memory
+    /// </summary>
     public class MemoryStorageConatiner : IStorageContainer
     {
         private readonly DownloadItem _downloadItem;
         private readonly Dictionary<int, byte[]> _memoryBuffer = new Dictionary<int, byte[]>();
 
-        private const long BufferLimit = 30 * 1024 * 1024; // 30 Mb
+        private readonly int _maxSegments;
         private readonly object _syncRoot = new object();
-        private int _maxChunks;
+        private readonly List<int> _doneSegments;
 
-        public MemoryStorageConatiner(DownloadItem item)
+        public MemoryStorageConatiner(DownloadItem item, int bufferSegments = 64)
         {
+            _maxSegments = bufferSegments;
             _downloadItem = item;
-            _maxChunks = (int)(BufferLimit / DownloadItem.SegmentSize);
+            _doneSegments = new List<int>();
         }
 
         public void Dispose()
         {
             _memoryBuffer.Clear();
-            GC.Collect(2);
-        }
-
-        public bool TryRead(byte[] buffer, long start, int count)
-        {
-            if (_downloadItem.DoneSegments == null) return false;
-            if (CanRead(start, count))
-            {
-                var startIndex = GetSegmentIndex(start);
-                var endIndex = GetSegmentIndex(start + count);
-                lock (_downloadItem.SyncRoot)
-                {
-                    lock (_syncRoot)
-                    {
-                        if (startIndex == endIndex)
-                        {
-                            var segment = _memoryBuffer[startIndex];
-                            var startOffset = (int)(start % DownloadItem.SegmentSize);
-                            Buffer.BlockCopy(segment, startOffset, buffer, 0, count);
-                        }
-                        else
-                        {
-                            int position = 0;
-                            for (var i = startIndex; i <= endIndex; i++)
-                            {
-                                var segment = _memoryBuffer[i];
-
-                                if (i == startIndex)
-                                {
-                                    var startOffset = (int)(start % DownloadItem.SegmentSize);
-                                    var length = DownloadItem.SegmentSize - startOffset;
-                                    Buffer.BlockCopy(segment, startOffset, buffer, 0, length);
-                                    position += length;
-                                }
-                                else if (i == endIndex)
-                                {
-                                    var length = (int)((start + count) % DownloadItem.SegmentSize);
-                                    Buffer.BlockCopy(segment, 0, buffer, position, length);
-                                }
-                                else
-                                {
-                                    // copy whole segment
-                                    Buffer.BlockCopy(segment, 0, buffer, position, DownloadItem.SegmentSize);
-                                    position += DownloadItem.SegmentSize;
-                                }
-                            }
-                        }
-                    }
-
-                }
-                return true;
-            }
-            return false;
-        }
-
-        public void ReleaseSegment(int index)
-        {
-
+            _doneSegments.Clear();
         }
 
         /// <summary>
-        /// Determines was all the segments from range been downloaded
+        /// Reads data from the saved segment
+        /// Returns amount of bytes read
         /// </summary>
-        /// <param name="startPos">File position from wich bytes should be read</param>
+        /// <param name="segmentIndex"></param>
+        /// <param name="segmentOffset"></param>
+        /// <param name="buffer"></param>
+        /// <param name="bufferOffset"></param>
         /// <param name="count"></param>
-        /// <param name="makeRequest">If true the not-finished segments will be marked as High-Priority segments</param>
         /// <returns></returns>
-        protected bool CanRead(long startPos, int count, bool makeRequest = true)
+        public int Read(int segmentIndex, int segmentOffset, byte[] buffer, int bufferOffset, int count)
         {
-            var startIndex = GetSegmentIndex(startPos);
-            var endIndex = GetSegmentIndex(startPos + count);
-            var result = true;
-
-            lock (_downloadItem.SyncRoot)
+            byte[] memorySegment;
+            lock (_syncRoot)
             {
-                for (int i = startIndex; i <= endIndex; i++)
-                {
+                if (!_memoryBuffer.TryGetValue(segmentIndex, out memorySegment))
+                    return 0;
 
-                    lock (_syncRoot)
-                    {
-                        if (!_memoryBuffer.ContainsKey(i))
-                        {
-                            result = false;
+                if (!_doneSegments.Contains(segmentIndex))
+                    return 0;
+            }
 
-                            if (makeRequest)
-                            {
-                                if (!_downloadItem.HighPrioritySegments.Contains(i))
-                                {
-                                    _downloadItem.HighPrioritySegments.Add(i);
-                                }
-                            }
-                            else return false;
+            var startOffset = segmentOffset % DownloadItem.SegmentSize;
+            Buffer.BlockCopy(memorySegment, startOffset, buffer, bufferOffset, count);
 
-                        }
-                    }
-                }
-                return result;
+            return count;
+        }
+
+        /// <summary>
+        /// Releases occupied segments allowing to accept other
+        /// </summary>
+        /// <param name="index"></param>
+        public void ReleaseSegment(int index)
+        {
+            lock (_syncRoot)
+            {
+                _memoryBuffer.Remove(index);
+                _doneSegments.Remove(index);
             }
         }
-
-        private static int GetSegmentIndex(long filePosition)
-        {
-            return (int)(filePosition / DownloadItem.SegmentSize);
-        }
-
+        
+        /// <summary>
+        /// Writes data to the storage 
+        /// </summary>
+        /// <param name="segment">segment information</param>
+        /// <param name="offset">segment space offset</param>
+        /// <param name="buffer">data buffer to write</param>
+        /// <param name="length">amount of bytes to write</param>
+        /// <returns></returns>
         public bool WriteData(SegmentInfo segment, int offset, byte[] buffer, int length)
         {
-            throw new NotImplementedException();
+            byte[] memorySegment;
+            lock (_syncRoot)
+            {
+                if (!_memoryBuffer.TryGetValue(segment.Index, out memorySegment))
+                {
+                    if (_memoryBuffer.Count >= _maxSegments)
+                        return false;
+
+                    memorySegment = new byte[DownloadItem.SegmentSize];
+                    _memoryBuffer.Add(segment.Index, memorySegment);
+                }
+            }
+
+            Buffer.BlockCopy(buffer, 0, memorySegment, offset, length);
+            
+            if (offset + length == segment.Length)
+                lock (_syncRoot)
+                    _doneSegments.Add(segment.Index);
+
+            return true;
+        }
+
+        /// <summary>
+        /// Gets how much new segments the container can accept
+        /// </summary>
+        public int FreeSegments
+        {
+            get { return _maxSegments - _memoryBuffer.Count; }
+        }
+
+        /// <summary>
+        /// Tells if the segment is available for reading
+        /// i.e. is completely downloaded
+        /// </summary>
+        /// <returns></returns>
+        public bool CanReadSegment(int segment)
+        {
+            lock (_syncRoot)
+            {
+                return _memoryBuffer.ContainsKey(segment) && _doneSegments.Contains(segment);
+            }
         }
     }
 }

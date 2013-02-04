@@ -18,6 +18,20 @@ namespace SharpDc
             return true;
         }
 
+        public int Read(int segmentIndex, int segmentOffset, byte[] buffer, int bufferOffset, int count)
+        {
+            throw new System.NotSupportedException();
+        }
+
+        public int FreeSegments {
+            get { return int.MaxValue; }
+        }
+
+        public bool CanReadSegment(int segmentIndex)
+        {
+            return false;
+        }
+
         public void Dispose()
         {
             
