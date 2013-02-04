@@ -5,6 +5,7 @@
 //  -------------------------------------------------------------
 using System;
 using System.IO;
+using System.Threading;
 
 namespace SharpDc.Structs
 {
@@ -28,7 +29,7 @@ namespace SharpDc.Structs
         /// Creates a new stream from the file in a share
         /// </summary>
         /// <param name="filePath"></param>
-        /// <param name="magnet"> </param>
+        /// <param name="magnet"></param>
         internal DcStream(string filePath, Magnet magnet)
         {
             if (filePath == null) 
@@ -119,9 +120,11 @@ namespace SharpDc.Structs
             {
                 return _fileStream.Read(buffer, offset, count);
             }
-                       
 
-            return 0;
+            while (!_downloadItem.Read(buffer, _position + offset, count))
+                Thread.Sleep(50);
+
+            return count;
         }
 
         /// <summary>
@@ -136,6 +139,19 @@ namespace SharpDc.Structs
             if (_fileStream != null)
             {
                 return _fileStream.Seek(offset, origin);
+            }
+
+            switch (origin)
+            {
+                case SeekOrigin.Begin:
+                    _position = offset;
+                    break;
+                case SeekOrigin.Current:
+                    _position += offset;
+                    break;
+                case SeekOrigin.End:
+                    _position = Length + offset;
+                    break;
             }
 
             return _position;

@@ -4,6 +4,7 @@
 //  licensed under the LGPL
 //  -------------------------------------------------------------
 using System;
+using System.Collections.Concurrent;
 using System.Text;
 using SharpDc.Events;
 using SharpDc.Logging;
@@ -60,6 +61,8 @@ namespace SharpDc.Connections
         }
 
         public string RemoteAddress { get; private set; }
+
+        public ConcurrentDictionary<string, UserInfo> Users { get; private set; }
 
         #region Events
 
@@ -130,9 +133,31 @@ namespace SharpDc.Connections
             if (handler != null) handler(this, e);
         }
 
+        public event EventHandler<SearchResultEventArgs> PassiveSearchResult;
+
+        protected void OnPassiveSearchResult(SearchResultEventArgs e)
+        {
+            var handler = PassiveSearchResult;
+            if (handler != null) handler(this, e);
+        }
+
+        /// <summary>
+        /// Occurs when the hub sends us our own external ip address
+        /// Read it from CurrentUser.IP property
+        /// </summary>
+        public event EventHandler OwnIpReceived;
+
+        protected void OnOwnIpReceived()
+        {
+            var handler = OwnIpReceived;
+            if (handler != null) handler(this, EventArgs.Empty);
+        }
+
         #endregion
 
-        public HubConnection(HubSettings settings) : base(settings.HubAddress){
+        public HubConnection(HubSettings settings) : base(settings.HubAddress)
+        {
+            Users = new ConcurrentDictionary<string, UserInfo>();
             Settings = settings;
             ConnectionStatusChanged += HubConnectionConnectionStatusChanged;
         }
@@ -236,6 +261,30 @@ namespace SharpDc.Connections
                                     OnMessageGetPass();
                                 }
                                 break;
+                            case "$MyINFO":
+                                {
+                                    var arg = MyINFOMessage.Parse(cmd);
+                                    OnMessageMyINFO(arg);
+                                }
+                                break;
+                            case "$Quit":
+                                {
+                                    var arg = QuitMessage.Parse(cmd);
+                                    OnMessageQuit(arg);
+                                }
+                                break;
+                            case "$SR":
+                                {
+                                    var arg = SRMessage.Parse(cmd);
+                                    OnMessageSR(arg);
+                                }
+                                break;
+                            case "$UserIP":
+                                {
+                                    var arg = UserIPMessage.Parse(cmd);
+                                    OnUserIPMessage(arg);
+                                }
+                                break;
                         }
                     }
                     catch (Exception x)
@@ -251,6 +300,54 @@ namespace SharpDc.Connections
             }
 
 
+        }
+
+        private void OnUserIPMessage(UserIPMessage userIpMessage)
+        {
+            foreach (var pair in userIpMessage.UsersIp)
+            {
+                var ui = new UserInfo();
+                ui.Nickname = pair.Key;
+                var ip = pair.Value;
+
+                Users.AddOrUpdate(pair.Key, ui, (key, prev) =>
+                    {
+                        var u = prev;
+                        u.IP = ip;
+                        return u;
+                    });
+
+                if (pair.Key == CurrentUser.Nickname)
+                {
+                    var userInfo = CurrentUser;
+                    userInfo.IP = pair.Value;
+                    CurrentUser = userInfo;
+                    OnOwnIpReceived();
+                }
+            }
+        }
+
+        private void OnMessageSR(SRMessage srMessage)
+        {
+            OnPassiveSearchResult(new SearchResultEventArgs { Message = srMessage });
+        }
+
+        private void OnMessageQuit(QuitMessage quitMessage)
+        {
+            UserInfo user;
+            if (Users.TryRemove(quitMessage.Nickname, out user))
+            {
+                // TODO: fire event here
+            }
+        }
+
+        private void OnMessageMyINFO(MyINFOMessage arg)
+        {
+            var ui = new UserInfo(arg);
+            Users.AddOrUpdate(arg.Nickname, ui, (key, prev) => ui);
+
+            if (ui.Nickname == CurrentUser.Nickname)
+                Active = true;
         }
 
         private void OnMessageGetPass()
@@ -291,7 +388,7 @@ namespace SharpDc.Connections
         {
             if (lockMsg.ExtendedProtocol)
             {
-                SendMessage(new SupportsMessage { NoHello = true, NoGetINFO = true }.Raw);
+                SendMessage(new SupportsMessage { NoHello = true, NoGetINFO = true, UserIP2 = true }.Raw);
             }
 
             SendMessage(lockMsg.CreateKey().Raw);
@@ -314,7 +411,7 @@ namespace SharpDc.Connections
             };
 
             SendMessage(new VersionMessage().Raw);
-            if(Settings.GetUsersList)
+            if (Settings.GetUsersList)
                 SendMessage(new GetNickListMessage().Raw);
             SendMessage(myInfo.Raw);
 

@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using SharpDc.Collections;
 using SharpDc.Events;
 using SharpDc.Interfaces;
+using SharpDc.Logging;
 
 namespace SharpDc.Structs
 {
@@ -24,7 +25,14 @@ namespace SharpDc.Structs
 
     public class DownloadItem
     {
+        private static readonly ILogger Logger = LogManager.GetLogger();
+
         public static int SegmentSize = 1024 * 1024;
+
+        public static int GetSegmentIndex(long filePosition)
+        {
+            return (int)(filePosition / SegmentSize);
+        }
 
         private BitArray _activeSegments;
         private BitArray _downloadedSegments;
@@ -70,7 +78,22 @@ namespace SharpDc.Structs
 
         public int TotalSegmentsCount
         {
-            get { return _totalSegmentsCount; }
+            get {
+                if (_totalSegmentsCount == 0)
+                {
+                    // initiate the buffers
+
+                    _totalSegmentsCount = (int)(_magnet.Size / SegmentSize);
+                    if (_magnet.Size % SegmentSize != 0) _totalSegmentsCount++;
+                    _doneSegmentsCount = 0;
+                    _activeSegmentsCount = 0;
+
+                    _activeSegments = new BitArray(_totalSegmentsCount);
+                    _downloadedSegments = new BitArray(_totalSegmentsCount);
+
+                }
+                return _totalSegmentsCount; 
+            }
         }
 
         public DownloadPriority Priority { get; set; }
@@ -107,6 +130,14 @@ namespace SharpDc.Structs
         /// </summary>
         public DateTime LastSearch { get; set; }
 
+        /// <summary>
+        /// Tells if download is finished
+        /// </summary>
+        public bool Downloaded
+        {
+            get { return TotalSegmentsCount == DoneSegmentsCount; }
+        }
+
         #region Events
 
         public event EventHandler<SegmentEventArgs> SegmentTaken;
@@ -115,6 +146,8 @@ namespace SharpDc.Structs
         {
             var handler = SegmentTaken;
             if (handler != null) handler(this, e);
+
+            Logger.Info("SEG TAKEN ID:{0} POS:{1} {2}", e.SegmentInfo.Index, e.SegmentInfo.StartPosition, e.Source);
         }
 
         public event EventHandler<SegmentEventArgs> SegmentCancelled;
@@ -123,6 +156,8 @@ namespace SharpDc.Structs
         {
             var handler = SegmentCancelled;
             if (handler != null) handler(this, e);
+
+            Logger.Info("SEG CANCELLED ID:{0} {1}", e.SegmentInfo.Index, e.Source);
         }
 
         public event EventHandler<SegmentEventArgs> SegmentFinished;
@@ -131,6 +166,8 @@ namespace SharpDc.Structs
         {
             var handler = SegmentFinished;
             if (handler != null) handler(this, e);
+
+            Logger.Info("SEG FINISHED ID:{0} {1} ", e.SegmentInfo.Index, e.Source);
         }
 
         public event EventHandler DownloadFinished;
@@ -139,6 +176,8 @@ namespace SharpDc.Structs
         {
             var handler = DownloadFinished;
             if (handler != null) handler(this, EventArgs.Empty);
+
+            Logger.Info("{0} download finished", Magnet.FileName);
         }
 
         #endregion
@@ -156,32 +195,24 @@ namespace SharpDc.Structs
             segment.Length = 0;
             segment.StartPosition = -1;
 
+            if (StorageContainer.FreeSegments <= 0)
+            {
+                return false;
+            }
+
             bool result = false;
 
             lock (_syncRoot)
             {
-                if (_totalSegmentsCount == 0)
-                {
-                    // initiate the buffers
-
-                    _totalSegmentsCount = (int)(_magnet.Size / SegmentSize);
-                    if (_magnet.Size % SegmentSize != 0) _totalSegmentsCount++;
-                    _doneSegmentsCount = 0;
-                    _activeSegmentsCount = 0;
-
-                    _activeSegments = new BitArray(_totalSegmentsCount);
-                    _downloadedSegments = new BitArray(_totalSegmentsCount);
-
-                }
-
-                if (_totalSegmentsCount == _activeSegmentsCount + _doneSegmentsCount)
+                if (TotalSegmentsCount == _activeSegmentsCount + _doneSegmentsCount)
                     return false;
 
                 for (var i = 0; i < _highPrioritySegments.Count; i++)
                 {
-                    if (!_downloadedSegments[i] && !_activeSegments[i])
+                    var segIndex = _highPrioritySegments[i];
+                    if (!_downloadedSegments[segIndex] && !_activeSegments[segIndex])
                     {
-                        segment.Index = i;
+                        segment.Index = segIndex;
                         break;
                     }
                 }
@@ -249,6 +280,93 @@ namespace SharpDc.Structs
             {
                 OnDownloadFinished();
             }
+        }
+
+        /// <summary>
+        /// Determines was all the segments from range been downloaded
+        /// </summary>
+        /// <param name="startPos">File position from wich bytes should be read</param>
+        /// <param name="count"></param>
+        /// <param name="makeRequest">If true the not-finished segments will be marked as High-Priority segments</param>
+        /// <returns></returns>
+        protected bool CanRead(long startPos, int count, bool makeRequest = true)
+        {
+            var startIndex = GetSegmentIndex(startPos);
+            var endIndex   = GetSegmentIndex(startPos + count);
+            var result     = true;
+
+            lock (SyncRoot)
+            {
+                for (int i = startIndex; i <= endIndex; i++)
+                {
+                    lock (_syncRoot)
+                    {
+                        if (!StorageContainer.CanReadSegment(i))
+                        {
+                            result = false;
+
+                            if (makeRequest)
+                            {
+                                if (!HighPrioritySegments.Contains(i))
+                                {
+                                    Logger.Info("Add high priority segment {0}", i);
+                                    HighPrioritySegments.Add(i);
+                                }
+                            }
+                            else return false;
+                        }
+                    }
+                }
+                return result;
+            }
+        }
+
+        public bool Read(byte[] buffer, long filePosition, int count)
+        {
+            if (!CanRead(filePosition, count))
+                return false;
+
+            var startIndex = GetSegmentIndex(filePosition);
+            var endIndex   = GetSegmentIndex(filePosition + count);
+            
+            lock (_syncRoot)
+            {
+                if (startIndex == endIndex)
+                {
+                    var startOffset = (int)(filePosition % SegmentSize);
+                    return StorageContainer.Read(startIndex, startOffset, buffer, 0, count) == count;
+                }
+                else
+                {
+                    int position = 0;
+                    for (var i = startIndex; i <= endIndex; i++)
+                    {
+                        if (i == startIndex)
+                        {
+                            var startOffset = (int)(filePosition % SegmentSize);
+                            var length = SegmentSize - startOffset;
+                            if (StorageContainer.Read(i, startOffset, buffer, 0, length) != length)
+                                return false;
+                            position += length;
+                        }
+                        else if (i == endIndex)
+                        {
+                            var length = (int)((filePosition + count) % SegmentSize);
+                            if (StorageContainer.Read(i, 0, buffer, position, length) != length)
+                                return false;
+                        }
+                        else
+                        {
+                            // copy whole segment
+                            if (StorageContainer.Read(i, 0, buffer, position, SegmentSize) != SegmentSize)
+                                return false;
+                            position += SegmentSize;
+                        }
+                    }
+                }
+            }
+
+            return true;
         }
     }
 }

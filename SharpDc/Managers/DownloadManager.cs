@@ -38,6 +38,11 @@ namespace SharpDc.Managers
             get { return _itemsCount; }
         }
 
+        public object SyncRoot
+        {
+            get { return _synObject; }
+        }
+
         public IEnumerable<DownloadItem> Items() {
             lock (_synObject)
             {
@@ -294,7 +299,8 @@ namespace SharpDc.Managers
 
         public bool AddDownload(DownloadItem di)
         {
-            if (!OnDownloadAdding(di)) return false;
+            if (!OnDownloadAdding(di)) 
+                return false;
 
             if (di.StorageContainer == null)
             {
@@ -382,13 +388,13 @@ namespace SharpDc.Managers
         {
             lock (_synObject)
             {
-                di.Sources.ItemAdded -= SourcesItemAdded;
+                di.Sources.ItemAdded   -= SourcesItemAdded;
                 di.Sources.ItemRemoved -= SourcesItemRemoved;
 
                 di.DownloadFinished -= DDownloadFinished;
                 di.SegmentCancelled -= DSegmentCancelled;
-                di.SegmentFinished -= DSegmentFinished;
-                di.SegmentTaken -= DSegmentTaken;
+                di.SegmentFinished  -= DSegmentFinished;
+                di.SegmentTaken     -= DSegmentTaken;
                 //di.SegmentVerified -= d_SegmentVerified;
                 //di.NeedVerification -= d_NeedVerification;
                 _itemsCount--;
@@ -410,8 +416,15 @@ namespace SharpDc.Managers
                     }
                 }
             }
-            OnDownloadRemoved(new DownloadEventArgs { DownloadItem = di });
 
+            if (di.StorageContainer is FileStorageContainer && !di.Downloaded)
+            {
+                var fileStorage = di.StorageContainer as FileStorageContainer;
+
+                File.Delete(fileStorage.TempFilePath);
+            }
+
+            OnDownloadRemoved(new DownloadEventArgs { DownloadItem = di });
         }
 
         void SourcesItemRemoved(object sender, ObservableListEventArgs<Source> e)
@@ -475,6 +488,7 @@ namespace SharpDc.Managers
                     {
                         File.Copy(item.SaveTargets[0], item.SaveTargets[i]);
                     }
+                    fileStorage.TempFilePath = item.SaveTargets[0];
                 }
                 catch (Exception x)
                 {

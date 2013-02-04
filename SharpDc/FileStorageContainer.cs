@@ -4,9 +4,11 @@
 //  licensed under the LGPL
 //  -------------------------------------------------------------
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using SharpDc.Interfaces;
+using SharpDc.Logging;
 using SharpDc.Structs;
 
 namespace SharpDc
@@ -16,6 +18,8 @@ namespace SharpDc
     /// </summary>
     public class FileStorageContainer : IStorageContainer
     {
+        private static readonly ILogger Logger = LogManager.GetLogger();
+
         private readonly DownloadItem _downloadItem;
         private readonly Dictionary<int, FileStream> _aliveStreams = new Dictionary<int, FileStream>();
         private readonly Stack<FileStream> _idleStreams = new Stack<FileStream>();
@@ -25,8 +29,11 @@ namespace SharpDc
         
         private bool _isDisposed;
         private bool _isDisposing;
-
         private long _maxPosition;
+
+        // allows to tell if the segment is written to the file
+        private readonly BitArray _segmentsWritten;
+        private int _segmentsWrittenCount;
 
         /// <summary>
         /// Allows to store data into a file
@@ -40,11 +47,14 @@ namespace SharpDc
             var folderPath = Path.GetDirectoryName(tempFilePath);
             if (folderPath != null && !Directory.Exists(folderPath))
                 Directory.CreateDirectory(folderPath);
+
+            _segmentsWritten = new BitArray(item.TotalSegmentsCount);
         }
 
         public bool WriteData(SegmentInfo segment, int offset, byte[] buffer, int length)
         {
-            if (_isDisposed || _isDisposing) return false;
+            if (_isDisposed || _isDisposing) 
+                return false;
 
             if (length + offset > segment.Length)
                 length = (int)(segment.Length - offset);
@@ -64,101 +74,96 @@ namespace SharpDc
                 }
             }
 
-            if (stream == null)
+            try
             {
-                try
+
+                if (stream == null)
                 {
-                    stream = new FileStream(TempFilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite,
-                                            FileShare.ReadWrite, 1024 * 1024, true);
-                    setupStream = true;
-                }
-                catch
-                {
-                    return false;
-                }
+                    try
+                    {
+                        stream = new FileStream(TempFilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite,
+                                                FileShare.ReadWrite, 1024 * 1024, true);
+                        setupStream = true;
+                    }
+                    catch
+                    {
+                        return false;
+                    }
 
-                lock (_syncRoot)
-                {
-                    _aliveStreams.Add(segment.Index, stream);
-                }
-            }
-
-            if (setupStream)
-            {
-                stream.Position = segment.StartPosition;
-                _maxPosition = Math.Max(_maxPosition, segment.StartPosition);
-            }
-
-
-            stream.Write(buffer, 0, length);
-
-            if (length + offset >= segment.Length)
-            {
-                stream.Flush();
-                lock (_syncRoot)
-                {
-                    _idleStreams.Push(stream);
-                    if (!_aliveStreams.Remove(segment.Index))
-                        throw new InvalidDataException();
-                }
-            }
-
-            return true;
-        }
-
-        /// <summary>
-        /// Determines was all the segments from range been downloaded
-        /// </summary>
-        /// <param name="startPos">File position from wich bytes should be read</param>
-        /// <param name="count"></param>
-        /// <param name="makeRequest">If true the not-finished segments will be marked as High-Priority segments</param>
-        /// <returns></returns>
-        protected bool CanRead(long startPos, int count, bool makeRequest = true)
-        {
-            var startIndex = GetSegmentIndex(startPos);
-            var endIndex = GetSegmentIndex(startPos + count);
-            var result = true;
-
-            lock (_downloadItem.SyncRoot)
-            {
-                for (int i = startIndex; i <= endIndex; i++)
-                {
                     lock (_syncRoot)
                     {
-                        if (!_downloadItem.DoneSegments[i])
-                        {
-                            result = false;
-
-                            if (makeRequest)
-                            {
-                                if (!_downloadItem.HighPrioritySegments.Contains(i))
-                                {
-                                    _downloadItem.HighPrioritySegments.Add(i);
-                                }
-                            }
-                            else return false;
-                        }
+                        _aliveStreams.Add(segment.Index, stream);
                     }
                 }
-                return result;
+
+                if (setupStream)
+                {
+                    stream.Position = segment.StartPosition;
+                    _maxPosition = Math.Max(_maxPosition, segment.StartPosition);
+                }
+
+
+                stream.Write(buffer, 0, length);
+
+                if (length + offset >= segment.Length)
+                {
+                    stream.Flush();
+                    lock (_syncRoot)
+                    {
+                        _segmentsWritten.Set(segment.Index, true);
+                        _segmentsWrittenCount++;
+                        _idleStreams.Push(stream);
+                        if (!_aliveStreams.Remove(segment.Index))
+                            throw new InvalidDataException();
+                    }
+                }
             }
+            catch (Exception x)
+            {
+                Logger.Error("File write error: {0}", x.Message);
+                return false;
+            }
+            
+            return true;
         }
-
+        
         /// <summary>
-        /// Tries to read data from the file
+        /// Reads data from the saved segment
+        /// Returns amount of bytes read
         /// </summary>
-        /// <param name="position"></param>
+        /// <param name="segmentIndex"></param>
+        /// <param name="segmentOffset">segment offset to read from</param>
         /// <param name="buffer"></param>
+        /// <param name="bufferOffset">buffer write offset</param>
+        /// <param name="count"></param>
         /// <returns></returns>
-        public bool Read(long position, byte[] buffer)
+        public int Read(int segmentIndex, int segmentOffset, byte[] buffer, int bufferOffset, int count)
         {
-            // ensure all segments downloaded
-            throw new NotImplementedException();
+            try
+            {
+                using (var fs = new FileStream(TempFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, count))
+                {
+                    fs.Position = (long)DownloadItem.SegmentSize * segmentIndex + segmentOffset;
+                    return fs.Read(buffer, bufferOffset, count);
+                }
+            }
+            catch (Exception x)
+            {
+                Logger.Error("File read error: " + x.Message);
+            }
+
+            return 0;
         }
 
-        private static int GetSegmentIndex(long filePosition)
+        public int FreeSegments
         {
-            return (int)(filePosition / DownloadItem.SegmentSize);
+            get { return _segmentsWritten.Count - _segmentsWrittenCount; }
+        }
+
+        public bool CanReadSegment(int index)
+        {
+            lock (_syncRoot)
+                return _segmentsWritten[index];
         }
 
         public void Dispose()
@@ -183,6 +188,7 @@ namespace SharpDc
 
                 _isDisposed = true;
             }
+            _isDisposing = false;
         }
     }
 }

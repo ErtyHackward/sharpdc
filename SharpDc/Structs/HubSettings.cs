@@ -14,7 +14,7 @@ namespace SharpDc.Structs
 
         /// <summary>
         /// Indicates if hub should request users list
-        /// It is maybe reasonable to not reqiest the list on huge hubs
+        /// It is maybe reasonable to not request the list on huge hubs
         /// </summary>
         public bool GetUsersList;
 

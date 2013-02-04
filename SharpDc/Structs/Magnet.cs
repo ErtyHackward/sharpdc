@@ -101,10 +101,10 @@ namespace SharpDc.Structs
             _tth = "";
             _filename = "";
             _preview = false;
-            Parse(magnet);
+            ParseInternal(magnet);
         }
 
-        private void Parse(string magnet)
+        private void ParseInternal(string magnet)
         {
             if (!magnet.StartsWith("magnet:", StringComparison.CurrentCultureIgnoreCase))
                 throw new ApplicationException("Unable to parse magnet link, format is incorrect");
@@ -238,5 +238,14 @@ namespace SharpDc.Structs
             return Encoding.UTF8.GetString(Encoding.Default.GetBytes(inputInUtf8));
         }
 
+        /// <summary>
+        /// Tries to parse text as a magnet
+        /// </summary>
+        /// <param name="text"></param>
+        /// <returns></returns>
+        public static Magnet Parse(string text)
+        {
+            return new Magnet(text);
+        }
     }
 }

@@ -24,6 +24,10 @@ namespace SharpDc.Interfaces
         /// </summary>
         int TotalFiles { get; }
 
+        /// <summary>
+        /// Adds file into the share
+        /// </summary>
+        /// <param name="item"></param>
         void AddFile(ContentItem item);
 
         List<ContentItem> Search(SearchQuery query, int limit = 0);

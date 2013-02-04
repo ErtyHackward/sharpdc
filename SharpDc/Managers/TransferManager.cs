@@ -426,7 +426,8 @@ namespace SharpDc.Managers
 
         public void RequestTransfers(DownloadItem di)
         {
-            if (di.Sources.Count == 0 || di.Priority == DownloadPriority.Pause) return;
+            if (di.Sources.Count == 0 || di.Priority == DownloadPriority.Pause) 
+                return;
 
             if (_engine.Settings.MaxDownloadThreads != 0 && _allowedUsers.Count >= _engine.Settings.MaxDownloadThreads)
                 return;
@@ -470,6 +471,8 @@ namespace SharpDc.Managers
                         AllowConnection(source.UserNickname, hub);
                     }
                     _engine.SourceManager.UpdateRequests(source, 1);
+
+                    Logger.Info("Requesting connection {0}", source.UserNickname);
 
                     if (_engine.Settings.ActiveMode)
                         hub.SendMessage(new ConnectToMeMessage { Nickname = source.UserNickname, Address = _engine.LocalTcpAddress }.Raw);
@@ -529,6 +532,14 @@ namespace SharpDc.Managers
                 {
                     yield return transferConnection;    
                 }
+            }
+        }
+
+        public void StopTransfers(DownloadItem di)
+        {
+            foreach (var tr in Transfers().Where(t => t.DownloadItem == di))
+            {
+                tr.Dispose();
             }
         }
     }
