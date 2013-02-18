@@ -19,6 +19,10 @@ namespace SharpDc.Structs
         public bool GetUsersList;
 
         public string HubName;
+
+        /// <summary>
+        /// Our user nickname
+        /// </summary>
         public string Nickname;
 
         /// <summary>

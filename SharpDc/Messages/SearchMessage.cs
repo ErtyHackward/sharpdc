@@ -91,8 +91,16 @@ namespace SharpDc.Messages
 
     public struct ConnectToMeMessage : IStringMessage
     {
-        public string Nickname;
-        public string Address;
+        /// <summary>
+        /// Recepient nickname
+        /// </summary>
+        public string RecipientNickname;
+
+        /// <summary>
+        /// Sender address
+        /// </summary>
+        public string SenderAddress;
+
         //$ConnectToMe [Ник_получателя] [IP_отправителя]:[Порт_отправителя]|
 
         public static ConnectToMeMessage Parse(string raw)
@@ -101,15 +109,15 @@ namespace SharpDc.Messages
 
             var split = raw.Split(' ');
 
-            msg.Nickname = split[1];
-            msg.Address = split[2];
+            msg.RecipientNickname = split[1];
+            msg.SenderAddress = split[2];
 
             return msg;
         }
 
         public string Raw
         {
-            get { return string.Format("$ConnectToMe {0} {1}", Nickname, Address); }
+            get { return string.Format("$ConnectToMe {0} {1}", RecipientNickname, SenderAddress); }
         }
     }
 

@@ -251,7 +251,7 @@ namespace SharpDc.Connections
 
                                     if (!string.IsNullOrEmpty(ea.LocalAddress))
                                     {
-                                        SendMessage(new ConnectToMeMessage { Nickname = arg.SenderNickname , Address = ea.LocalAddress }.Raw);
+                                        SendMessage(new ConnectToMeMessage { RecipientNickname = arg.SenderNickname , SenderAddress = ea.LocalAddress }.Raw);
                                     }
 
                                 }

@@ -427,7 +427,7 @@ namespace SharpDc
         {
             lock (_speedSyncRoot)
             {
-                _totalUploaded += e.Transfer.UploadSpeed.Total;
+                _totalUploaded   += e.Transfer.UploadSpeed.Total;
                 _totalDownloaded += e.Transfer.DownloadSpeed.Total;
             }
 
@@ -611,7 +611,7 @@ namespace SharpDc
             e.Hub.OutgoingConnectionRequest -= HubOutgoingConnectionRequest;
             e.Hub.SearchRequest -= HubSearchRequest;
             e.Hub.PassiveSearchResult -= HubPassiveSearchResult;
-            e.Hub.OwnIpReceived -= Hub_OwnIpReceived;
+            e.Hub.OwnIpReceived -= HubOwnIpReceived;
 
             if (Settings.DumpHubProtocolMessages)
             {
@@ -627,7 +627,7 @@ namespace SharpDc
             e.Hub.OutgoingConnectionRequest += HubOutgoingConnectionRequest;
             e.Hub.SearchRequest += HubSearchRequest;
             e.Hub.PassiveSearchResult += HubPassiveSearchResult;
-            e.Hub.OwnIpReceived += Hub_OwnIpReceived;
+            e.Hub.OwnIpReceived += HubOwnIpReceived;
 
             if (Settings.DumpHubProtocolMessages)
             {
@@ -639,7 +639,7 @@ namespace SharpDc
                 e.Hub.TagInfo = TagInfo;
         }
 
-        void Hub_OwnIpReceived(object sender, EventArgs e)
+        void HubOwnIpReceived(object sender, EventArgs e)
         {
             var hub = (HubConnection)sender;
             LocalAddress = hub.CurrentUser.IP;
@@ -670,20 +670,28 @@ namespace SharpDc
                 {
                     var result = results[0];
                     var hub = (HubConnection)sender;
+                    var res = new SRMessage
+                                  {
+                                      FileName = result.VirtualPath,
+                                      FileSize = result.Magnet.Size,
+                                      Nickname = hub.Settings.Nickname,
+                                      FreeSlots =
+                                          Settings.MaxUploadThreads > 0
+                                              ? Settings.MaxUploadThreads - TransferManager.TransfersCount
+                                              : 0,
+                                      HubAddress = hub.RemoteAddress,
+                                      HubName = "TTH:" + result.Magnet.TTH,
+                                      TotalSlots = Settings.MaxUploadThreads
+                                  };
+
                     if (e.Message.SearchAddress.StartsWith("Hub:"))
                     {
-                        var res = new SRMessage
-                        {
-                            FileName = result.VirtualPath,
-                            FileSize = result.Magnet.Size,
-                            TargetNickname = e.Message.SearchAddress.Remove(0, 4),
-                            Nickname = hub.Settings.Nickname,
-                            FreeSlots = 200,
-                            HubAddress = hub.RemoteAddress,
-                            HubName = "TTH:" + result.Magnet.TTH,
-                            TotalSlots = 200
-                        }.Raw;
-                        hub.SendMessage(res);
+                        res.TargetNickname = e.Message.SearchAddress.Remove(0, 4);
+                        hub.SendMessage(res.Raw);
+                    }
+                    else
+                    {
+                        UdpConnection.SendMessage(res.Raw, e.Message.SearchAddress);
                     }
                 }
             }
@@ -695,27 +703,33 @@ namespace SharpDc
 
             var ea = new ConnectionRequestEventArgs
             {
-                UserNickname = e.Message.Nickname, 
-                Address = e.Message.Address, 
+                UserNickname = "", 
+                Address = e.Message.SenderAddress, 
                 HubConnection = hubConnection
             };
             
             OnConnectionRequest(ea);
 
             if (ea.Cancel)
+            {
                 return;
+            }
 
             TransferConnection transfer;
             try
             {
-                transfer = new TransferConnection(e.Message.Address);
+                transfer = new TransferConnection(e.Message.SenderAddress)
+                {
+                    AllowedToConnect = true,
+                    Source = new Source { HubAddress = hubConnection.RemoteAddress }
+                };
             }
             catch (Exception x)
             {
                 Logger.Error("Unable to create outgoing transfer thread {0}", x.Message);
                 return;
             }
-
+            
             TransferManager.AddTransfer(transfer);
             transfer.FirstMessages = new[]
                                              {
@@ -934,7 +948,7 @@ namespace SharpDc
         public bool Cancel { get; set; }
 
         /// <summary>
-        /// Gets user nickname
+        /// Gets remote user nickname if possible (in case of active search will be empty)
         /// </summary>
         public string UserNickname { get; set; }
 

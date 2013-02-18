@@ -71,6 +71,12 @@ namespace SharpDc.Connections
             set { _segmentInfo = value; }
         }
 
+        /// <summary>
+        /// Gets or sets if the connection should be established 
+        /// without check in allow list
+        /// </summary>
+        public bool AllowedToConnect { get; set; }
+
         #region Events
         public event EventHandler<TransferSegmentCompletedEventArgs> SegmentCompleted;
 
@@ -630,9 +636,10 @@ namespace SharpDc.Connections
             }
 
             Source = new Source { UserNickname = arg.Nickname, HubAddress = ea.HubAddress };
+
             if (FirstMessages == null)
             {
-                SendMessage(new MyNickMessage {Nickname = ea.OwnNickname}.Raw);
+                SendMessage(new MyNickMessage { Nickname = ea.OwnNickname }.Raw);
                 SendMessage(new LockMessage().Raw);
             }
 
