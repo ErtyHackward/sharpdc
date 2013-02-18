@@ -74,6 +74,12 @@ namespace SharpDc.Connections
         }
 
         public int Port { get; private set; }
+
+        public void SendMessage(string res, string address)
+        {
+            var bytes = Encoding.UTF8.GetBytes(res);
+            _client.Send(bytes, bytes.Length, Utils.CreateIPEndPoint(address));
+        }
     }
 
     public class SearchResultEventArgs : EventArgs

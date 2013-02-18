@@ -15,7 +15,7 @@ namespace SharpDc.Messages
         private string _raw;
         public string Raw
         {
-            get { return "$Lock EXTENDEDPROTOCOLABCABCABCABCABCABC Pk=OGO3"; }
+            get { return "$Lock EXTENDEDPROTOCOLABCABCABCABCABCABC Pk=SHARPDC"; }
         }
         
         public static LockMessage Parse(string raw)

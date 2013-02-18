@@ -22,6 +22,10 @@ namespace SharpDc.Managers
         private readonly DcEngine _engine;
         private readonly List<TransferConnection> _connections = new List<TransferConnection>();
         private readonly object _synRoot = new object();
+
+        /// <summary>
+        /// list of passive users requests
+        /// </summary>
         private readonly List<TransferRequest> _allowedUsers = new List<TransferRequest>();
 
         private int _downloadThreadsCount;
@@ -296,78 +300,87 @@ namespace SharpDc.Managers
 
         void TransferAuthorizationHandler(object sender, TransferAuthorizationEventArgs e)
         {
-            var sw = Stopwatch.StartNew();
-            var swMsg = new Stopwatch();
-            var swWhere = new Stopwatch();
-            var swLock = Stopwatch.StartNew();
+            var transfer = (TransferConnection)sender;
+            
+            // NOTE: we should remember that active users don't have allow records
+            // They will have an address of a hub in the Source property
+            // defined in ConnectToMe command handle section
 
             lock (_synRoot)
             {
-                swLock.Stop();
-
+                TransferRequest req;
                 var index = _allowedUsers.FindIndex(p => p.Nickname == e.UserNickname);
 
                 if (index != -1)
                 {
-                    var source = new Source
-                    {
-                        UserNickname = e.UserNickname,
-                        HubAddress = _allowedUsers[index].Hub.RemoteAddress
-                    };
-
-
-                    swWhere = Stopwatch.StartNew();
-                    var list = _connections.Where(transferConnection => transferConnection.Source == source).ToList();
-                    swWhere.Stop();
-
-                    // do not allow duplicate connections
-                    foreach (var connection in list)
-                    {
-                        connection.DisconnectAsync();
-                    }
-
-                    swMsg = Stopwatch.StartNew();
-                    foreach (var transferConnection in list)
-                    {
-                        Logger.Info("Disconnecting old transfer {0}", source);
-                    }
-                    swMsg.Stop();
-                    
-                    var ea = new TransferManagerAuthorizationEventArgs
-                    {
-                        Connection = (TransferConnection)sender,
-                        Nickname = e.UserNickname
-                    };
-
-                    OnTransferAuthorization(ea);
-
-                    if (ea.Cancel)
-                    {
-                        Logger.Info("Transfer connection cancelled at top level {0}", e.UserNickname);
-                        return;
-                    }
-
-                    e.Allowed = true;
-                    e.OwnNickname = _allowedUsers[index].Hub.CurrentUser.Nickname;
-                    e.HubAddress = _allowedUsers[index].Hub.RemoteAddress;
+                    // passive user
+                    req = _allowedUsers[index];
                     _allowedUsers.RemoveAt(index);
-
-                    _engine.SourceManager.UpdateRequests(source, -1);
                 }
                 else
                 {
-                    Logger.Info("Can't find allow record for {0}", e.UserNickname);
+                    // active user
+                    if (!transfer.AllowedToConnect)
+                        return;
+                    req = TransferRequest.Empty;
                 }
-            }
 
-            sw.Stop();
-            if (sw.ElapsedMilliseconds > 300)
-                Logger.Warn("Slow transfer authorization {0}ms L:{4}ms W:{1}ms M:{2}ms Connections:{3}", 
-                    sw.ElapsedMilliseconds,
-                    swWhere.ElapsedMilliseconds,
-                    swMsg.ElapsedMilliseconds,
-                    _connections.Count,
-                    swLock.ElapsedMilliseconds);
+                var source = new Source
+                                 {
+                                     UserNickname = e.UserNickname,
+                                     HubAddress = req.IsEmpty ? transfer.Source.HubAddress : req.Hub.RemoteAddress
+                                 };
+
+                // find connections with the same user
+                var list = _connections.Where(transferConnection => transferConnection.Source == source).ToList();
+
+                // do not allow duplicate connections
+                foreach (var connection in list)
+                {
+                    connection.DisconnectAsync();
+                    Logger.Info("Disconnecting old transfer {0}", source);
+                }
+                
+                var ea = new TransferManagerAuthorizationEventArgs
+                             {
+                                 Connection = (TransferConnection)sender,
+                                 Nickname = e.UserNickname
+                             };
+
+                OnTransferAuthorization(ea);
+
+                if (ea.Cancel)
+                {
+                    Logger.Info("Transfer connection cancelled at top level {0}", e.UserNickname);
+                    return;
+                }
+
+                e.Allowed = true;
+
+                if (req.IsEmpty)
+                {
+                    e.HubAddress = source.HubAddress;
+
+                    var hub = _engine.Hubs.FirstOrDefault(h => h.RemoteAddress == e.HubAddress);
+                    if (hub != null)
+                    {
+                        e.OwnNickname = hub.Settings.Nickname;
+                    }
+                    else
+                    {
+                        Logger.Error("Authorisation failed for {0}. There is no such hub: {1} ", e.UserNickname,
+                                     e.HubAddress);
+                        e.Allowed = false;
+                    }
+                }
+                else
+                {
+                    e.OwnNickname = _allowedUsers[index].Hub.CurrentUser.Nickname;
+                    e.HubAddress = _allowedUsers[index].Hub.RemoteAddress;
+                }
+
+                _engine.SourceManager.UpdateRequests(source, -1);
+            }
         }
 
         void TransferDownloadItemNeeded(object sender, DownloadItemNeededEventArgs e)
@@ -475,7 +488,7 @@ namespace SharpDc.Managers
                     Logger.Info("Requesting connection {0}", source.UserNickname);
 
                     if (_engine.Settings.ActiveMode)
-                        hub.SendMessage(new ConnectToMeMessage { Nickname = source.UserNickname, Address = _engine.LocalTcpAddress }.Raw);
+                        hub.SendMessage(new ConnectToMeMessage { RecipientNickname = source.UserNickname, SenderAddress = _engine.LocalTcpAddress }.Raw);
                     else
                         hub.SendMessage(new RevConnectToMeMessage { SenderNickname = hub.Settings.Nickname, TargetNickname = source.UserNickname }.Raw);
                 }
@@ -638,8 +651,20 @@ namespace SharpDc.Managers
     /// </summary>
     public struct TransferRequest
     {
+        static TransferRequest()
+        {
+            Empty = new TransferRequest();
+        }
+
         public string Nickname { get; set; }
         public HubConnection Hub { get; set; }
         public DateTime Added { get; set; }
+
+        public bool IsEmpty
+        {
+            get { return string.IsNullOrEmpty(Nickname); }
+        }
+
+        public static TransferRequest Empty { get; private set; }
     }
 }
