@@ -163,7 +163,7 @@ namespace SharpDc
         }
 
         /// <summary>
-        /// Seconds between reconnect attempts
+        /// Seconds between reconnect attempts, 0 - don't reconnect
         /// </summary>
         public int ReconnectTimeout
         {

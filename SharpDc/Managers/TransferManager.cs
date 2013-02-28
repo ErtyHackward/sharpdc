@@ -33,7 +33,7 @@ namespace SharpDc.Managers
 
         /// <summary>
         /// Maximum time between connection request (hub) and connection authorization(direct), in seconds
-        /// Default: 10
+        /// Default: 30
         /// </summary>
         public int ConnectionWaitTimeout { get; set; }
 
@@ -68,7 +68,7 @@ namespace SharpDc.Managers
             get { return _connections.Count; }
         }
 
-        #region Event 
+        #region Events 
 
         public event EventHandler<UploadItemErrorEventArgs> Error;
 
@@ -102,11 +102,22 @@ namespace SharpDc.Managers
             if (handler != null) handler(this, e);
         }
 
+        /// <summary>
+        /// Occurs when transfer requests for an upload item
+        /// </summary>
+        public event EventHandler<UploadItemNeededEventArgs> TransferUploadItemNeeded;
+
+        protected virtual void OnTransferUploadItemNeeded(UploadItemNeededEventArgs e)
+        {
+            var handler = TransferUploadItemNeeded;
+            if (handler != null) handler(this, e);
+        }
+
         #endregion
 
         public TransferManager(DcEngine engine)
         {
-            ConnectionWaitTimeout = 10;
+            ConnectionWaitTimeout = 30;
             DownloadInactivityTimeout = 5;
             UploadInactivityTimeout = 30;
 
@@ -155,7 +166,7 @@ namespace SharpDc.Managers
             }
 
             transfer.ConnectionStatusChanged += TransferConnectionStatusChanged;
-            transfer.UploadItemNeeded += TransferUploadItemNeeded;
+            transfer.UploadItemNeeded += TransferUploadItemNeededHandler;
             transfer.DirectionChanged += TransferDirectionChanged;
             transfer.DownloadItemNeeded += TransferDownloadItemNeeded;
             transfer.Authorization += TransferAuthorizationHandler;
@@ -182,7 +193,7 @@ namespace SharpDc.Managers
                 }
 
                 transfer.ConnectionStatusChanged -= TransferConnectionStatusChanged;
-                transfer.UploadItemNeeded -= TransferUploadItemNeeded;
+                transfer.UploadItemNeeded -= TransferUploadItemNeededHandler;
                 transfer.DirectionChanged -= TransferDirectionChanged;
                 transfer.DownloadItemNeeded -= TransferDownloadItemNeeded;
                 transfer.Authorization -= TransferAuthorizationHandler;
@@ -204,8 +215,13 @@ namespace SharpDc.Managers
             }
         }
 
-        void TransferUploadItemNeeded(object sender, UploadItemNeededEventArgs e)
+        private void TransferUploadItemNeededHandler(object sender, UploadItemNeededEventArgs e)
         {
+            OnTransferUploadItemNeeded(e);
+
+            if (e.Handled)
+                return;
+
             if (string.IsNullOrEmpty(e.Content.Magnet.TTH))
             {
                 if (e.Content.Magnet.FileName == "files.xml.bz2")
@@ -216,7 +232,8 @@ namespace SharpDc.Managers
             else
             {
                 var share = _engine.Share;
-                if (share == null) return;
+                if (share == null) 
+                    return;
 
                 var results = share.Search(new SearchQuery { 
                     Query = e.Content.Magnet.TTH, 
@@ -225,7 +242,7 @@ namespace SharpDc.Managers
 
                 if (results.Count == 1)
                 {
-                    e.UploadItem = new UploadItem (_engine.Settings.FileReadBufferSize) { Content = results[0] };
+                    e.UploadItem = new UploadItem (results[0], _engine.Settings.FileReadBufferSize);
                     e.UploadItem.Error += UploadItemError;
                     e.UploadItem.Disposed += UploadItemDisposed;
                 }
@@ -375,8 +392,8 @@ namespace SharpDc.Managers
                 }
                 else
                 {
-                    e.OwnNickname = _allowedUsers[index].Hub.CurrentUser.Nickname;
-                    e.HubAddress = _allowedUsers[index].Hub.RemoteAddress;
+                    e.OwnNickname = req.Hub.CurrentUser.Nickname;
+                    e.HubAddress = req.Hub.RemoteAddress;
                 }
 
                 _engine.SourceManager.UpdateRequests(source, -1);

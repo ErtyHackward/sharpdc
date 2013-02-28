@@ -14,33 +14,30 @@ using SharpDc.Managers;
 
 namespace SharpDc.Structs
 {
+    /// <summary>
+    /// Allows to read data from local file system
+    /// </summary>
     public class UploadItem : IDisposable
     {
-        public static int UploadItemsCount;
-        
         private static readonly ILogger Logger = LogManager.GetLogger();
+        
+        private static int _fileStreamsCount;
 
-        public ContentItem Content { get; set; }
+        /// <summary>
+        /// Gets total amount of FileSteam objects exists
+        /// </summary>
+        public static int TotalFileStreamsCount
+        {
+            get { return _fileStreamsCount; }
+        }
 
-        private FileStream _fileStream;
 
         private readonly object _syncRoot = new object();
-
-        private readonly Queue<double> _perfomance = new Queue<double>();
+        private FileStream _fileStream;
+        
+        public ContentItem Content { get; set; }
 
         public int FileStreamReadBufferSize { get; private set; }
-
-        public double ReadAverageTime
-        {
-            get {
-                lock (_perfomance)
-                {
-                    if (_perfomance.Any())
-                        return _perfomance.Average();
-                    return -1;
-                }
-            }
-        }
 
         public event EventHandler<UploadItemErrorEventArgs> Error;
 
@@ -59,83 +56,43 @@ namespace SharpDc.Structs
             if (handler != null) handler(this, EventArgs.Empty);
         }
 
-        public UploadItem(int bufferSize = 1024 * 100)
+        public UploadItem(ContentItem item, int bufferSize = 1024 * 100)
         {
+            Content = item;
             FileStreamReadBufferSize = bufferSize;
         }
 
-        private int InternalRead(byte[] array, long start, int count)
+        protected virtual int InternalRead(byte[] array, long start, int count)
         {
-            var openSw = Stopwatch.StartNew();
-            if (_fileStream == null)
+            using (new PerfLimit("Slow open " + Content.SystemPath, 1000))
             {
-                _fileStream = new FileStream(Content.SystemPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, FileStreamReadBufferSize, false);
-                Interlocked.Increment(ref UploadItemsCount);
-            }
-            openSw.Stop();
-
-            if (openSw.ElapsedMilliseconds > 1000)
-            {
-                Logger.Warn("Slow open {0}ms {1}", openSw.ElapsedMilliseconds, Content.SystemPath);
-            }
-            
-            var sw = Stopwatch.StartNew();
-            _fileStream.Position = start;
-            var read = _fileStream.Read(array, 0, count);
-            sw.Stop();
-
-            lock (_perfomance)
-            {
-                _perfomance.Enqueue(sw.Elapsed.TotalMilliseconds);
-                if (_perfomance.Count > 5)
-                    _perfomance.Dequeue();
+                if (_fileStream == null)
+                {
+                    _fileStream = new FileStream(Content.SystemPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
+                                                 FileStreamReadBufferSize, false);
+                    Interlocked.Increment(ref _fileStreamsCount);
+                }
             }
 
-            if (sw.ElapsedMilliseconds > 1000)
+            using (new PerfLimit("Slow read " + Content.SystemPath))
             {
-                Logger.Warn("Slow read {0}ms {1}", sw.ElapsedMilliseconds, Content.SystemPath);
+                _fileStream.Position = start;
+                return _fileStream.Read(array, 0, count);
             }
-
-            return read;
         }
 
         public int Read(byte[] array, long start, int count)
         {
-            lock (_syncRoot)
+            try
             {
-                try
-                {
+                lock (_syncRoot)
                     return InternalRead(array, start, count);
-                }
-                catch (Exception x)
-                {
-                    if (x is IOException)
-                    {
-                        try
-                        {
-                            // try to open file one more time
-                            if (_fileStream != null)
-                            {
-                                _fileStream.Dispose();
-                                _fileStream = null;
-                                Interlocked.Decrement(ref UploadItemsCount);
-                            }
-
-                            return InternalRead(array, start, count);
-                        }
-                        catch (Exception ex)
-                        {
-                            OnError(new UploadItemErrorEventArgs { Exception = ex });
-                            Logger.Error("Unable to read the data for upload (SA): " + x.Message);
-                            return 0;
-                        }
-                    }
-                    
-                    OnError(new UploadItemErrorEventArgs {Exception = x});
-                    Logger.Error("Unable to read the data for upload: " + x.Message);
-                    return 0;
-                    
-                }
+            }
+            catch (Exception x)
+            {
+                OnError(new UploadItemErrorEventArgs { Exception = x });
+                Logger.Error("Unable to read the data for upload: " + x.Message);
+                return 0;
             }
         }
 
@@ -147,7 +104,7 @@ namespace SharpDc.Structs
                 {
                     _fileStream.Dispose();
                     _fileStream = null;
-                    Interlocked.Decrement(ref UploadItemsCount);
+                    Interlocked.Decrement(ref _fileStreamsCount);
                 }
             }
             OnDisposed();
