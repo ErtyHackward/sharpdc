@@ -368,7 +368,7 @@ namespace SharpDc
         {
             foreach (var hub in Hubs)
             {
-                if (hub.ConnectionStatus == ConnectionStatus.Disconnected &&
+                if (Settings.ReconnectTimeout != 0 && hub.ConnectionStatus == ConnectionStatus.Disconnected &&
                     hub.LastEventTime.AddSeconds(Settings.ReconnectTimeout) < DateTime.Now)
                 {
                     Logger.Info("{0}: Hub inactivity timeout reached [{1}]. Reconnecting", hub.Settings.HubName, Settings.ReconnectTimeout);
@@ -905,7 +905,7 @@ namespace SharpDc
                     for (int i = 0; i < list.Count; i++)
                     {
                         list[i].ConnectAsync();
-                        Thread.Sleep(200);
+                        Thread.Sleep(100);
                     }
                     
                 }).BeginInvoke(null, null);

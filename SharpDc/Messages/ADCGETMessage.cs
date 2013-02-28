@@ -64,6 +64,11 @@ namespace SharpDc.Messages
                 return string.Format("$ADCGET {0} {1} {2} {3}", typeStr, Request, Start, Length); 
             }
         }
+
+        public override string ToString()
+        {
+            return Raw;
+        }
     }
 
     public enum ADCGETType

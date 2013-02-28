@@ -113,6 +113,7 @@
     <Compile Include="Structs\DownloadItemsGroup.cs" />
     <Compile Include="Structs\HubSettings.cs" />
     <Compile Include="Structs\Magnet.cs" />
+    <Compile Include="Structs\NullUploadItem.cs" />
     <Compile Include="Structs\SegmentInfo.cs" />
     <Compile Include="Structs\Source.cs" />
     <Compile Include="Structs\SpeedAverage.cs" />

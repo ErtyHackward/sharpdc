@@ -47,8 +47,7 @@ namespace SharpDc.Managers
         }
 
         #endregion
-
-
+        
         public SearchManager(DcEngine engine)
         {
             _engine = engine;
@@ -68,18 +67,24 @@ namespace SharpDc.Managers
 
             HubSearchResult result;
 
-            if (!_tthList.TryGetValue(resultMagnet.TTH, out result))
+            lock (_syncRoot)
             {
-                result = new HubSearchResult(resultMagnet, resultSource, resultMsg.FileName);
-                _tthList.Add(resultMagnet.TTH, result);
-                _results.Add(result);
-            }
-            else
-            {
-                if (result.Sources.FindIndex(s => s.UserNickname == resultSource.UserNickname && s.HubAddress == resultSource.HubAddress) == -1)
+                if (!_tthList.TryGetValue(resultMagnet.TTH, out result))
                 {
-                    result.Sources.Add(resultSource);
-                    result.VirtualDirs.Add(resultMsg.FileName);
+                    result = new HubSearchResult(resultMagnet, resultSource, resultMsg.FileName);
+                    _tthList.Add(resultMagnet.TTH, result);
+                    _results.Add(result);
+                }
+                else
+                {
+                    if (
+                        result.Sources.FindIndex(
+                            s => s.UserNickname == resultSource.UserNickname && s.HubAddress == resultSource.HubAddress) ==
+                        -1)
+                    {
+                        result.Sources.Add(resultSource);
+                        result.VirtualDirs.Add(resultMsg.FileName);
+                    }
                 }
             }
 
@@ -264,7 +269,8 @@ namespace SharpDc.Managers
         
         public void CheckItem(DownloadItem downloadItem)
         {
-            if (_searchQueue.Count > 30) return;
+            if (_searchQueue.Count > 30) 
+                return;
 
             if ((DateTime.Now - downloadItem.LastSearch).TotalMinutes < _engine.Settings.SearchAlternativesInterval)
                 return;

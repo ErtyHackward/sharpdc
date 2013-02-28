@@ -432,7 +432,7 @@ namespace SharpDc.Connections
         private void OnMessageAdcget(ref ADCGETMessage adcgetMessage)
         {
             var reqItem = new ContentItem();
-
+            
             if (adcgetMessage.Type == ADCGETType.Tthl)
             {
                 SendMessage(new ErrorMessage { Error = "File Not Available" }.Raw);
@@ -450,7 +450,7 @@ namespace SharpDc.Connections
                     reqItem.Magnet = new Magnet { FileName = adcgetMessage.Request };
                 }
             }
-
+            
             if (!SlotUsed)
             {
                 var ea = new CancelEventArgs();
@@ -469,7 +469,7 @@ namespace SharpDc.Connections
 
             if (UploadItem == null || UploadItem.Content.Magnet.TTH != reqItem.Magnet.TTH)
             {
-                var ea = new UploadItemNeededEventArgs { Content = reqItem };
+                var ea = new UploadItemNeededEventArgs { Transfer = this, Content = reqItem };
                 OnUploadItemNeeded(ea);
 
                 if (UploadItem != null)
@@ -484,9 +484,7 @@ namespace SharpDc.Connections
                     return;
                 }
             }
-
-            // TODO: check for slots
-
+            
             if (_readBuffer == null)
             {
                 _readBuffer = new byte[1024 * 64];
@@ -494,17 +492,26 @@ namespace SharpDc.Connections
 
             if (adcgetMessage.Start + adcgetMessage.Length > UploadItem.Content.Magnet.Size)
                 adcgetMessage.Length = UploadItem.Content.Magnet.Size - adcgetMessage.Start;
-
-            for (var position = adcgetMessage.Start; !_disposed && position< adcgetMessage.Start + adcgetMessage.Length; position += _readBuffer.Length)
+            
+            for (var position = adcgetMessage.Start; !_disposed && position < adcgetMessage.Start + adcgetMessage.Length; position += _readBuffer.Length)
             {
                 if (position == adcgetMessage.Start)
-                    SendMessage(new ADCSNDMessage{ Type = ADCGETType.File, Request = adcgetMessage.Request, Start = adcgetMessage.Start, Length = adcgetMessage.Length}.Raw);
+                {
+                    SendMessage(
+                        new ADCSNDMessage
+                            {
+                                Type = ADCGETType.File,
+                                Request = adcgetMessage.Request,
+                                Start = adcgetMessage.Start,
+                                Length = adcgetMessage.Length
+                            }.Raw);
+                }
 
                 var length = _readBuffer.Length;
 
                 if (adcgetMessage.Start + adcgetMessage.Length < position + length)
                     length = (int)(adcgetMessage.Start + adcgetMessage.Length - position);
-
+                
                 var read = UploadItem.Read(_readBuffer, position, length);
 
                 if (read != length)
@@ -672,8 +679,9 @@ namespace SharpDc.Connections
         Upload
     }
 
-    public class UploadItemNeededEventArgs : EventArgs
+    public class UploadItemNeededEventArgs : BaseEventArgs
     {
+        public TransferConnection Transfer { get; set; }
         public ContentItem Content { get; set; }
         public UploadItem UploadItem { get; set; }
     }

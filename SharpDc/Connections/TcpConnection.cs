@@ -38,20 +38,6 @@ namespace SharpDc.Connections
 
         private readonly object _sendLock = new object();
         
-        private readonly Queue<double> _perfomance = new Queue<double>();
-        
-        public double SendAverageTime
-        {
-            get {
-                lock (_perfomance)
-                {
-                    if (_perfomance.Any())
-                        return _perfomance.Average();
-                    return -1;
-                }
-            }
-        }
-
         public Socket Socket
         {
             get { return _socket; }
@@ -343,17 +329,8 @@ namespace SharpDc.Connections
                 goto begin;
             }
 
-            var sw = Stopwatch.StartNew();
             Send(buffer, 0, length);
-            sw.Stop();
-
-            lock (_perfomance)
-            {
-                _perfomance.Enqueue(sw.Elapsed.TotalMilliseconds);
-                if (_perfomance.Count > 5)
-                    _perfomance.Dequeue();
-            }
-
+            
             Monitor.Exit(_delayedMessages);
         }
 

@@ -6,12 +6,39 @@
 using System;
 using System.Diagnostics;
 using System.Globalization;
+using System.Linq;
 using System.Net;
 
 namespace SharpDc
 {
     public static class Utils
     {
+        public const long KiB = 1024;
+        public const long MiB = 1024 * KiB;
+        public const long GiB = 1024 * MiB;
+        public const long TiB = 1024 * GiB;
+
+        /// <summary>
+        /// Returns random string of lower-case characters
+        /// </summary>
+        /// <param name="length"></param>
+        /// <param name="r"></param>
+        /// <returns></returns>
+        public static string RandomSequence(int length = 8, Random r = null)
+        {
+            string seq = "";
+
+            if (r == null)
+                r = new Random(Guid.NewGuid().ToByteArray().Sum(b => b));
+
+            for (int i = 0; i < length; i++)
+            {
+                seq += (char)('a' + r.Next(0, 26));
+            }
+
+            return seq;
+        }
+
         public static Stopwatch Measure(Action action)
         {
             Stopwatch sw = Stopwatch.StartNew();
