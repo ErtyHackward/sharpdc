@@ -6,6 +6,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading;
 using SharpDc.Collections;
 using SharpDc.Events;
 using SharpDc.Interfaces;
@@ -82,15 +83,21 @@ namespace SharpDc.Structs
                 if (_totalSegmentsCount == 0)
                 {
                     // initiate the buffers
+                    lock (_syncRoot)
+                    {
+                        if (_totalSegmentsCount != 0)
+                            return _totalSegmentsCount;
 
-                    _totalSegmentsCount = (int)(_magnet.Size / SegmentSize);
-                    if (_magnet.Size % SegmentSize != 0) _totalSegmentsCount++;
-                    _doneSegmentsCount = 0;
-                    _activeSegmentsCount = 0;
+                        var ttl = (int)(_magnet.Size / SegmentSize);
+                        if (_magnet.Size % SegmentSize != 0) ttl++;
+                        _doneSegmentsCount = 0;
+                        _activeSegmentsCount = 0;
 
-                    _activeSegments = new BitArray(_totalSegmentsCount);
-                    _downloadedSegments = new BitArray(_totalSegmentsCount);
-
+                        _activeSegments = new BitArray(ttl);
+                        _downloadedSegments = new BitArray(ttl);
+                        _totalSegmentsCount = ttl;
+                    }
+                    
                 }
                 return _totalSegmentsCount; 
             }
@@ -138,6 +145,11 @@ namespace SharpDc.Structs
             get { return TotalSegmentsCount == DoneSegmentsCount; }
         }
 
+        /// <summary>
+        /// Whether or not to log segment take/done/cancel events
+        /// </summary>
+        public bool LogSegmentEvents { get; set; }
+
         #region Events
 
         public event EventHandler<SegmentEventArgs> SegmentTaken;
@@ -147,7 +159,8 @@ namespace SharpDc.Structs
             var handler = SegmentTaken;
             if (handler != null) handler(this, e);
 
-            Logger.Info("SEG TAKEN ID:{0} POS:{1} {2}", e.SegmentInfo.Index, e.SegmentInfo.StartPosition, e.Source);
+            if (LogSegmentEvents)
+                Logger.Info("SEG TAKEN ID:{0} POS:{1} {2}", e.SegmentInfo.Index, e.SegmentInfo.StartPosition, e.Source);
         }
 
         public event EventHandler<SegmentEventArgs> SegmentCancelled;
@@ -157,7 +170,8 @@ namespace SharpDc.Structs
             var handler = SegmentCancelled;
             if (handler != null) handler(this, e);
 
-            Logger.Info("SEG CANCELLED ID:{0} {1}", e.SegmentInfo.Index, e.Source);
+            if (LogSegmentEvents)
+                Logger.Info("SEG CANCELLED ID:{0} {1}", e.SegmentInfo.Index, e.Source);
         }
 
         public event EventHandler<SegmentEventArgs> SegmentFinished;
@@ -167,7 +181,8 @@ namespace SharpDc.Structs
             var handler = SegmentFinished;
             if (handler != null) handler(this, e);
 
-            Logger.Info("SEG FINISHED ID:{0} {1} ", e.SegmentInfo.Index, e.Source);
+            if (LogSegmentEvents)
+                Logger.Info("SEG FINISHED ID:{0} {1} ", e.SegmentInfo.Index, e.Source);
         }
 
         public event EventHandler DownloadFinished;
@@ -194,6 +209,13 @@ namespace SharpDc.Structs
             segment.Index = -1;
             segment.Length = 0;
             segment.StartPosition = -1;
+
+
+            if (StorageContainer == null)
+            {
+                Logger.Error("Unable to take the segment, no storage container set");
+                return false;
+            }
 
             if (StorageContainer.FreeSegments <= 0)
             {
@@ -232,7 +254,9 @@ namespace SharpDc.Structs
                 if (segment.Index != -1)
                 {
                     segment.StartPosition = (long)segment.Index * SegmentSize;
-                    segment.Length = segment.Index == _totalSegmentsCount - 1 ? (int)(_magnet.Size % SegmentSize) : SegmentSize;
+                    segment.Length = segment.Index == _totalSegmentsCount - 1
+                                            ? (int)(_magnet.Size % SegmentSize)
+                                            : SegmentSize;
 
                     _activeSegmentsCount++;
                     _activeSegments[segment.Index] = true;
@@ -241,7 +265,7 @@ namespace SharpDc.Structs
                     result = true;
                 }
             }
-            
+
             if (result)
                 OnSegmentTaken(new SegmentEventArgs { SegmentInfo = segment, Source = src, DownloadItem = this });
 

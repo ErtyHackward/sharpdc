@@ -26,14 +26,12 @@ namespace SharpDc.Connections
         private Source _source;
         private SegmentInfo _segmentInfo;
         private string _tail;
-        private Encoding _encoding = Encoding.Default;
+        private Encoding _encoding = Encoding.ASCII;
         private bool _binaryMode;
         private DirectionMessage _userDirection;
         private int _ourNumer;
         private bool _disposed;
         private byte[] _readBuffer;
-
-        private readonly object _disposeSync = new object();
 
         private TransferDirection _direction;
 
@@ -94,11 +92,27 @@ namespace SharpDc.Connections
             if (handler != null) handler(this, e);
         }
 
-        public event EventHandler<UploadItemNeededEventArgs> UploadItemNeeded;
+        /// <summary>
+        /// Handle this event to change upload item creation
+        /// </summary>
+        public event EventHandler<UploadItemEventArgs> UploadItemNeeded;
 
-        private void OnUploadItemNeeded(UploadItemNeededEventArgs e)
+        private void OnUploadItemNeeded(UploadItemEventArgs e)
         {
+            e.Transfer = this;
             var handler = UploadItemNeeded;
+            if (handler != null) handler(this, e);
+        }
+
+        /// <summary>
+        /// Handle this event to customize UploadItem disposing
+        /// </summary>
+        public event EventHandler<UploadItemEventArgs> UploadItemDispose;
+
+        protected virtual void OnUploadItemDispose(UploadItemEventArgs e)
+        {
+            e.Transfer = this;
+            var handler = UploadItemDispose;
             if (handler != null) handler(this, e);
         }
 
@@ -203,6 +217,15 @@ namespace SharpDc.Connections
                 _tail = null;
             }
 
+            if (_segmentInfo.Length < _segmentPosition + length)
+            {
+                var writeLength = (int)(_segmentInfo.Length - _segmentPosition);
+                _tail = _encoding.GetString(buffer, writeLength, length - writeLength);
+                var extra = length - writeLength;
+                length = writeLength;
+                Logger.Warn("Received extra data in parse binary ({0}): {1}...", extra, _tail.Substring(0, Math.Min(extra, 5)));
+            }
+
             if (DownloadItem.StorageContainer.WriteData(_segmentInfo, _segmentPosition, buffer, length))
             {
                 _segmentPosition += length;
@@ -280,7 +303,10 @@ namespace SharpDc.Connections
         public void RequestSegment()
         {
             if (_segmentInfo.Index == -1)
+            {
+                Logger.Error("No segment to request");
                 throw new InvalidOperationException();
+            }
 
             SendMessage(new ADCGETMessage { 
                 Type = ADCGETType.File, 
@@ -315,7 +341,8 @@ namespace SharpDc.Connections
 
         protected override void ParseRaw(byte[] buffer, int length)
         {
-            if (_disposed) return;
+            if (_disposed) 
+                return;
 
             if (_binaryMode)
             {
@@ -359,7 +386,7 @@ namespace SharpDc.Connections
                     OnIncomingMessage(new MessageEventArgs { Message = command });
                 }
 
-                if (command[0] == '$')
+                if (command.Length > 0 && command[0] == '$')
                 {
                     // command
                     var spaceIndex = command.IndexOf(' ');
@@ -469,12 +496,17 @@ namespace SharpDc.Connections
 
             if (UploadItem == null || UploadItem.Content.Magnet.TTH != reqItem.Magnet.TTH)
             {
-                var ea = new UploadItemNeededEventArgs { Transfer = this, Content = reqItem };
+                var ea = new UploadItemEventArgs { Transfer = this, Content = reqItem };
                 OnUploadItemNeeded(ea);
 
                 if (UploadItem != null)
                 {
-                    UploadItem.Dispose();
+                    var uea = new UploadItemEventArgs();
+                    OnUploadItemDispose(uea);
+                    if (!uea.Handled)
+                    {
+                        UploadItem.Dispose();
+                    }
                 }
 
                 UploadItem = ea.UploadItem;
@@ -491,8 +523,12 @@ namespace SharpDc.Connections
             }
 
             if (adcgetMessage.Start + adcgetMessage.Length > UploadItem.Content.Magnet.Size)
+            {
+                Logger.Warn("Trim ADCGET length to file actual length {0}/{1}", adcgetMessage.Start + adcgetMessage.Length, UploadItem.Content.Magnet.Size);
                 adcgetMessage.Length = UploadItem.Content.Magnet.Size - adcgetMessage.Start;
-            
+                
+            }
+
             for (var position = adcgetMessage.Start; !_disposed && position < adcgetMessage.Start + adcgetMessage.Length; position += _readBuffer.Length)
             {
                 if (position == adcgetMessage.Start)
@@ -511,17 +547,23 @@ namespace SharpDc.Connections
 
                 if (adcgetMessage.Start + adcgetMessage.Length < position + length)
                     length = (int)(adcgetMessage.Start + adcgetMessage.Length - position);
-                
+
                 var read = UploadItem.Read(_readBuffer, position, length);
 
                 if (read != length)
                 {
-                    Logger.Error("File read error ({0},{1}): {2}", read, length, UploadItem.Content.SystemPath);
+                    Logger.Error("Upload read error ({0}/{1}): {2}", read, length, UploadItem.Content.SystemPath);
                     Dispose();
                     return;
                 }
+                
+                var sent = Send(_readBuffer, 0, read);
 
-                SendRaw(_readBuffer, read);
+                if (sent != read)
+                {
+                    Dispose();
+                    return;
+                }
             }
         }
 
@@ -531,7 +573,6 @@ namespace SharpDc.Connections
             {
                 if (_userDirection.Download)
                 {
-
                     // conflict
                     if (_userDirection.Number == _ourNumer)
                     {
@@ -556,6 +597,10 @@ namespace SharpDc.Connections
                     _segmentPosition = 0;
                     // we won, request a segment
                     RequestSegment();
+                }
+                else
+                {
+                    Logger.Warn("Can't take the segment to download");
                 }
             }
             else
@@ -609,6 +654,12 @@ namespace SharpDc.Connections
         private void OnMessageDirection(ref DirectionMessage directionMessage)
         {
             _userDirection = directionMessage;
+
+            if (!_userDirection.Download && DownloadItem == null)
+            {
+                Logger.Warn("User want to upload and we have no DownloadItem for him. Disconnecting.");
+                Dispose();
+            }
         }
 
         private void OnMessageLock(ref LockMessage lockMessage)
@@ -656,14 +707,19 @@ namespace SharpDc.Connections
         {
             if (_disposed) 
                 return;
-
+            
             _readBuffer = null;
             ReleaseSegment();
             DownloadItem = null;
             if (UploadItem != null)
             {
-                UploadItem.Dispose();
-                UploadItem = null;
+                var ea = new UploadItemEventArgs();
+                OnUploadItemDispose(ea);
+                if (!ea.Handled)
+                {
+                    UploadItem.Dispose();
+                    UploadItem = null;
+                }
             }
 
             DisconnectAsync();
@@ -679,7 +735,7 @@ namespace SharpDc.Connections
         Upload
     }
 
-    public class UploadItemNeededEventArgs : BaseEventArgs
+    public class UploadItemEventArgs : BaseEventArgs
     {
         public TransferConnection Transfer { get; set; }
         public ContentItem Content { get; set; }

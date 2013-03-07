@@ -35,10 +35,16 @@ namespace SharpDc
         private TcpConnectionListener _tcpConnectionListener;
         private int _active;
         private Timer _updateTimer;
+        private readonly object _updateSynRoot = new object();
         private IShare _share;
         private long _totalUploaded;
         private long _totalDownloaded;
         private readonly object _speedSyncRoot = new object();
+
+        /// <summary>
+        /// Gets or sets thread pool used by engine
+        /// </summary>
+        public static IThreadPoolProxy ThreadPool { get; set; }
 
         #region Properties
         /// <summary>
@@ -216,6 +222,11 @@ namespace SharpDc
 
         #region Constructor
 
+        static DcEngine()
+        {
+            DcEngine.ThreadPool = new ThreadPoolProxy();
+        }
+
         public DcEngine() : this(EngineSettings.Default) { }
 
         public DcEngine(EngineSettings settings)
@@ -264,6 +275,7 @@ namespace SharpDc
 
         #endregion
 
+        
 
         void DownloadManagerDownloadAdding(object sender, CancelDownloadEventArgs e)
         {
@@ -356,7 +368,7 @@ namespace SharpDc
         {
             _updateTimer = new Timer(o => Update(), null, 0, updateInterval);
         }
-
+        
         /// <summary>
         /// Performs engine control operations, need to be called periodically
         /// - Checks hub connections (and restores if needed)
@@ -364,7 +376,7 @@ namespace SharpDc
         /// - Sends search requests
         /// - Disconnects timeouted connections
         /// </summary>
-        void Update()
+        public void Update()
         {
             foreach (var hub in Hubs)
             {
@@ -380,7 +392,7 @@ namespace SharpDc
             if (!Active) 
                 return;
 
-            if (!Monitor.TryEnter(_updateTimer))
+            if (!Monitor.TryEnter(_updateSynRoot))
             {
                 Logger.Warn("Unable to update engine, it is locked");
                 return;
@@ -416,7 +428,7 @@ namespace SharpDc
             }
             finally
             {
-                Monitor.Exit(_updateTimer);
+                Monitor.Exit(_updateSynRoot);
             }
 
             if (sw.ElapsedMilliseconds > 300)
@@ -896,7 +908,8 @@ namespace SharpDc
             }
             else
             {
-                new ThreadStart(delegate {
+                DcEngine.ThreadPool.QueueWorkItem(delegate
+                {
                     
                     // start new connections gradually
 
@@ -908,7 +921,7 @@ namespace SharpDc
                         Thread.Sleep(100);
                     }
                     
-                }).BeginInvoke(null, null);
+                });
             }
         }
 

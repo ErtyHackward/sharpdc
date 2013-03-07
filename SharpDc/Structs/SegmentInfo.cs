@@ -10,5 +10,10 @@ namespace SharpDc.Structs
         public int Index;
         public long StartPosition;
         public long Length;
+
+        public override string ToString()
+        {
+            return string.Format("SegInfo[I:{0};S:{1};L:{2}]", Index, StartPosition, Length);
+        }
     }
 }

@@ -70,9 +70,11 @@
     <Compile Include="Exceptions\InvalidFileNameException.cs" />
     <Compile Include="Exceptions\NoFreeSpaceException.cs" />
     <Compile Include="Helpers\FileHelper.cs" />
+    <Compile Include="Helpers\HttpHelper.cs" />
     <Compile Include="Interfaces\ISearchResult.cs" />
     <Compile Include="Interfaces\IShare.cs" />
     <Compile Include="Interfaces\IStorageContainer.cs" />
+    <Compile Include="IThreadPoolProxy.cs" />
     <Compile Include="Logging\LogManager.cs" />
     <Compile Include="Managers\ContentItem.cs" />
     <Compile Include="Managers\DownloadManager.cs" />
@@ -111,6 +113,7 @@
     <Compile Include="Structs\DcStream.cs" />
     <Compile Include="Structs\DownloadItem.cs" />
     <Compile Include="Structs\DownloadItemsGroup.cs" />
+    <Compile Include="Structs\HttpUploadItem.cs" />
     <Compile Include="Structs\HubSettings.cs" />
     <Compile Include="Structs\Magnet.cs" />
     <Compile Include="Structs\NullUploadItem.cs" />
@@ -121,6 +124,7 @@
     <Compile Include="Structs\TagInfo.cs" />
     <Compile Include="Structs\UploadItem.cs" />
     <Compile Include="Structs\UserInfo.cs" />
+    <Compile Include="ThreadPoolProxy.cs" />
     <Compile Include="Utils.cs" />
     <Compile Include="WebServer\Request.cs" />
     <Compile Include="WebServer\Response.cs" />
