@@ -5,24 +5,34 @@
 //  -------------------------------------------------------------
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 
 namespace SharpDc.Structs
 {
     /// <summary>
     /// General class for speed calculations
+    /// Uses moving average method
     /// </summary>
     public class SpeedAverage
     {
-        private readonly int _period;
+        private readonly TimeSpan _period;
+        private readonly TimeSpan _window;
+
         private long _accumulated;
         private readonly object _syncRoot = new object();
-        private DateTime _lastSecond;
-        private readonly Queue<KeyValuePair<DateTime, long>> _buffer = new Queue<KeyValuePair<DateTime, long>>();
-
-        private const int SizeLimit = 100;
+        private long _windowStartedAt;
+        private readonly Queue<KeyValuePair<long, long>> _buffer = new Queue<KeyValuePair<long, long>>();
 
         private long _total;
+
+        /// <summary>
+        /// Gets moving average period of time
+        /// </summary>
+        public TimeSpan Period
+        {
+            get { return _period; }
+        }
 
         /// <summary>
         /// Gets total amount of bytes processed
@@ -32,9 +42,44 @@ namespace SharpDc.Structs
             get { return _total; }
         }
 
-        public SpeedAverage(int period)
+        /// <summary>
+        /// Creates speed calculator with 10 seconds period and 1 second buffer
+        /// </summary>
+        public SpeedAverage()
+        {
+            _period = TimeSpan.FromSeconds(10);
+            _window = TimeSpan.FromSeconds(1);
+        }
+
+        /// <summary>
+        /// Creates speed calculator with 1 second buffer
+        /// </summary>
+        /// <param name="period">Moving average period</param>
+        public SpeedAverage(TimeSpan period)
         {
             _period = period;
+            _window = TimeSpan.FromSeconds(1);
+        }
+
+        /// <summary>
+        /// Creates speed calculator
+        /// </summary>
+        /// <param name="period">Moving average period interval</param>
+        /// <param name="window">Buffer length to accumulate values</param>
+        public SpeedAverage(TimeSpan period, TimeSpan window)
+        {
+            _period = period;
+            _window = window;
+        }
+
+        private double GetSecondsPassedFrom(long timestamp)
+        {
+            return (double)(Stopwatch.GetTimestamp() - timestamp) / Stopwatch.Frequency;
+        }
+
+        private double GetSecondsDiff(long to, long from)
+        {
+            return (double)(to - from) / Stopwatch.Frequency;
         }
 
         public void Update(int bytesTransmitted)
@@ -42,46 +87,42 @@ namespace SharpDc.Structs
             lock (_syncRoot)
             {
                 _total += bytesTransmitted;
-                if ((DateTime.Now - _lastSecond).TotalSeconds < 1)
+
+                if (GetSecondsPassedFrom(_windowStartedAt) < _window.TotalSeconds)
                 {
                     _accumulated += bytesTransmitted;
                     return;
                 }
-            }
-
-            if (_buffer.Count >= SizeLimit)
-            {
-                RemoveOldValues();
-                if (_buffer.Count >= SizeLimit)
+                
+                if (_buffer.Count >= _period.TotalMilliseconds / _window.TotalMilliseconds + 1 )
                 {
-                    return;
+                    RemoveOldValues();
                 }
-            }
 
-            var pair = new KeyValuePair<DateTime, long>(DateTime.Now, _accumulated + bytesTransmitted);
-            _buffer.Enqueue(pair);
-            _accumulated = 0;
-            _lastSecond = DateTime.Now;
+                // save prev window
+                
+                var pair = new KeyValuePair<long, long>(_windowStartedAt, _accumulated);
+                _buffer.Enqueue(pair);
+
+                // start a new window
+                _accumulated = bytesTransmitted;
+                _windowStartedAt = Stopwatch.GetTimestamp();
+            }
         }
 
         public double GetSpeed()
         {
             lock (_syncRoot)
             {
+                //Update(0);
                 RemoveOldValues();
 
-                if (_buffer.Count == 0)
-                    return 0;
+                long summ = _accumulated;
 
-                var result = _buffer.Sum(pair => pair.Value);
+                if (_buffer.Count != 0)
+                    summ += _buffer.Sum(pair => pair.Value);
 
-                result += _accumulated;
-
-                var elapsed = (DateTime.Now - _buffer.Peek().Key).TotalSeconds;
-
-                if (elapsed < 1) elapsed = 1;
-
-                return result/elapsed;
+                return summ / _period.TotalSeconds;
             }
         }
 
@@ -92,7 +133,7 @@ namespace SharpDc.Structs
             {
                 var pair = _buffer.Peek();
 
-                if ((DateTime.Now - pair.Key).TotalSeconds > _period)
+                if (GetSecondsPassedFrom(pair.Key) > _period.TotalSeconds + 1)
                     _buffer.Dequeue();
                 else
                     break;

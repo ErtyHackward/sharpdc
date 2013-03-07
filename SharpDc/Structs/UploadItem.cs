@@ -23,6 +23,8 @@ namespace SharpDc.Structs
         
         private static int _fileStreamsCount;
 
+        private bool _isDisposed;
+
         /// <summary>
         /// Gets total amount of FileSteam objects exists
         /// </summary>
@@ -41,7 +43,7 @@ namespace SharpDc.Structs
 
         public event EventHandler<UploadItemErrorEventArgs> Error;
 
-        private void OnError(UploadItemErrorEventArgs e)
+        protected void OnError(UploadItemErrorEventArgs e)
         {
             e.UploadItem = this;
             var handler = Error;
@@ -64,20 +66,35 @@ namespace SharpDc.Structs
 
         protected virtual int InternalRead(byte[] array, long start, int count)
         {
-            using (new PerfLimit("Slow open " + Content.SystemPath, 1000))
+            if (_fileStream == null)
             {
-                if (_fileStream == null)
+                FileStream fs;
+                using (new PerfLimit("Slow open " + Content.SystemPath, 4000))
                 {
-                    _fileStream = new FileStream(Content.SystemPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
-                                                 FileStreamReadBufferSize, false);
+                    fs = new FileStream(Content.SystemPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
+                                        FileStreamReadBufferSize, false);
+                }
+
+                lock (_syncRoot)
+                {
+                    if (_isDisposed)
+                    {
+                        fs.Dispose();
+                        return 0;
+                    }
                     Interlocked.Increment(ref _fileStreamsCount);
+                    _fileStream = fs;
                 }
             }
+            
 
-            using (new PerfLimit("Slow read " + Content.SystemPath))
+            lock (_syncRoot)
             {
-                _fileStream.Position = start;
-                return _fileStream.Read(array, 0, count);
+                using (new PerfLimit("Slow read " + Content.SystemPath, 4000))
+                {
+                    _fileStream.Position = start;
+                    return _fileStream.Read(array, 0, count);
+                }
             }
         }
 
@@ -85,8 +102,7 @@ namespace SharpDc.Structs
         {
             try
             {
-                lock (_syncRoot)
-                    return InternalRead(array, start, count);
+                return InternalRead(array, start, count);
             }
             catch (Exception x)
             {
@@ -96,7 +112,20 @@ namespace SharpDc.Structs
             }
         }
 
-        public void Dispose()
+        public bool IsLocked
+        {
+            get {
+
+                if (Monitor.TryEnter(_syncRoot, 100))
+                {
+                    Monitor.Exit(_syncRoot);
+                    return false;
+                }
+                return true;
+            }
+        }
+
+        public virtual void Dispose()
         {
             lock (_syncRoot)
             {
@@ -106,6 +135,7 @@ namespace SharpDc.Structs
                     _fileStream = null;
                     Interlocked.Decrement(ref _fileStreamsCount);
                 }
+                _isDisposed = true;
             }
             OnDisposed();
         }

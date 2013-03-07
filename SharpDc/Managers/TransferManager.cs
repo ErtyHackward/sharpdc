@@ -105,11 +105,22 @@ namespace SharpDc.Managers
         /// <summary>
         /// Occurs when transfer requests for an upload item
         /// </summary>
-        public event EventHandler<UploadItemNeededEventArgs> TransferUploadItemNeeded;
+        public event EventHandler<UploadItemEventArgs> TransferUploadItemNeeded;
 
-        protected virtual void OnTransferUploadItemNeeded(UploadItemNeededEventArgs e)
+        protected virtual void OnTransferUploadItemNeeded(UploadItemEventArgs e)
         {
             var handler = TransferUploadItemNeeded;
+            if (handler != null) handler(this, e);
+        }
+
+        /// <summary>
+        /// Occurs when transfer tries to dispose its UploadItem
+        /// </summary>
+        public event EventHandler<UploadItemEventArgs> TransferUploadItemDispose;
+
+        protected virtual void OnTransferUploadItemDispose(UploadItemEventArgs e)
+        {
+            var handler = TransferUploadItemDispose;
             if (handler != null) handler(this, e);
         }
 
@@ -167,6 +178,7 @@ namespace SharpDc.Managers
 
             transfer.ConnectionStatusChanged += TransferConnectionStatusChanged;
             transfer.UploadItemNeeded += TransferUploadItemNeededHandler;
+            transfer.UploadItemDispose += TransferUploadItemDisposeHandler;
             transfer.DirectionChanged += TransferDirectionChanged;
             transfer.DownloadItemNeeded += TransferDownloadItemNeeded;
             transfer.Authorization += TransferAuthorizationHandler;
@@ -175,6 +187,11 @@ namespace SharpDc.Managers
 
             OnTransferAdded(new TransferEventArgs { Transfer = transfer });
 
+        }
+
+        void TransferUploadItemDisposeHandler(object sender, UploadItemEventArgs e)
+        {
+            OnTransferUploadItemDispose(e);
         }
 
         void TransferConnectionStatusChanged(object sender, ConnectionStatusEventArgs e)
@@ -193,12 +210,13 @@ namespace SharpDc.Managers
                 }
 
                 transfer.ConnectionStatusChanged -= TransferConnectionStatusChanged;
-                transfer.UploadItemNeeded -= TransferUploadItemNeededHandler;
-                transfer.DirectionChanged -= TransferDirectionChanged;
-                transfer.DownloadItemNeeded -= TransferDownloadItemNeeded;
-                transfer.Authorization -= TransferAuthorizationHandler;
-                transfer.Error -= TransferError;
-                transfer.SlotRequest -= TransferSlotRequest;
+                transfer.UploadItemNeeded        -= TransferUploadItemNeededHandler;
+                transfer.UploadItemDispose       -= TransferUploadItemDisposeHandler;
+                transfer.DirectionChanged        -= TransferDirectionChanged;
+                transfer.DownloadItemNeeded      -= TransferDownloadItemNeeded;
+                transfer.Authorization           -= TransferAuthorizationHandler;
+                transfer.Error                   -= TransferError;
+                transfer.SlotRequest             -= TransferSlotRequest;
 
                 OnTransferRemoved(new TransferEventArgs { Transfer = transfer, Exception = e.Exception });
             }
@@ -215,7 +233,7 @@ namespace SharpDc.Managers
             }
         }
 
-        private void TransferUploadItemNeededHandler(object sender, UploadItemNeededEventArgs e)
+        private void TransferUploadItemNeededHandler(object sender, UploadItemEventArgs e)
         {
             OnTransferUploadItemNeeded(e);
 
@@ -439,10 +457,16 @@ namespace SharpDc.Managers
                 {
                     var idleSeconds = (DateTime.Now - transferConnection.LastEventTime).TotalSeconds;
 
-                    if (transferConnection.DownloadItem != null && idleSeconds > DownloadInactivityTimeout)
+                    if (transferConnection.DownloadItem != null && DownloadInactivityTimeout > 0 && idleSeconds > DownloadInactivityTimeout)
+                    {
+                        Logger.Info("Download inactivity timeout reached [{0}, {1}]. Disconnect.", DownloadInactivityTimeout, transferConnection.Source);
                         transferConnection.DisconnectAsync();
-                    else if (idleSeconds > UploadInactivityTimeout)
+                    }
+                    else if (UploadInactivityTimeout > 0 && idleSeconds > UploadInactivityTimeout)
+                    {
+                        Logger.Info("Upload inactivity timeout reached [{0}, {1}]. Disconnect.", UploadInactivityTimeout, transferConnection.Source);
                         transferConnection.DisconnectAsync();
+                    }
                 }
                 swUpdate.Stop();
             }
