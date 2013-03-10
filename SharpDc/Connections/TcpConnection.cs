@@ -144,19 +144,21 @@ namespace SharpDc.Connections
 
         protected TcpConnection(string address) : this(ParseAddress(address)) { }
 
-        protected TcpConnection(IPEndPoint remoteEndPoint)
+        protected TcpConnection()
         {
             Initialize();
+        }
+
+        protected TcpConnection(IPEndPoint remoteEndPoint) : this()
+        {
             RemoteEndPoint = remoteEndPoint;
             _connectionStatus = ConnectionStatus.Disconnected;
         }
 
-        protected TcpConnection(Socket socket)
+        protected TcpConnection(Socket socket) : this()
         {
             if (socket == null) 
                 throw new ArgumentNullException("socket");
-
-            Initialize();
 
             _socket = socket;
             _socket.SendTimeout = SendTimeout;

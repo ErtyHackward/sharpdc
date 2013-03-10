@@ -10,6 +10,8 @@ namespace SharpDc.Structs
     {
         private static readonly ILogger Logger = LogManager.GetLogger();
 
+        public static HttpDownloadManager Manager = new HttpDownloadManager();
+
         private byte[] _buffer;
         private long _position;
         
@@ -22,7 +24,7 @@ namespace SharpDc.Structs
 
         private bool ValidateBuffer(long pos, int count)
         {
-            if (_position <= pos && _position + _buffer.Length >= pos + count)
+            if (_position != -1 && _position <= pos && _position + _buffer.Length >= pos + count)
                 return true;
 
             _position = pos;
@@ -36,8 +38,8 @@ namespace SharpDc.Structs
             {
                 using (new PerfLimit(string.Format("Http request {0} {1} bytes", Content.SystemPath, length), 4000))
                 {
-                    HttpHelper.DownloadChunk(Content.SystemPath, _buffer, _position, length);
-                    return true;
+                    //HttpHelper.DownloadChunk(Content.SystemPath, _buffer, _position, length);
+                    return Manager.DownloadChunk(Content.SystemPath, _buffer, _position, length);
                 }
             }
             catch (Exception x)
