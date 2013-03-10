@@ -936,6 +936,8 @@ namespace SharpDc
                 _updateTimer = null;
             }
 
+            HttpUploadItem.Manager.Dispose();
+
             Hubs.ForEach(h => h.Dispose());
             TransferManager.Dispose();
             InitTcp(0);

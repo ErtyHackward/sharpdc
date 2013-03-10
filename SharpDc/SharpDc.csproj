@@ -43,6 +43,7 @@
     <Compile Include="Collections\HubCollection.cs" />
     <Compile Include="Collections\ObservableList.cs" />
     <Compile Include="Collections\SourceList.cs" />
+    <Compile Include="Connections\HttpConnection.cs" />
     <Compile Include="Connections\HubConnection.cs" />
     <Compile Include="Connections\TcpConnection.cs" />
     <Compile Include="Connections\TransferConnection.cs" />
@@ -71,6 +72,7 @@
     <Compile Include="Exceptions\NoFreeSpaceException.cs" />
     <Compile Include="Helpers\FileHelper.cs" />
     <Compile Include="Helpers\HttpHelper.cs" />
+    <Compile Include="HttpDownloadManager.cs" />
     <Compile Include="Interfaces\ISearchResult.cs" />
     <Compile Include="Interfaces\IShare.cs" />
     <Compile Include="Interfaces\IStorageContainer.cs" />
