@@ -1,13 +1,10 @@
 //  -------------------------------------------------------------
 //  SharpDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012
+//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
 //  licensed under the LGPL
 //  -------------------------------------------------------------
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using SharpDc.Logging;
 using SharpDc.Managers;
@@ -19,12 +16,11 @@ namespace SharpDc.Structs
     /// </summary>
     public class UploadItem : IDisposable
     {
+        #region Static
         private static readonly ILogger Logger = LogManager.GetLogger();
         
         private static int _fileStreamsCount;
-
-        private bool _isDisposed;
-
+        
         /// <summary>
         /// Gets total amount of FileSteam objects exists
         /// </summary>
@@ -32,14 +28,26 @@ namespace SharpDc.Structs
         {
             get { return _fileStreamsCount; }
         }
-
-
+        #endregion
+        
+        private bool _isDisposed;
         private readonly object _syncRoot = new object();
         private FileStream _fileStream;
-        
+        private string _systemPath;
+
+        /// <summary>
+        /// Gets or sets system path to use
+        /// </summary>
+        public string SystemPath
+        {
+            get { return _systemPath ?? Content.SystemPath; }
+            set { _systemPath = value; }
+        }
+
         public ContentItem Content { get; set; }
 
         public int FileStreamReadBufferSize { get; private set; }
+
 
         public event EventHandler<UploadItemErrorEventArgs> Error;
 
@@ -71,7 +79,7 @@ namespace SharpDc.Structs
                 FileStream fs;
                 using (new PerfLimit("Slow open " + Content.SystemPath, 4000))
                 {
-                    fs = new FileStream(Content.SystemPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
+                    fs = new FileStream(SystemPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
                                         FileStreamReadBufferSize, false);
                 }
 
@@ -139,6 +147,8 @@ namespace SharpDc.Structs
             }
             OnDisposed();
         }
+
+        
     }
 
     public class UploadItemErrorEventArgs : EventArgs

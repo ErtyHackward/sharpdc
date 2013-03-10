@@ -111,6 +111,8 @@ namespace SharpDc
 
         public SourceManager SourceManager { get; set; }
 
+        public FileSourceManager FileSourceManager { get; set; }
+
         /// <summary>
         /// Gets amount of bytes uploaded by the transfers since the program start
         /// </summary>
@@ -248,7 +250,9 @@ namespace SharpDc
             TransferManager = new TransferManager(this);
             TransferManager.TransferAdded += TransferManagerTransferAdded;
             TransferManager.TransferRemoved += TransferManagerTransferRemoved;
+            TransferManager.TransferUploadItemError += TransferManagerTransferUploadItemError;
             SourceManager = new SourceManager();
+            FileSourceManager = new FileSourceManager();
 
             InitUdp(Settings.UdpPort);
             InitTcp(Settings.TcpPort);
@@ -274,64 +278,7 @@ namespace SharpDc
         }
 
         #endregion
-
         
-
-        void DownloadManagerDownloadAdding(object sender, CancelDownloadEventArgs e)
-        {
-            if (e.DownloadItem.SaveTargets == null)
-                return;
-
-            var drive1 = Path.GetPathRoot(e.DownloadItem.SaveTargets[0]);
-           
-            // here we should check for free space, 
-            if (!string.IsNullOrEmpty(drive1) && FileHelper.GetFreeDiskSpace(drive1) < e.DownloadItem.Magnet.Size)
-            {
-                throw new NoFreeSpaceException(drive1);
-            }
-
-            if (string.IsNullOrEmpty(drive1))
-                return;
-
-            // lets check for file size restriction
-            var driveInfo1 = new DriveInfo(drive1);
-            var fileSystem1 = driveInfo1.DriveFormat;
-            
-            if (fileSystem1 == "FAT32")
-            {
-                // maximum file size 4 Gb
-                if (e.DownloadItem.Magnet.Size > 4L * 1024 * 1024 * 1024)
-                    throw new FileTooBigException(4L * 1024 * 1024 * 1024, e.DownloadItem.Magnet.Size);
-            }
-
-            if (fileSystem1 == "NTFS")
-            {
-                // maximum file size 16 Tb - 64 Kb
-                if (e.DownloadItem.Magnet.Size > 16L * 1024 * 1024 * 1024 * 1024 - 64 * 1024)
-                    throw new FileTooBigException(16L * 1024 * 1024 * 1024 * 1024 - 64 * 1024, e.DownloadItem.Magnet.Size);
-            }
-
-            if (Settings.InstantAllocate)
-            {
-                var path = e.DownloadItem.SaveTargets[0];
-                var dirInfo = new DirectoryInfo(Path.GetDirectoryName(path));
-                if (!dirInfo.Exists)
-                {
-                    dirInfo.Create();
-                }
-                FileHelper.AllocateFile(path, e.DownloadItem.Magnet.Size);
-            }
-
-        }
-
-        void DownloadManager_DownloadCompleted(object sender, DownloadCompletedEventArgs e)
-        {
-            if (Share != null)
-            {
-                
-            }
-        }
-
         /// <summary>
         /// Returns stream to read file from DC or from share
         /// Allows to read non-downloaded files
@@ -435,32 +382,6 @@ namespace SharpDc
                 Logger.Warn("Slow engine update Total:{0}ms R:{1}ms T:{2}ms S:{3}ms", sw.ElapsedMilliseconds, swRequest.ElapsedMilliseconds, swTransfers.ElapsedMilliseconds, swSearches.ElapsedMilliseconds);
         }
 
-        void TransferManagerTransferRemoved(object sender, TransferEventArgs e)
-        {
-            lock (_speedSyncRoot)
-            {
-                _totalUploaded   += e.Transfer.UploadSpeed.Total;
-                _totalDownloaded += e.Transfer.DownloadSpeed.Total;
-            }
-
-            if (Settings.DumpTransferProtocolMessages)
-            {
-                e.Transfer.IncomingMessage -= IncomingMessageHandler;
-                e.Transfer.OutgoingMessage -= OutgoingMessageHandler;
-            }
-
-            e.Transfer.Dispose();
-        }
-
-        void TransferManagerTransferAdded(object sender, TransferEventArgs e)
-        {
-            if (Settings.DumpTransferProtocolMessages)
-            {
-                e.Transfer.IncomingMessage += IncomingMessageHandler;
-                e.Transfer.OutgoingMessage += OutgoingMessageHandler;
-            }
-        }
-
         private void InitTcp(int p)
         {
             if (_tcpConnectionListener != null)
@@ -477,31 +398,7 @@ namespace SharpDc
                 _tcpConnectionListener.ListenAsync();
             }
         }
-
-        void TcpConnectionListenerIncomingConnection(object sender, IncomingConnectionEventArgs e)
-        {
-            if (e.Socket.Connected)
-            {
-                var connLimit = Settings.ConnectionsLimit;
-
-                if (connLimit != 0 && TransferManager.TransfersCount >= connLimit)
-                {
-                    Logger.Warn("Connection limit {0} reached, dropping incoming connection", connLimit);
-                    return;
-                }
-
-                e.Handled = true;
-                var transfer = new TransferConnection(e.Socket);
-                TransferManager.AddTransfer(transfer);
-                transfer.ListenAsync();
-            }
-            else
-            {
-                Logger.Warn("We have disconnected incoming socket");
-            }
-        }
         
-
         private void InitUdp(int port)
         {
             if (_udpConnection != null)
@@ -526,6 +423,118 @@ namespace SharpDc
         }
 
         #region Handlers
+
+
+        void DownloadManagerDownloadAdding(object sender, CancelDownloadEventArgs e)
+        {
+            if (e.DownloadItem.SaveTargets == null)
+                return;
+
+            var drive1 = Path.GetPathRoot(e.DownloadItem.SaveTargets[0]);
+
+            // here we should check for free space, 
+            if (!string.IsNullOrEmpty(drive1) && FileHelper.GetFreeDiskSpace(drive1) < e.DownloadItem.Magnet.Size)
+            {
+                throw new NoFreeSpaceException(drive1);
+            }
+
+            if (string.IsNullOrEmpty(drive1))
+                return;
+
+            // lets check for file size restriction
+            var driveInfo1 = new DriveInfo(drive1);
+            var fileSystem1 = driveInfo1.DriveFormat;
+
+            if (fileSystem1 == "FAT32")
+            {
+                // maximum file size 4 Gb
+                if (e.DownloadItem.Magnet.Size > 4L * 1024 * 1024 * 1024)
+                    throw new FileTooBigException(4L * 1024 * 1024 * 1024, e.DownloadItem.Magnet.Size);
+            }
+
+            if (fileSystem1 == "NTFS")
+            {
+                // maximum file size 16 Tb - 64 Kb
+                if (e.DownloadItem.Magnet.Size > 16L * 1024 * 1024 * 1024 * 1024 - 64 * 1024)
+                    throw new FileTooBigException(16L * 1024 * 1024 * 1024 * 1024 - 64 * 1024, e.DownloadItem.Magnet.Size);
+            }
+
+            if (Settings.InstantAllocate)
+            {
+                var path = e.DownloadItem.SaveTargets[0];
+                var dirInfo = new DirectoryInfo(Path.GetDirectoryName(path));
+                if (!dirInfo.Exists)
+                {
+                    dirInfo.Create();
+                }
+                FileHelper.AllocateFile(path, e.DownloadItem.Magnet.Size);
+            }
+
+        }
+
+        void DownloadManager_DownloadCompleted(object sender, DownloadCompletedEventArgs e)
+        {
+            if (Share != null)
+            {
+
+            }
+        }
+
+
+        void TcpConnectionListenerIncomingConnection(object sender, IncomingConnectionEventArgs e)
+        {
+            if (e.Socket.Connected)
+            {
+                var connLimit = Settings.ConnectionsLimit;
+
+                if (connLimit != 0 && TransferManager.TransfersCount >= connLimit)
+                {
+                    Logger.Warn("Connection limit {0} reached, dropping incoming connection", connLimit);
+                    return;
+                }
+
+                e.Handled = true;
+                var transfer = new TransferConnection(e.Socket);
+                TransferManager.AddTransfer(transfer);
+                transfer.ListenAsync();
+            }
+            else
+            {
+                Logger.Warn("We have disconnected incoming socket");
+            }
+        }
+
+        void TransferManagerTransferRemoved(object sender, TransferEventArgs e)
+        {
+            lock (_speedSyncRoot)
+            {
+                _totalUploaded += e.Transfer.UploadSpeed.Total;
+                _totalDownloaded += e.Transfer.DownloadSpeed.Total;
+            }
+
+            if (Settings.DumpTransferProtocolMessages)
+            {
+                e.Transfer.IncomingMessage -= IncomingMessageHandler;
+                e.Transfer.OutgoingMessage -= OutgoingMessageHandler;
+            }
+
+            e.Transfer.Dispose();
+        }
+
+        void TransferManagerTransferAdded(object sender, TransferEventArgs e)
+        {
+            if (Settings.DumpTransferProtocolMessages)
+            {
+                e.Transfer.IncomingMessage += IncomingMessageHandler;
+                e.Transfer.OutgoingMessage += OutgoingMessageHandler;
+            }
+        }
+
+        void TransferManagerTransferUploadItemError(object sender, UploadItemErrorEventArgs e)
+        {
+            FileSourceManager.RegisterError(e.UploadItem.SystemPath);
+        }
+
         void UdpConnectionSearchResult(object sender, SearchResultEventArgs e)
         {
             SearchManager.InjectResult(e.Message);

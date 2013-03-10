@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
+//  -------------------------------------------------------------
 //  SharpDc project 
 //  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012
 //  licensed under the LGPL
 //  -------------------------------------------------------------
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -11,7 +12,7 @@ using SharpDc.Interfaces;
 using SharpDc.Logging;
 using SharpDc.Structs;
 
-namespace SharpDc
+namespace SharpDc.Storage
 {
     /// <summary>
     /// Allows to save the data into a file

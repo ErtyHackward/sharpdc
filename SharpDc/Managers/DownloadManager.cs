@@ -10,6 +10,7 @@ using System.Linq;
 using SharpDc.Collections;
 using SharpDc.Events;
 using SharpDc.Logging;
+using SharpDc.Storage;
 using SharpDc.Structs;
 
 namespace SharpDc.Managers

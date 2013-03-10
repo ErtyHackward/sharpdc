@@ -1,15 +1,15 @@
-﻿//  -------------------------------------------------------------
+//  -------------------------------------------------------------
 //  SharpDc project 
 //  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012
 //  licensed under the LGPL
 //  -------------------------------------------------------------
+
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using SharpDc.Interfaces;
 using SharpDc.Structs;
 
-namespace SharpDc
+namespace SharpDc.Storage
 {
     /// <summary>
     /// Provides a container that stores all data in memory
