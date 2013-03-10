@@ -1,6 +1,4 @@
 using System;
-using System.Net;
-using SharpDc.Helpers;
 using SharpDc.Logging;
 using SharpDc.Managers;
 
@@ -36,10 +34,10 @@ namespace SharpDc.Structs
 
             try
             {
-                using (new PerfLimit(string.Format("Http request {0} {1} bytes", Content.SystemPath, length), 4000))
+                using (new PerfLimit(string.Format("Http request {0} {1} bytes", SystemPath, length), 4000))
                 {
                     //HttpHelper.DownloadChunk(Content.SystemPath, _buffer, _position, length);
-                    return Manager.DownloadChunk(Content.SystemPath, _buffer, _position, length);
+                    return Manager.DownloadChunk(SystemPath, _buffer, _position, length);
                 }
             }
             catch (Exception x)
@@ -53,7 +51,10 @@ namespace SharpDc.Structs
         protected override int InternalRead(byte[] array, long start, int count)
         {
             if (!ValidateBuffer(start, count))
+            {
+                OnError(new UploadItemErrorEventArgs());
                 return 0;
+            }
 
             Buffer.BlockCopy(_buffer, (int)(start - _position), array, 0, count);
 

@@ -1,15 +1,13 @@
-﻿//  -------------------------------------------------------------
+//  -------------------------------------------------------------
 //  SharpDc project 
 //  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012
 //  licensed under the LGPL
 //  -------------------------------------------------------------
+
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using SharpDc.Interfaces;
 
-namespace SharpDc
+namespace SharpDc.Storage
 {
     /// <summary>
     /// Provides memory buffering of write operations to the file

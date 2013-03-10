@@ -70,11 +70,11 @@ namespace SharpDc.Managers
 
         #region Events 
 
-        public event EventHandler<UploadItemErrorEventArgs> Error;
+        public event EventHandler<UploadItemErrorEventArgs> TransferUploadItemError;
 
-        private void OnError(UploadItemErrorEventArgs e)
+        private void OnUploadItemError(UploadItemErrorEventArgs e)
         {
-            var handler = Error;
+            var handler = TransferUploadItemError;
             if (handler != null) handler(this, e);
         }
 
@@ -237,34 +237,45 @@ namespace SharpDc.Managers
         {
             OnTransferUploadItemNeeded(e);
 
-            if (e.Handled)
-                return;
-
-            if (string.IsNullOrEmpty(e.Content.Magnet.TTH))
+            if (!e.Handled)
             {
-                if (e.Content.Magnet.FileName == "files.xml.bz2")
+                if (string.IsNullOrEmpty(e.Content.Magnet.TTH))
                 {
-                    // asked for file list
+                    if (e.Content.Magnet.FileName == "files.xml.bz2")
+                    {
+                        // asked for file list
+                    }
+                }
+                else
+                {
+                    var share = _engine.Share;
+                    if (share == null)
+                        return;
+
+                    var results = share.Search(new SearchQuery
+                                                   {
+                                                       Query = e.Content.Magnet.TTH,
+                                                       SearchType = SearchType.TTH
+                                                   }, 1);
+
+                    if (results.Count == 1)
+                    {
+                        e.UploadItem = new UploadItem(results[0], _engine.Settings.FileReadBufferSize);
+                    }
                 }
             }
-            else
+
+            if (e.UploadItem != null)
             {
-                var share = _engine.Share;
-                if (share == null) 
-                    return;
-
-                var results = share.Search(new SearchQuery { 
-                    Query = e.Content.Magnet.TTH, 
-                    SearchType = SearchType.TTH 
-                }, 1);
-
-                if (results.Count == 1)
+                if (e.UploadItem.Content.SystemPaths != null && e.UploadItem.Content.SystemPaths.Length > 1)
                 {
-                    e.UploadItem = new UploadItem (results[0], _engine.Settings.FileReadBufferSize);
-                    e.UploadItem.Error += UploadItemError;
-                    e.UploadItem.Disposed += UploadItemDisposed;
+                    e.UploadItem.SystemPath = _engine.FileSourceManager.GetBestSource(e.UploadItem.Content.SystemPaths);
                 }
+
+                e.UploadItem.Error += UploadItemError;
+                e.UploadItem.Disposed += UploadItemDisposed;
             }
+
         }
 
         void UploadItemDisposed(object sender, EventArgs e)
@@ -276,7 +287,7 @@ namespace SharpDc.Managers
 
         void UploadItemError(object sender, UploadItemErrorEventArgs e)
         {
-            OnError(e);
+            OnUploadItemError(e);
         }
 
         void TransferError(object sender, TransferErrorEventArgs e)

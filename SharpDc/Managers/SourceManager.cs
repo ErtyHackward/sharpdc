@@ -9,6 +9,9 @@ using SharpDc.Structs;
 
 namespace SharpDc.Managers
 {
+    /// <summary>
+    /// Provides download source quality checks
+    /// </summary>
     public class SourceManager
     {
         private readonly Dictionary<Source, SourceQuality> _sources = new Dictionary<Source, SourceQuality>();

@@ -39,7 +39,6 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="BufferedFileStorageContainer.cs" />
     <Compile Include="Collections\HubCollection.cs" />
     <Compile Include="Collections\ObservableList.cs" />
     <Compile Include="Collections\SourceList.cs" />
@@ -72,7 +71,6 @@
     <Compile Include="Exceptions\NoFreeSpaceException.cs" />
     <Compile Include="Helpers\FileHelper.cs" />
     <Compile Include="Helpers\HttpHelper.cs" />
-    <Compile Include="HttpDownloadManager.cs" />
     <Compile Include="Interfaces\ISearchResult.cs" />
     <Compile Include="Interfaces\IShare.cs" />
     <Compile Include="Interfaces\IStorageContainer.cs" />
@@ -80,13 +78,14 @@
     <Compile Include="Logging\LogManager.cs" />
     <Compile Include="Managers\ContentItem.cs" />
     <Compile Include="Managers\DownloadManager.cs" />
+    <Compile Include="Managers\FileSourceManager.cs" />
+    <Compile Include="Managers\HttpDownloadManager.cs" />
     <Compile Include="Managers\HubSearchResult.cs" />
     <Compile Include="Managers\MemoryShare.cs" />
     <Compile Include="Managers\SearchManager.cs" />
     <Compile Include="Managers\SearchQuery.cs" />
     <Compile Include="Managers\SourceManager.cs" />
     <Compile Include="Managers\TransferManager.cs" />
-    <Compile Include="MemoryStorageConatiner.cs" />
     <Compile Include="Messages\ADCGETMessage.cs" />
     <Compile Include="Messages\ADCSNDMessage.cs" />
     <Compile Include="Messages\DirectionMessage.cs" />
@@ -107,14 +106,18 @@
     <Compile Include="Messages\UserIPMessage.cs" />
     <Compile Include="Messages\ValidateNickMessage.cs" />
     <Compile Include="Messages\VersionMessage.cs" />
-    <Compile Include="NullStorageContainer.cs" />
     <Compile Include="PerfLimit.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Connections\TcpConnectionListener.cs" />
-    <Compile Include="FileStorageContainer.cs" />
+    <Compile Include="Storage\BufferedFileStorageContainer.cs" />
+    <Compile Include="Storage\FileStorageContainer.cs" />
+    <Compile Include="Storage\MemoryStorageConatiner.cs" />
+    <Compile Include="Storage\NullStorageContainer.cs" />
     <Compile Include="Structs\DcStream.cs" />
     <Compile Include="Structs\DownloadItem.cs" />
     <Compile Include="Structs\DownloadItemsGroup.cs" />
+    <Compile Include="Structs\HttpPool.cs" />
+    <Compile Include="Structs\HttpTask.cs" />
     <Compile Include="Structs\HttpUploadItem.cs" />
     <Compile Include="Structs\HubSettings.cs" />
     <Compile Include="Structs\Magnet.cs" />
