@@ -412,7 +412,7 @@ namespace SharpDc
             {
                 try
                 {
-                    _udpConnection = new UdpConnection(port);
+                    _udpConnection = new UdpConnection(Settings.NetworkInterface, port);
                     _udpConnection.SearchResult += UdpConnectionSearchResult;
                 }
                 catch
@@ -643,6 +643,11 @@ namespace SharpDc
 
         void HubsHubAdded(object sender, HubsChangedEventArgs e)
         {
+            if (Settings.NetworkInterface != IPAddress.Any)
+            {
+                e.Hub.LocalAddress = new IPEndPoint(Settings.NetworkInterface, 0);
+            }
+
             e.Hub.ActiveStatusChanged += HubActiveStatusChanged;
             e.Hub.IncomingConnectionRequest += HubConnectionRequest;
             e.Hub.OutgoingConnectionRequest += HubOutgoingConnectionRequest;
@@ -744,6 +749,12 @@ namespace SharpDc
                     AllowedToConnect = true,
                     Source = new Source { HubAddress = hubConnection.RemoteAddress }
                 };
+
+                if (!Equals(Settings.NetworkInterface, IPAddress.Any))
+                {
+                    transfer.LocalAddress = new IPEndPoint(Settings.NetworkInterface, 0);
+                }
+
             }
             catch (Exception x)
             {

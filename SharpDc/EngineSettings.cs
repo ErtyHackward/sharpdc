@@ -5,6 +5,7 @@
 //  -------------------------------------------------------------
 using System;
 using System.IO;
+using System.Net;
 using SharpDc.Events;
 
 namespace SharpDc
@@ -34,6 +35,12 @@ namespace SharpDc
         private int _tcpReceiveBufferSize;
         private int _fileReadBufferSize;
         private int _connectionsLimit;
+        private IPAddress _netInterface;
+
+        public EngineSettings()
+        {
+            _netInterface = IPAddress.Any;
+        }
 
         /// <summary>
         /// Occurs when some setting is changed
@@ -291,7 +298,7 @@ namespace SharpDc
         }
 
         /// <summary>
-        /// Gets or sets value indicating if the hubs should request a user list
+        /// Gets or sets local ip-address. This filed should contain external(router) ip to work in active mode.
         /// </summary>
         public string LocalAddress
         {
@@ -372,6 +379,22 @@ namespace SharpDc
         }
 
         /// <summary>
+        /// Gets or sets network interface to use
+        /// </summary>
+        public IPAddress NetworkInterface
+        {
+            get { return _netInterface; }
+            set
+            {
+                if (!_netInterface.Equals(value))
+                {
+                    _netInterface = value;
+                    OnChanged(EngineSettingType.NetworkInterface);
+                }
+            }
+        }
+
+        /// <summary>
         /// Gets default settings
         /// </summary>
         public static EngineSettings Default
@@ -395,7 +418,8 @@ namespace SharpDc
                                _searchAlternativesInterval = 5,
                                _tcpBackLog = 10,
                                _tcpReceiveBufferSize = 64 * 1024,
-                               _fileReadBufferSize = 64 * 1024
+                               _fileReadBufferSize = 64 * 1024,
+                               _netInterface = IPAddress.Any
                            };
             }
         }

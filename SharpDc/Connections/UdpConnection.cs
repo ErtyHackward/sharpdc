@@ -32,9 +32,13 @@ namespace SharpDc.Connections
             if (handler != null) handler(this, e);
         }
 
-        public UdpConnection(int listenPort)
+        public UdpConnection(IPAddress localInterface, int listenPort)
         {
-            _client = new UdpClient(listenPort);
+            if (!IPAddress.Any.Equals(localInterface))
+                _client = new UdpClient(listenPort);
+            else
+                _client = new UdpClient(new IPEndPoint(localInterface, 0));
+
             _endPoint = new IPEndPoint(IPAddress.Any, listenPort);
             _client.BeginReceive(OnReceived, null);
             Port = listenPort;

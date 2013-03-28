@@ -26,6 +26,7 @@ namespace SharpDc
         TcpBacklog,
         TcpReceiveBufferSize,
         FileReadBufferSize,
-        ConnectionsLimit
+        ConnectionsLimit,
+        NetworkInterface
     }
 }
