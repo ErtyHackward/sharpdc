@@ -412,7 +412,7 @@ namespace SharpDc
             {
                 try
                 {
-                    _udpConnection = new UdpConnection(Settings.NetworkInterface, port);
+                    _udpConnection = new UdpConnection(port, Settings.NetworkInterface);
                     _udpConnection.SearchResult += UdpConnectionSearchResult;
                 }
                 catch

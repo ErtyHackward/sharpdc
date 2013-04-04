@@ -7,12 +7,15 @@ using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using SharpDc.Logging;
 using SharpDc.Messages;
 
 namespace SharpDc.Connections
 {
     public class UdpConnection
     {
+        private static readonly ILogger Logger = LogManager.GetLogger();
+
         private UdpClient _client;
         private IPEndPoint _endPoint;
         
@@ -32,12 +35,14 @@ namespace SharpDc.Connections
             if (handler != null) handler(this, e);
         }
 
-        public UdpConnection(IPAddress localInterface, int listenPort)
+        public UdpConnection(int listenPort, IPAddress localInterface = null)
         {
-            if (!IPAddress.Any.Equals(localInterface))
-                _client = new UdpClient(listenPort);
-            else
+            if (localInterface != null)
+            {
                 _client = new UdpClient(new IPEndPoint(localInterface, 0));
+            }
+            else
+                _client = new UdpClient(listenPort);
 
             _endPoint = new IPEndPoint(IPAddress.Any, listenPort);
             _client.BeginReceive(OnReceived, null);

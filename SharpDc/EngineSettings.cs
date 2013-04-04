@@ -37,11 +37,6 @@ namespace SharpDc
         private int _connectionsLimit;
         private IPAddress _netInterface;
 
-        public EngineSettings()
-        {
-            _netInterface = IPAddress.Any;
-        }
-
         /// <summary>
         /// Occurs when some setting is changed
         /// </summary>
@@ -386,7 +381,7 @@ namespace SharpDc
             get { return _netInterface; }
             set
             {
-                if (!_netInterface.Equals(value))
+                if (!Equals(_netInterface, value))
                 {
                     _netInterface = value;
                     OnChanged(EngineSettingType.NetworkInterface);
@@ -419,7 +414,7 @@ namespace SharpDc
                                _tcpBackLog = 10,
                                _tcpReceiveBufferSize = 64 * 1024,
                                _fileReadBufferSize = 64 * 1024,
-                               _netInterface = IPAddress.Any
+                               _netInterface = null
                            };
             }
         }
