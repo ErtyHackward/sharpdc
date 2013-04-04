@@ -643,7 +643,7 @@ namespace SharpDc
 
         void HubsHubAdded(object sender, HubsChangedEventArgs e)
         {
-            if (Settings.NetworkInterface != IPAddress.Any)
+            if (Settings.NetworkInterface != null)
             {
                 e.Hub.LocalAddress = new IPEndPoint(Settings.NetworkInterface, 0);
             }
