@@ -922,6 +922,9 @@ namespace SharpDc
         /// </summary>
         public void Connect()
         {
+            if (Hubs.Count == 0)
+                return;
+
             if (Hubs.Count < 20)
             {
                 Hubs.ForEach(h => h.ConnectAsync());
