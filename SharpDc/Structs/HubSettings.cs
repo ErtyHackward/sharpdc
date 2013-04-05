@@ -8,7 +8,7 @@ namespace SharpDc.Structs
     /// <summary>
     /// Contains hub-specific settings
     /// </summary>
-    public struct HubSettings
+    public class HubSettings
     {
         public string HubAddress;
 

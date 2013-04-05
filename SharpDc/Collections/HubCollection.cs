@@ -204,7 +204,7 @@ namespace SharpDc.Collections
         /// </summary>
         /// <param name="hub"></param>
         /// <returns></returns>
-        bool ICollection<HubConnection>.Remove(HubConnection hub)
+        public bool Remove(HubConnection hub)
         {
             bool result;
             lock (_syncRoot)
