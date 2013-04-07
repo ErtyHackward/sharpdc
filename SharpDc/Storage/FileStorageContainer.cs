@@ -1,9 +1,8 @@
 //  -------------------------------------------------------------
-//  SharpDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012
+//  LiveDc project 
+//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2013-2013
 //  licensed under the LGPL
 //  -------------------------------------------------------------
-
 using System;
 using System.Collections;
 using System.Collections.Generic;
