@@ -12,6 +12,7 @@ namespace SharpDc.Structs
     /// <summary>
     /// Structure that represents magnet link
     /// </summary>
+    [Serializable]
     public struct Magnet
     {
         private long _size;

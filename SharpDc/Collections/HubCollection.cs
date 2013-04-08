@@ -33,7 +33,7 @@ namespace SharpDc.Collections
         }
 
         /// <summary>
-        /// Gets/Sets hub by name
+        /// Gets hub by name
         /// </summary>
         /// <param name="hubName"></param>
         /// <returns></returns>

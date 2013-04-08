@@ -18,7 +18,6 @@ namespace SharpDc
     {
         private int _udpPort;
         private int _tcpPort;
-        private string _pathIncomplete;
         private string _pathDownload;
         private string _pathFileLists;
         private int _maxDownloadThreads;

@@ -7,6 +7,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Xml.Serialization;
+using SharpDc.Helpers;
 using SharpDc.Interfaces;
 using SharpDc.Messages;
 
@@ -15,12 +18,15 @@ namespace SharpDc.Managers
     /// <summary>
     /// Represents a memory share
     /// </summary>
+    [Serializable]
     public class MemoryShare : IShare
     {
         private readonly Dictionary<string, ContentItem> _tthIndex = new Dictionary<string, ContentItem>();
 
         private long _totalShared;
         private int _totalFiles;
+
+        public bool IsDirty { get; private set; }
 
         /// <summary>
         /// Gets total amount of bytes in the share
@@ -38,12 +44,46 @@ namespace SharpDc.Managers
             get { return _totalFiles; }
         }
 
-        public event System.EventHandler TotalSharedChanged;
+        /// <summary>
+        /// Don't use reserved for serialization/deserialization
+        /// </summary>
+        [XmlArray("Items")]
+        public List<ContentItem> SerializationItems
+        {
+            get 
+            {
+                lock (_tthIndex)
+                    return _tthIndex.Values.ToList();
+            }
+            set 
+            { 
+                Clear();
+                AddFiles(value);
+                IsDirty = false;
+            }
+        }
+
+        public event EventHandler TotalSharedChanged;
 
         protected virtual void OnTotalSharedChanged()
         {
+            IsDirty = true;
             var handler = TotalSharedChanged;
             if (handler != null) handler(this, EventArgs.Empty);
+        }
+
+        public void AddFiles(IEnumerable<ContentItem> items)
+        {
+            lock (_tthIndex)
+            {
+                foreach (var item in items)
+                {
+                    _tthIndex.Add(item.Magnet.TTH, item);
+                    _totalShared += item.Magnet.Size;
+                    _totalFiles++;
+                }
+            }
+            OnTotalSharedChanged();
         }
 
         public void AddFile(ContentItem item)
@@ -126,7 +166,7 @@ namespace SharpDc.Managers
                 {
                     var item = _tthIndex[tth];
 
-                    if (!File.Exists(item.SystemPath))
+                    if (!FileHelper.FileExists(item.SystemPath))
                     {
                         _tthIndex.Remove(tth);
                         _totalShared -= item.Magnet.Size;
@@ -151,6 +191,33 @@ namespace SharpDc.Managers
             }
 
             OnTotalSharedChanged();
+        }
+
+        public void ExportAsXml(string filePath)
+        {
+            var xml = new XmlSerializer(GetType());
+
+            using (var fs = File.OpenWrite(filePath))
+            {
+                xml.Serialize(fs, this);
+            }
+        }
+
+        public void ImportFromXml(string filePath)
+        {
+            var share = CreateFromXml(filePath);
+            Clear();
+            AddFiles(share.Items());
+        }
+
+        public static MemoryShare CreateFromXml(string filePath)
+        {
+            var xml = new XmlSerializer(typeof(MemoryShare));
+            
+            using (var fs = File.OpenRead(filePath))
+            {
+                return (MemoryShare)xml.Deserialize(fs);
+            }
         }
     }
 }

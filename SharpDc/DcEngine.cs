@@ -454,14 +454,14 @@ namespace SharpDc
 
             if (fileSystem1 == "FAT32")
             {
-                // maximum file size 4 Gb
+                // maximum file size is 4 Gb
                 if (e.DownloadItem.Magnet.Size > 4L * 1024 * 1024 * 1024)
                     throw new FileTooBigException(4L * 1024 * 1024 * 1024, e.DownloadItem.Magnet.Size);
             }
 
             if (fileSystem1 == "NTFS")
             {
-                // maximum file size 16 Tb - 64 Kb
+                // maximum file size is 16 Tb - 64 Kb
                 if (e.DownloadItem.Magnet.Size > 16L * 1024 * 1024 * 1024 * 1024 - 64 * 1024)
                     throw new FileTooBigException(16L * 1024 * 1024 * 1024 * 1024 - 64 * 1024,
                                                   e.DownloadItem.Magnet.Size);
