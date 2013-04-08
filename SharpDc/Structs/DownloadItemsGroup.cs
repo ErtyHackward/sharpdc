@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Collections.Generic;
 using System.Xml.Serialization;
@@ -56,10 +57,7 @@ namespace SharpDc.Structs
 
         public DownloadItem this[int index]
         {
-            get
-            {
-                return _list[index];
-            }
+            get { return _list[index]; }
             set
             {
                 if (value == null)
@@ -135,14 +133,8 @@ namespace SharpDc.Structs
 
         public int MaxFiles
         {
-            get
-            {
-                return _maxFiles;
-            }
-            set
-            {
-                _maxFiles = value;
-            }
+            get { return _maxFiles; }
+            set { _maxFiles = value; }
         }
 
         public int Count
@@ -152,10 +144,7 @@ namespace SharpDc.Structs
 
         public IEnumerable<DownloadItem> DownloadItems
         {
-            get
-            {
-                return _list;
-            }
+            get { return _list; }
         }
 
         #region IEnumerable<DownloadItem> Members

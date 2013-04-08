@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 
 namespace SharpDc.Messages
@@ -24,8 +25,8 @@ namespace SharpDc.Messages
 
         public string Raw
         {
-            get {
-
+            get
+            {
                 string size = "F?T?0";
                 if (SizeRestricted)
                 {
@@ -38,20 +39,20 @@ namespace SharpDc.Messages
 
                 search = search.Replace(' ', '$');
 
-                return string.Format("$Search {0} {1}?{2}?{3}", SearchAddress, size, (int)SearchType, search); 
+                return string.Format("$Search {0} {1}?{2}?{3}", SearchAddress, size, (int)SearchType, search);
             }
         }
 
         public static SearchMessage Parse(string cmd)
         {
             //$Search 10.10.10.10:3746 F?T?0?9?TTH:TO32WPD6AQE7VA7654HEAM5GKFQGIL7F2BEKFNA
-            
+
             SearchMessage msg;
 
             var parts = cmd.Split(' ');
             if (parts.Length != 3)
                 throw new FormatException("Invalid Search message: " + cmd);
-            
+
             msg.SearchAddress = parts[1];
 
             parts = parts[2].Split('?');
@@ -67,13 +68,13 @@ namespace SharpDc.Messages
 
             msg.SearchRequest = parts[4].Replace('$', ' ');
 
-            if (msg.SearchRequest.StartsWith("TTH:")) 
+            if (msg.SearchRequest.StartsWith("TTH:"))
                 msg.SearchRequest = msg.SearchRequest.Remove(0, 4);
 
             return msg;
         }
     }
-     
+
     public enum SearchType
     {
         Any = 1,
@@ -87,7 +88,6 @@ namespace SharpDc.Messages
         TTH = 9,
         Image = 10
     }
-
 
     public struct ConnectToMeMessage : IStringMessage
     {
@@ -145,7 +145,7 @@ namespace SharpDc.Messages
             get { return string.Format("$RevConnectToMe {0} {1}", SenderNickname, TargetNickname); }
         }
     }
-    
+
     public struct SRMessage : IStringMessage
     {
         //$SR [Ник_ответчика] [Результат][0x05][Свободные_слоты]/[Всего_слотов][0x05][Имя_хаба] ([IP_хаба:Порт]){[0x05][Целевой_ник]}|
@@ -178,7 +178,6 @@ namespace SharpDc.Messages
 
             var nickEnd = raw.IndexOf(' ', 4);
 
-
             SRMessage msg;
 
             msg.Nickname = parts[0].Substring(4, nickEnd - 4);
@@ -194,7 +193,7 @@ namespace SharpDc.Messages
             }
             else msg.FileSize = -1;
 
-            var slotString = parts[partIndex].Substring(parts[partIndex].IndexOf(' ')+1);
+            var slotString = parts[partIndex].Substring(parts[partIndex].IndexOf(' ') + 1);
 
             var slots = slotString.Split('/');
 
@@ -211,7 +210,7 @@ namespace SharpDc.Messages
             var closeIndex = hubString.IndexOf(')');
 
             hubString = hubString.Substring(openIndex + 1, closeIndex - openIndex - 1);
-            
+
             msg.HubAddress = hubString;
             msg.TargetNickname = null;
 
@@ -220,8 +219,12 @@ namespace SharpDc.Messages
 
         public string Raw
         {
-            get {
-                return string.Format("$SR {0} {1} {2}/{3}\x0005{4} ({5}){6}", Nickname, FileName + (FileSize > 0 ? "\x0005"+FileSize: "") , FreeSlots, TotalSlots, HubName, HubAddress, string.IsNullOrEmpty(TargetNickname)?"":"\x0005"+TargetNickname );
+            get
+            {
+                return string.Format("$SR {0} {1} {2}/{3}\x0005{4} ({5}){6}", Nickname,
+                                     FileName + (FileSize > 0 ? "\x0005" + FileSize : ""), FreeSlots, TotalSlots,
+                                     HubName, HubAddress,
+                                     string.IsNullOrEmpty(TargetNickname) ? "" : "\x0005" + TargetNickname);
             }
         }
     }

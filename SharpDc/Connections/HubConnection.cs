@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Collections.Concurrent;
 using System.Text;
@@ -26,7 +27,7 @@ namespace SharpDc.Connections
         /// Contains public information of this client
         /// </summary>
         public TagInfo TagInfo { get; set; }
-        
+
         /// <summary>
         /// Gets or sets information about current user
         /// </summary>
@@ -39,7 +40,8 @@ namespace SharpDc.Connections
         public HubSettings Settings
         {
             get { return _settings; }
-            set { 
+            set
+            {
                 _settings = value;
                 _currentUser.Nickname = _settings.Nickname;
             }
@@ -51,7 +53,8 @@ namespace SharpDc.Connections
         public bool Active
         {
             get { return _active; }
-            private set {
+            private set
+            {
                 if (_active != value)
                 {
                     _active = value;
@@ -162,7 +165,7 @@ namespace SharpDc.Connections
             ConnectionStatusChanged += HubConnectionConnectionStatusChanged;
         }
 
-        void HubConnectionConnectionStatusChanged(object sender, ConnectionStatusEventArgs e)
+        private void HubConnectionConnectionStatusChanged(object sender, ConnectionStatusEventArgs e)
         {
             if (e.Status == ConnectionStatus.Connected)
                 RemoteAddress = RemoteEndPoint.ToString();
@@ -201,7 +204,7 @@ namespace SharpDc.Connections
                     OnIncomingMessage(new MessageEventArgs { Message = cmd });
                 }
 
-                if(cmd[0] == '$')
+                if (cmd[0] == '$')
                 {
                     // command
                     var spaceIndex = cmd.IndexOf(' ');
@@ -238,7 +241,7 @@ namespace SharpDc.Connections
                             case "$ConnectToMe":
                                 {
                                     var arg = ConnectToMeMessage.Parse(cmd);
-                                    var ea = new OutgoingConnectionRequestEventArgs{ Message = arg };
+                                    var ea = new OutgoingConnectionRequestEventArgs { Message = arg };
 
                                     OnOutgoingConnectionRequest(ea);
                                 }
@@ -251,9 +254,13 @@ namespace SharpDc.Connections
 
                                     if (!string.IsNullOrEmpty(ea.LocalAddress))
                                     {
-                                        SendMessage(new ConnectToMeMessage { RecipientNickname = arg.SenderNickname , SenderAddress = ea.LocalAddress }.Raw);
+                                        SendMessage(
+                                            new ConnectToMeMessage
+                                                {
+                                                    RecipientNickname = arg.SenderNickname,
+                                                    SenderAddress = ea.LocalAddress
+                                                }.Raw);
                                     }
-
                                 }
                                 break;
                             case "$GetPass":
@@ -289,17 +296,14 @@ namespace SharpDc.Connections
                     }
                     catch (Exception x)
                     {
-                        Logger.Error("Error when trying to parse a command: " + x.Message );
+                        Logger.Error("Error when trying to parse a command: " + x.Message);
                     }
                 }
                 else
                 {
                     // chat message
                 }
-
             }
-
-
         }
 
         private void OnUserIPMessage(UserIPMessage userIpMessage)
@@ -311,11 +315,11 @@ namespace SharpDc.Connections
                 var ip = pair.Value;
 
                 Users.AddOrUpdate(pair.Key, ui, (key, prev) =>
-                    {
-                        var u = prev;
-                        u.IP = ip;
-                        return u;
-                    });
+                                                    {
+                                                        var u = prev;
+                                                        u.IP = ip;
+                                                        return u;
+                                                    });
 
                 if (pair.Key == CurrentUser.Nickname)
                 {
@@ -374,16 +378,16 @@ namespace SharpDc.Connections
         {
             OnSearchRequest(new SearchRequestEventArgs { Message = searchMessage });
         }
-        
+
         public void SendMessage(string message)
         {
             if (OutgoingMessage != null)
             {
                 OnOutgoingMessage(new MessageEventArgs { Message = message });
             }
-            SendAsync(message+"|");
+            SendAsync(message + "|");
         }
-        
+
         private void OnMessageLock(ref LockMessage lockMsg)
         {
             if (lockMsg.ExtendedProtocol)
@@ -397,18 +401,21 @@ namespace SharpDc.Connections
 
         private void OnMessageHubName(ref HubNameMessage arg)
         {
- 	        
         }
 
         private void OnMessageHello(ref HelloMessage helloMessage)
         {
-            var myInfo = new MyINFOMessage { 
-                Nickname = _currentUser.Nickname,
-                Tag = string.Format("<{0},M:{1},H:{2},S:{3}{4}>", TagInfo.Version, Settings.PassiveMode ? "P":"A", "0/0/0", "100", string.IsNullOrEmpty(TagInfo.City)?"":",C:"+TagInfo.City ), 
-                Connection=TagInfo.Connection, 
-                Flag = TagInfo.Flag,
-                Share = _settings.FakeShare == 0 ? _currentUser.Share : _settings.FakeShare
-            };
+            var myInfo = new MyINFOMessage
+                             {
+                                 Nickname = _currentUser.Nickname,
+                                 Tag =
+                                     string.Format("<{0},M:{1},H:{2},S:{3}{4}>", TagInfo.Version,
+                                                   Settings.PassiveMode ? "P" : "A", "0/0/0", "100",
+                                                   string.IsNullOrEmpty(TagInfo.City) ? "" : ",C:" + TagInfo.City),
+                                 Connection = TagInfo.Connection,
+                                 Flag = TagInfo.Flag,
+                                 Share = _settings.FakeShare == 0 ? _currentUser.Share : _settings.FakeShare
+                             };
 
             SendMessage(new VersionMessage().Raw);
             if (Settings.GetUsersList)

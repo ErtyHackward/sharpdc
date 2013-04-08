@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -22,13 +23,17 @@ namespace SharpDc.Managers
         private readonly DcEngine _engine;
         private readonly object _synObject = new object();
         private readonly SortedList<string, DownloadItem> _tthList = new SortedList<string, DownloadItem>();
-        private readonly SortedList<Source, HashSet<DownloadItem>> _sourcesList = new SortedList<Source, HashSet<DownloadItem>>();
+
+        private readonly SortedList<Source, HashSet<DownloadItem>> _sourcesList =
+            new SortedList<Source, HashSet<DownloadItem>>();
+
         private readonly List<DownloadItem> _itemsWithoutTth = new List<DownloadItem>();
         private readonly List<DownloadItemsGroup> _groups = new List<DownloadItemsGroup>();
         private int _updateIndex;
         private int _itemsCount;
 
         #region Events
+
         /// <summary>
         /// Downloading have been completed of segment
         /// </summary>
@@ -44,12 +49,13 @@ namespace SharpDc.Managers
             get { return _synObject; }
         }
 
-        public IEnumerable<DownloadItem> Items() {
+        public IEnumerable<DownloadItem> Items()
+        {
             lock (_synObject)
             {
                 foreach (var pair in _tthList)
                 {
-                    yield return pair.Value;    
+                    yield return pair.Value;
                 }
             }
         }
@@ -87,6 +93,7 @@ namespace SharpDc.Managers
         /// Downloading of segment have been started
         /// </summary>
         public event EventHandler<SegmentEventArgs> SegmentStarted;
+
         protected virtual void OnSegmentStarted(SegmentEventArgs e)
         {
             var handler = SegmentStarted;
@@ -97,6 +104,7 @@ namespace SharpDc.Managers
         /// Segment downloading have been canceled
         /// </summary>
         public event EventHandler<SegmentEventArgs> SegmentCancelled;
+
         protected virtual void OnSegmentCancelled(SegmentEventArgs e)
         {
             var handler = SegmentCancelled;
@@ -104,6 +112,7 @@ namespace SharpDc.Managers
         }
 
         public event EventHandler<VerifySegmentEventArgs> SegmentVerified;
+
         protected virtual void OnSegmentVerified(VerifySegmentEventArgs e)
         {
             var handler = SegmentVerified;
@@ -114,6 +123,7 @@ namespace SharpDc.Managers
         /// DownloadItem have been completed (Download)
         /// </summary>
         public event EventHandler<DownloadCompletedEventArgs> DownloadCompleted;
+
         protected virtual void OnDownloadCompleted(DownloadCompletedEventArgs e)
         {
             var handler = DownloadCompleted;
@@ -124,6 +134,7 @@ namespace SharpDc.Managers
         /// DownloadItem adding to DownloadManager. Can be cancelled.
         /// </summary>
         public event EventHandler<CancelDownloadEventArgs> DownloadAdding;
+
         protected virtual bool OnDownloadAdding(DownloadItem di)
         {
             if (DownloadAdding == null) return true;
@@ -137,6 +148,7 @@ namespace SharpDc.Managers
         /// DownloadItem have been added to DownloadManager
         /// </summary>
         public event EventHandler<DownloadEventArgs> DownloadAdded;
+
         protected virtual void OnDownloadAdded(DownloadEventArgs e)
         {
             var handler = DownloadAdded;
@@ -147,6 +159,7 @@ namespace SharpDc.Managers
         /// DownloadItem have been removed from DownloadManager
         /// </summary>
         public event EventHandler<DownloadEventArgs> DownloadRemoved;
+
         protected virtual void OnDownloadRemoved(DownloadEventArgs e)
         {
             var handler = DownloadRemoved;
@@ -157,6 +170,7 @@ namespace SharpDc.Managers
         /// Occurs when some of download items gets TTH
         /// </summary>
         public event EventHandler<DownloadEventArgs> TthAssigned;
+
         protected virtual void OnTthAssigned(DownloadEventArgs e)
         {
             var handler = TthAssigned;
@@ -167,6 +181,7 @@ namespace SharpDc.Managers
         /// Source have been added to DownloadManager
         /// </summary>
         public event EventHandler<SourceEventArgs> SourceAdded;
+
         protected virtual void OnSourceAdded(SourceEventArgs e)
         {
             var handler = SourceAdded;
@@ -177,6 +192,7 @@ namespace SharpDc.Managers
         /// Source have been removed from DownloadManager
         /// </summary>
         public event EventHandler<SourceEventArgs> SourceRemoved;
+
         protected virtual void OnSourceRemoved(SourceEventArgs e)
         {
             var handler = SourceRemoved;
@@ -223,7 +239,7 @@ namespace SharpDc.Managers
                 {
                     ImportDownloads(group.DownloadItems);
                 }
-                
+
                 _groups.Add(group);
             }
         }
@@ -279,7 +295,7 @@ namespace SharpDc.Managers
                         }
                         else
                         {
-                            _sourcesList.Add(source, new HashSet<DownloadItem> {di});
+                            _sourcesList.Add(source, new HashSet<DownloadItem> { di });
                         }
                     }
 
@@ -295,19 +311,20 @@ namespace SharpDc.Managers
                     //di.NeedVerification += d_NeedVerification;
                 }
             }
-
         }
 
         public bool AddDownload(DownloadItem di)
         {
-            if (!OnDownloadAdding(di)) 
+            if (!OnDownloadAdding(di))
                 return false;
 
             if (di.StorageContainer == null)
             {
                 var downloadPath = di.SaveTargets[0];
                 var folder = Path.GetDirectoryName(downloadPath);
-                var tempDownloadPath = Path.Combine(folder, string.Format("{0}.{1}.dctmp", Path.GetFileName(downloadPath), di.Magnet.TTH));
+                var tempDownloadPath = Path.Combine(folder,
+                                                    string.Format("{0}.{1}.dctmp", Path.GetFileName(downloadPath),
+                                                                  di.Magnet.TTH));
                 var fileStorageContainer = new FileStorageContainer(tempDownloadPath, di);
                 di.StorageContainer = fileStorageContainer;
             }
@@ -321,7 +338,6 @@ namespace SharpDc.Managers
             {
                 lock (_synObject)
                 {
-                    
                     if (!string.IsNullOrEmpty(di.Magnet.TTH))
                     {
                         _tthList.Add(di.Magnet.TTH, di);
@@ -341,7 +357,6 @@ namespace SharpDc.Managers
                             _sourcesList.Add(source, new HashSet<DownloadItem> { di });
                         }
                     }
-                    
                 }
 
                 di.Sources.ItemAdded += SourcesItemAdded;
@@ -353,7 +368,7 @@ namespace SharpDc.Managers
                 di.SegmentTaken += DSegmentTaken;
                 //di.SegmentVerified += d_SegmentVerified;
                 //di.NeedVerification += d_NeedVerification;
-                
+
                 OnDownloadAdded(new DownloadEventArgs { DownloadItem = di });
             }
             else
@@ -389,13 +404,13 @@ namespace SharpDc.Managers
         {
             lock (_synObject)
             {
-                di.Sources.ItemAdded   -= SourcesItemAdded;
+                di.Sources.ItemAdded -= SourcesItemAdded;
                 di.Sources.ItemRemoved -= SourcesItemRemoved;
 
                 di.DownloadFinished -= DDownloadFinished;
                 di.SegmentCancelled -= DSegmentCancelled;
-                di.SegmentFinished  -= DSegmentFinished;
-                di.SegmentTaken     -= DSegmentTaken;
+                di.SegmentFinished -= DSegmentFinished;
+                di.SegmentTaken -= DSegmentTaken;
                 //di.SegmentVerified -= d_SegmentVerified;
                 //di.NeedVerification -= d_NeedVerification;
                 _itemsCount--;
@@ -403,7 +418,7 @@ namespace SharpDc.Managers
                 {
                     downloadItemsGroup.Remove(di);
                 }
-                
+
                 _tthList.Remove(di.Magnet.TTH);
                 foreach (var source in di.Sources)
                 {
@@ -428,7 +443,7 @@ namespace SharpDc.Managers
             OnDownloadRemoved(new DownloadEventArgs { DownloadItem = di });
         }
 
-        void SourcesItemRemoved(object sender, ObservableListEventArgs<Source> e)
+        private void SourcesItemRemoved(object sender, ObservableListEventArgs<Source> e)
         {
             var slist = (SourceList)sender;
             var list = _sourcesList[e.Item];
@@ -439,7 +454,7 @@ namespace SharpDc.Managers
             OnSourceRemoved(new SourceEventArgs { Source = e.Item, DownloadItem = slist.DownloadItem });
         }
 
-        void SourcesItemAdded(object sender, ObservableListEventArgs<Source> e)
+        private void SourcesItemAdded(object sender, ObservableListEventArgs<Source> e)
         {
             var slist = (SourceList)sender;
             if (_sourcesList.ContainsKey(e.Item))
@@ -455,22 +470,22 @@ namespace SharpDc.Managers
             OnSourceAdded(new SourceEventArgs { Source = e.Item, DownloadItem = slist.DownloadItem });
         }
 
-        void DSegmentTaken(object sender, SegmentEventArgs e)
+        private void DSegmentTaken(object sender, SegmentEventArgs e)
         {
             OnSegmentStarted(e);
         }
 
-        void DSegmentFinished(object sender, SegmentEventArgs e)
+        private void DSegmentFinished(object sender, SegmentEventArgs e)
         {
             OnSegmentCompleted(e);
         }
 
-        void DSegmentCancelled(object sender, SegmentEventArgs e)
+        private void DSegmentCancelled(object sender, SegmentEventArgs e)
         {
             OnSegmentCancelled(e);
         }
 
-        void DDownloadFinished(object sender, EventArgs e)
+        private void DDownloadFinished(object sender, EventArgs e)
         {
             var item = (DownloadItem)sender;
 
@@ -521,7 +536,6 @@ namespace SharpDc.Managers
         /// <returns></returns>
         public DownloadItem GetDownloadItem(Source source)
         {
-            
             lock (_synObject)
             {
                 List<DownloadItem> subList = null;
@@ -551,7 +565,9 @@ namespace SharpDc.Managers
                 {
                     for (int i = subList.Count - 1; i >= 0; i--)
                     {
-                        if (subList[i].TotalSegmentsCount == 0 || subList[i].DoneSegmentsCount < subList[i].TotalSegmentsCount - subList[i].ActiveSegmentsCount)
+                        if (subList[i].TotalSegmentsCount == 0 ||
+                            subList[i].DoneSegmentsCount <
+                            subList[i].TotalSegmentsCount - subList[i].ActiveSegmentsCount)
                             continue;
                         subList.RemoveAt(i);
                     }
@@ -566,7 +582,6 @@ namespace SharpDc.Managers
                     }
                     return di;
                 }
-
             }
             return null;
         }
@@ -597,7 +612,6 @@ namespace SharpDc.Managers
             }
         }
 
-
         public void Clear()
         {
             lock (_synObject)
@@ -626,8 +640,6 @@ namespace SharpDc.Managers
                     }
                 }
             }
-
-            
         }
     }
 }

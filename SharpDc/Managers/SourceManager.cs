@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System.Collections.Generic;
 using System.Linq;
 using SharpDc.Structs;
@@ -76,7 +77,6 @@ namespace SharpDc.Managers
         }
     }
 
-
     public struct SourceQuality
     {
         public int ErrorsCount;
@@ -85,9 +85,7 @@ namespace SharpDc.Managers
 
         public int Total
         {
-            get {
-                return SegmentsReceived - ErrorsCount - UnasnweredRequests;
-            }
+            get { return SegmentsReceived - ErrorsCount - UnasnweredRequests; }
         }
     }
 }

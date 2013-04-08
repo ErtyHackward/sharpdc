@@ -1,8 +1,9 @@
-//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using SharpDc.Structs;
 
@@ -16,6 +17,7 @@ namespace SharpDc.Events
     public class DownloadCompletedEventArgs : EventArgs
     {
         public DownloadItem DownloadItem { get; set; }
+
         /// <summary>
         /// Contains exception information if any when file moving
         /// </summary>

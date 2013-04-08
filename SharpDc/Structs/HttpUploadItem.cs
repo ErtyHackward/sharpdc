@@ -1,8 +1,9 @@
-//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2013-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2013-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using SharpDc.Logging;
 using SharpDc.Managers;
@@ -17,8 +18,7 @@ namespace SharpDc.Structs
 
         private byte[] _buffer;
         private long _position;
-        
-        
+
         public HttpUploadItem(ContentItem item, int bufferSize = 1024 * 1024) : base(item, bufferSize)
         {
             _buffer = new byte[bufferSize];

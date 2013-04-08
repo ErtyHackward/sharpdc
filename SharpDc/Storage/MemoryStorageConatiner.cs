@@ -1,8 +1,9 @@
-//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2013-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2013-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Collections.Generic;
 using SharpDc.Interfaces;
@@ -75,7 +76,7 @@ namespace SharpDc.Storage
                 _doneSegments.Remove(index);
             }
         }
-        
+
         /// <summary>
         /// Writes data to the storage 
         /// </summary>
@@ -100,7 +101,7 @@ namespace SharpDc.Storage
             }
 
             Buffer.BlockCopy(buffer, 0, memorySegment, offset, length);
-            
+
             if (offset + length == segment.Length)
                 lock (_syncRoot)
                     _doneSegments.Add(segment.Index);

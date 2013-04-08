@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2013-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2013-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,7 +17,9 @@ namespace SharpDc.Managers
     /// </summary>
     public class FileSourceManager
     {
-        private readonly List<KeyValuePair<string, SpeedAverage>> _fileSources = new List<KeyValuePair<string, SpeedAverage>>();
+        private readonly List<KeyValuePair<string, SpeedAverage>> _fileSources =
+            new List<KeyValuePair<string, SpeedAverage>>();
+
         private readonly object _syncRoot = new object();
 
         private readonly Random _random = new Random();
@@ -24,20 +27,20 @@ namespace SharpDc.Managers
         public TimeSpan Period { get; set; }
 
         public TimeSpan Window { get; set; }
-        
+
         public FileSourceManager()
         {
             Period = TimeSpan.FromMinutes(5);
             Window = TimeSpan.FromSeconds(10);
         }
-        
+
         public void RegisterSource(string fileSource)
         {
             lock (_syncRoot)
             {
                 if (_fileSources.FindIndex(p => p.Key.StartsWith(fileSource)) != -1)
                     throw new InvalidOperationException("Alredy have this source or similar");
-                
+
                 _fileSources.Add(new KeyValuePair<string, SpeedAverage>(fileSource, new SpeedAverage(Period, Window)));
             }
         }

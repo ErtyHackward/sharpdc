@@ -1,8 +1,9 @@
-//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2013-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2013-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -24,9 +25,9 @@ namespace SharpDc.Storage
         private readonly Dictionary<int, FileStream> _aliveStreams = new Dictionary<int, FileStream>();
         private readonly Stack<FileStream> _idleStreams = new Stack<FileStream>();
         private readonly object _syncRoot = new object();
-        
+
         public string TempFilePath { get; set; }
-        
+
         private bool _isDisposed;
         private bool _isDisposing;
         private long _maxPosition;
@@ -53,7 +54,7 @@ namespace SharpDc.Storage
 
         public bool WriteData(SegmentInfo segment, int offset, byte[] buffer, int length)
         {
-            if (_isDisposed || _isDisposing) 
+            if (_isDisposed || _isDisposing)
                 return false;
 
             if (length + offset > segment.Length)
@@ -76,7 +77,6 @@ namespace SharpDc.Storage
 
             try
             {
-
                 if (stream == null)
                 {
                     try
@@ -102,7 +102,6 @@ namespace SharpDc.Storage
                     _maxPosition = Math.Max(_maxPosition, segment.StartPosition);
                 }
 
-
                 stream.Write(buffer, 0, length);
 
                 if (length + offset >= segment.Length)
@@ -123,10 +122,10 @@ namespace SharpDc.Storage
                 Logger.Error("File write error: {0}", x.Message);
                 return false;
             }
-            
+
             return true;
         }
-        
+
         /// <summary>
         /// Reads data from the saved segment
         /// Returns amount of bytes read
@@ -141,7 +140,8 @@ namespace SharpDc.Storage
         {
             try
             {
-                using (var fs = new FileStream(TempFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, count))
+                using (var fs = new FileStream(TempFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, count)
+                    )
                 {
                     fs.Position = (long)DownloadItem.SegmentSize * segmentIndex + segmentOffset;
                     return fs.Read(buffer, bufferOffset, count);

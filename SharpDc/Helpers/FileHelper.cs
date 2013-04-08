@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -13,7 +14,12 @@ namespace SharpDc.Helpers
     {
         private static string _defaultPath;
 
-        private static readonly string[] ReservedFileNames = new[] { "CON", "AUX", "COM1", "COM2", "COM3", "COM4", "LPT1", "LPT2", "LPT3", "PRN", "NUL" };
+        private static readonly string[] ReservedFileNames = new[]
+                                                                 {
+                                                                     "CON", "AUX", "COM1", "COM2", "COM3", "COM4",
+                                                                     "LPT1",
+                                                                     "LPT2", "LPT3", "PRN", "NUL"
+                                                                 };
 
         public static string DefaultPath
         {
@@ -25,10 +31,7 @@ namespace SharpDc.Helpers
                 }
                 return _defaultPath;
             }
-            set
-            {
-                _defaultPath = value;
-            }
+            set { _defaultPath = value; }
         }
 
         public static bool IsValidFilePath(string path)
@@ -70,8 +73,6 @@ namespace SharpDc.Helpers
 
             return !IsReservedName(name);
         }
-
-
 
         public static bool IsReservedName(string fileName)
         {
@@ -182,7 +183,6 @@ namespace SharpDc.Helpers
 #endif
         }
 
-
         /// <summary>
         /// Try to delete file
         /// </summary>
@@ -198,21 +198,24 @@ namespace SharpDc.Helpers
                 }
                 return true;
             }
-            catch (Exception) { return false; }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
 #if !MONO
         [DllImport("kernel32.dll", EntryPoint = "GetDiskFreeSpaceExA")]
         private static extern long GetDiskFreeSpaceEx(string lpDirectoryName,
-          out long lpFreeBytesAvailableToCaller,
-          out long lpTotalNumberOfBytes,
-          out long lpTotalNumberOfFreeBytes);
+                                                      out long lpFreeBytesAvailableToCaller,
+                                                      out long lpTotalNumberOfBytes,
+                                                      out long lpTotalNumberOfFreeBytes);
 
         [DllImport("msvcrt.dll", SetLastError = true, CallingConvention = CallingConvention.Cdecl)]
-        static extern int _stat(string file, ref STAT buf);
+        private static extern int _stat(string file, ref STAT buf);
 
         [StructLayout(LayoutKind.Sequential)]
-        struct STAT
+        private struct STAT
         {
             public uint st_dev;
             public ushort st_ino;
@@ -228,7 +231,6 @@ namespace SharpDc.Helpers
         }
 
 #endif
-
 
         /// <summary>
         /// Get the free diskspace of a drive
@@ -250,13 +252,11 @@ namespace SharpDc.Helpers
 #else
             long totalBytes, freeBytes, freeBytesAvail;
             GetDiskFreeSpaceEx(driveName,
-                out freeBytesAvail,
-                out totalBytes,
-                out freeBytes);
+                               out freeBytesAvail,
+                               out totalBytes,
+                               out freeBytes);
             return freeBytesAvail;
 #endif
-
-
         }
 
         /// <summary>
@@ -277,8 +277,6 @@ namespace SharpDc.Helpers
             {
                 return true;
             }
-
         }
-
     }
 }

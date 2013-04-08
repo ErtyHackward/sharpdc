@@ -1,8 +1,9 @@
-//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2013-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2013-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Collections.Generic;
 using SharpDc.Connections;
@@ -39,24 +40,24 @@ namespace SharpDc.Managers
             QueueLimit = 10;
         }
 
-
         public bool DownloadChunk(string url, byte[] buffer, long filePos, int length)
         {
             var parsedUrl = new HttpUrl(url);
 
             var pool = GetPool(parsedUrl.Server);
 
-            var task = new HttpTask { 
-                Url = url, 
-                Buffer = buffer, 
-                FilePosition = filePos, 
-                Length = length 
-            };
+            var task = new HttpTask
+                           {
+                               Url = url,
+                               Buffer = buffer,
+                               FilePosition = filePos,
+                               Length = length
+                           };
 
             pool.StartTask(task);
-            
+
             task.Event.Wait();
-            
+
             return task.Completed;
         }
 
@@ -70,11 +71,12 @@ namespace SharpDc.Managers
                         return pool;
                 }
 
-                var p = new HttpPool { 
-                    Server = server, 
-                    ConnectionsLimit = ConnectionsPerServer,
-                    QueueLimit = QueueLimit
-                };
+                var p = new HttpPool
+                            {
+                                Server = server,
+                                ConnectionsLimit = ConnectionsPerServer,
+                                QueueLimit = QueueLimit
+                            };
 
                 _pools.Add(p);
                 return p;

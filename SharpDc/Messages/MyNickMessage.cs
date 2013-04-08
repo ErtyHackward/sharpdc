@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 namespace SharpDc.Messages
 {
     public struct MyNickMessage : IStringMessage
@@ -15,7 +16,7 @@ namespace SharpDc.Messages
             mn.Nickname = raw.Substring(8);
             return mn;
         }
-        
+
         public string Raw
         {
             get { return string.Format("$MyNick {0}", Nickname); }

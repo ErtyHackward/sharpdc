@@ -1,8 +1,9 @@
-//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.IO;
 using System.Net;
@@ -41,6 +42,7 @@ namespace SharpDc
         /// Occurs when some setting is changed
         /// </summary>
         public event EventHandler<EngineSettingsEventArgs> Changed;
+
         private int _searchAlternativesInterval;
 
         protected void OnChanged(EngineSettingType st)
@@ -48,7 +50,6 @@ namespace SharpDc
             EventHandler<EngineSettingsEventArgs> handler = Changed;
             if (handler != null) handler(this, new EngineSettingsEventArgs(st));
         }
-
 
         /// <summary>
         /// Maximum amount of connections allowed, 0 - unlimited
@@ -127,7 +128,6 @@ namespace SharpDc
                     _pathFileLists = value;
                     OnChanged(EngineSettingType.PathFileLists);
                 }
-
             }
         }
 
@@ -161,7 +161,6 @@ namespace SharpDc
                     OnChanged(EngineSettingType.MaxUploadThreads);
                 }
             }
-
         }
 
         /// <summary>
@@ -323,7 +322,7 @@ namespace SharpDc
                 }
             }
         }
-        
+
         /// <summary>
         /// Gets or sets interval between search for alternative sources in minutes
         /// </summary>
@@ -418,7 +417,5 @@ namespace SharpDc
                            };
             }
         }
-
-
     }
 }

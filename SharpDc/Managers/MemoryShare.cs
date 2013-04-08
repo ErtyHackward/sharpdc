@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -16,7 +17,7 @@ namespace SharpDc.Managers
     /// </summary>
     public class MemoryShare : IShare
     {
-        readonly Dictionary<string, ContentItem> _tthIndex = new Dictionary<string, ContentItem>();
+        private readonly Dictionary<string, ContentItem> _tthIndex = new Dictionary<string, ContentItem>();
 
         private long _totalShared;
         private int _totalFiles;
@@ -98,7 +99,8 @@ namespace SharpDc.Managers
 
                 foreach (var pair in _tthIndex)
                 {
-                    if (pair.Value.SystemPath.IndexOf(query.Query, System.StringComparison.CurrentCultureIgnoreCase) >= 0)
+                    if (pair.Value.SystemPath.IndexOf(query.Query, System.StringComparison.CurrentCultureIgnoreCase) >=
+                        0)
                     {
                         results.Add(pair.Value);
                         if (limit > 0 && results.Count == limit)
@@ -134,7 +136,6 @@ namespace SharpDc.Managers
 
             if (_totalShared != shared)
                 OnTotalSharedChanged();
-
         }
 
         /// <summary>
@@ -151,7 +152,5 @@ namespace SharpDc.Managers
 
             OnTotalSharedChanged();
         }
-
-        
     }
 }

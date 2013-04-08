@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System.Reflection;
 
 namespace SharpDc.Structs
@@ -26,7 +27,7 @@ namespace SharpDc.Structs
         /// Speed in megabits: 0.5, 10, 20, 100
         /// </summary>
         public string Connection { get; set; }
-        
+
         public byte Flag { get; set; }
 
         public TagInfo()

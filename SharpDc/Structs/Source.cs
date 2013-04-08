@@ -1,8 +1,9 @@
-//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Collections.Generic;
 
@@ -34,7 +35,7 @@ namespace SharpDc.Structs
             return string.Format("Source [{0},{1}]", UserNickname, HubAddress);
         }
 
-        public static bool operator==(Source one, Source two)
+        public static bool operator ==(Source one, Source two)
         {
             var cmp1 = string.Compare(one.UserNickname, two.UserNickname);
             return (cmp1 == 0 ? string.Compare(one.HubAddress, two.HubAddress) : cmp1) == 0;

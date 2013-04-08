@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.IO;
 using System.Threading;
@@ -32,7 +33,7 @@ namespace SharpDc.Structs
         /// <param name="magnet"></param>
         internal DcStream(string filePath, Magnet magnet)
         {
-            if (filePath == null) 
+            if (filePath == null)
                 throw new ArgumentNullException("filePath");
 
             Magnet = magnet;
@@ -45,7 +46,7 @@ namespace SharpDc.Structs
         /// <param name="downloadItem"></param>
         internal DcStream(DownloadItem downloadItem)
         {
-            if (downloadItem == null) 
+            if (downloadItem == null)
                 throw new ArgumentNullException("downloadItem");
 
             Magnet = downloadItem.Magnet;
@@ -90,7 +91,7 @@ namespace SharpDc.Structs
         public override long Length
         {
             get { return Magnet.Size; }
-        }      
+        }
 
         /// <summary>
         /// Gets or sets current read position
@@ -98,8 +99,8 @@ namespace SharpDc.Structs
         public override long Position
         {
             get { return _fileStream == null ? _position : _fileStream.Position; }
-            set {
-
+            set
+            {
                 if (_fileStream == null)
                     _position = value;
                 else

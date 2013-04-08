@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Diagnostics;
 using System.Globalization;
@@ -65,7 +66,7 @@ namespace SharpDc
 
             public object GetFormat(Type formatType)
             {
-                if (typeof(ICustomFormatter).IsAssignableFrom(formatType))
+                if (typeof (ICustomFormatter).IsAssignableFrom(formatType))
                     return this;
                 return null;
             }
@@ -102,7 +103,6 @@ namespace SharpDc
                 if (String.IsNullOrEmpty(precision)) precision = "2";
 
                 return String.Format("{0:N" + precision + "}{1}", size, letters[i]);
-
             }
 
             private static string defaultFormat(string format, object arg, IFormatProvider formatProvider)

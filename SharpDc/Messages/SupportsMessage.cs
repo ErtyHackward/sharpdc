@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System.Collections.Generic;
 
 namespace SharpDc.Messages
@@ -20,7 +21,6 @@ namespace SharpDc.Messages
         public const string sNoHello = "NoHello";
         public const string sUserIP2 = "UserIP2";
 
-
         public bool BZList;
         public bool XmlBZList;
         public bool ADCGet;
@@ -29,7 +29,6 @@ namespace SharpDc.Messages
         public bool NoGetINFO;
         public bool NoHello;
         public bool UserIP2;
-
 
         public static SupportsMessage Parse(string raw)
         {
@@ -49,7 +48,8 @@ namespace SharpDc.Messages
 
         public string Raw
         {
-            get {
+            get
+            {
                 var list = new List<string>();
 
                 if (BZList) list.Add(sBZList);
@@ -61,7 +61,7 @@ namespace SharpDc.Messages
                 if (NoHello) list.Add(sNoHello);
                 if (UserIP2) list.Add(sUserIP2);
 
-                return string.Format("$Supports {0}", string.Join(" ",list.ToArray()));
+                return string.Format("$Supports {0}", string.Join(" ", list.ToArray()));
             }
         }
     }

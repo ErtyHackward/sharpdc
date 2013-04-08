@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Linq;
 using System.Collections.Generic;
@@ -46,7 +47,7 @@ namespace SharpDc.Connections
 
         private readonly object _sendLock = new object();
         private readonly object _threadLock = new object();
-        
+
         public Socket Socket
         {
             get { return _socket; }
@@ -63,11 +64,17 @@ namespace SharpDc.Connections
         /// <summary>
         /// Gets last event time (send or receive)
         /// </summary>
-        public DateTime LastEventTime { get { return _lastUpdate; } }
+        public DateTime LastEventTime
+        {
+            get { return _lastUpdate; }
+        }
 
         public IPEndPoint LocalAddress { get; set; }
 
-        public IPEndPoint RemoteAddress { get { return RemoteEndPoint; } }
+        public IPEndPoint RemoteAddress
+        {
+            get { return RemoteEndPoint; }
+        }
 
         private readonly SpeedAverage _uploadSpeed = new SpeedAverage();
         private readonly SpeedAverage _downloadSpeed = new SpeedAverage();
@@ -79,7 +86,7 @@ namespace SharpDc.Connections
         {
             get { return _uploadSpeed; }
         }
-        
+
         /// <summary>
         /// Gets an object to obtain download speed
         /// </summary>
@@ -87,7 +94,7 @@ namespace SharpDc.Connections
         {
             get { return _downloadSpeed; }
         }
-        
+
         /// <summary>
         /// Allows to control global tcpConnection upload speed limit
         /// </summary>
@@ -142,7 +149,9 @@ namespace SharpDc.Connections
             DownloadSpeedLimit = new SpeedLimiter();
         }
 
-        protected TcpConnection(string address) : this(ParseAddress(address)) { }
+        protected TcpConnection(string address) : this(ParseAddress(address))
+        {
+        }
 
         protected TcpConnection()
         {
@@ -157,7 +166,7 @@ namespace SharpDc.Connections
 
         protected TcpConnection(Socket socket) : this()
         {
-            if (socket == null) 
+            if (socket == null)
                 throw new ArgumentNullException("socket");
 
             _socket = socket;
@@ -192,7 +201,7 @@ namespace SharpDc.Connections
                 if (_socket != null)
                 {
                     _socket.Close();
-                    _socket = null;   
+                    _socket = null;
                 }
             }
             SetConnectionStatus(ConnectionStatus.Disconnected);
@@ -242,13 +251,11 @@ namespace SharpDc.Connections
             {
                 SetConnectionStatus(ConnectionStatus.Disconnected, x);
             }
-
         }
 
         protected virtual void SendFirstMessages()
         {
         }
-
 
         private void SocketReadThread()
         {
@@ -267,13 +274,14 @@ namespace SharpDc.Connections
                 }
 
                 SendFirstMessages();
-                
+
                 if (_connectionBuffer == null || _connectionBuffer.Length != ConnectionBufferSize)
                     _connectionBuffer = new byte[ConnectionBufferSize];
 
                 int bytesReceived;
 
-                while (_connectionStatus == ConnectionStatus.Connected && (bytesReceived = _socket.Receive(_connectionBuffer)) != 0)
+                while (_connectionStatus == ConnectionStatus.Connected &&
+                       (bytesReceived = _socket.Receive(_connectionBuffer)) != 0)
                 {
                     _downloadSpeed.Update(bytesReceived);
                     _lastUpdate = DateTime.Now;
@@ -288,7 +296,6 @@ namespace SharpDc.Connections
             {
                 SetConnectionStatus(ConnectionStatus.Disconnected, x);
             }
-
         }
 
         protected abstract void ParseRaw(byte[] buffer, int length);
@@ -344,10 +351,8 @@ namespace SharpDc.Connections
         /// <returns></returns>
         public int Send(byte[] buffer, int offset, int length)
         {
-
             using (var sync = new ManualResetEventSlim())
             {
-
                 lock (_delayedMessages)
                 {
                     _delayedMessages.Enqueue(new SendTask
@@ -426,7 +431,7 @@ namespace SharpDc.Connections
                         return;
                     }
                 }
-                
+
                 SendTask task;
                 lock (_delayedMessages)
                 {
@@ -460,11 +465,12 @@ namespace SharpDc.Connections
             if (_connectionStatus == status)
                 return;
 
-            var ea = new ConnectionStatusEventArgs {
-                Status = status, 
-                Previous = old, 
-                Exception = x
-            };
+            var ea = new ConnectionStatusEventArgs
+                         {
+                             Status = status,
+                             Previous = old,
+                             Exception = x
+                         };
 
             _connectionStatus = status;
 
@@ -472,7 +478,6 @@ namespace SharpDc.Connections
 
             if (_connectionStatus == ConnectionStatus.Disconnected)
                 Dispose();
-
         }
 
         /// <summary>

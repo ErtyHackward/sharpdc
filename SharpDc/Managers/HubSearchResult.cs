@@ -1,8 +1,9 @@
-//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System.Collections.Generic;
 using System.Net;
 using SharpDc.Interfaces;
@@ -12,10 +13,23 @@ namespace SharpDc.Managers
 {
     public class HubSearchResult : ISearchResult
     {
-        public string Name { get { return Magnet.FileName; } }
-        public long Size { get { return Magnet.Size; } }
+        public string Name
+        {
+            get { return Magnet.FileName; }
+        }
+
+        public long Size
+        {
+            get { return Magnet.Size; }
+        }
+
         public List<string> VirtualDirs { get; set; }
-        public bool IsFolder { get { return string.IsNullOrEmpty(Magnet.TTH) || Magnet.Size == -1; } }
+
+        public bool IsFolder
+        {
+            get { return string.IsNullOrEmpty(Magnet.TTH) || Magnet.Size == -1; }
+        }
+
         public Magnet Magnet { get; set; }
         public List<IPEndPoint> UserAddress { get; set; }
 

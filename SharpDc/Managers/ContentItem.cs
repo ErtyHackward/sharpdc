@@ -1,8 +1,9 @@
-//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using SharpDc.Structs;
 
@@ -21,7 +22,8 @@ namespace SharpDc.Managers
         /// <summary>
         /// Gets first file location or null
         /// </summary>
-        public string SystemPath {
+        public string SystemPath
+        {
             get { return SystemPaths == null ? null : SystemPaths[0]; }
         }
 
