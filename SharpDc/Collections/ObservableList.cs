@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -17,8 +18,9 @@ namespace SharpDc.Collections
     public class ObservableList<T> : IList<T>
     {
         protected List<T> BaseList;
-        
+
         #region Events
+
         /// <summary>
         /// Occurs when item was added
         /// </summary>
@@ -29,7 +31,6 @@ namespace SharpDc.Collections
             var handler = ItemAdded;
             if (handler != null) handler(this, e);
         }
-
 
         /// <summary>
         /// Occurs when item was removed
@@ -48,10 +49,7 @@ namespace SharpDc.Collections
 
         public object SyncRoot
         {
-            get
-            {
-                return _syncRoot;
-            }
+            get { return _syncRoot; }
         }
 
         public ObservableList()
@@ -186,14 +184,8 @@ namespace SharpDc.Collections
 
         public T this[int index]
         {
-            get
-            {
-                return BaseList[index];
-            }
-            set
-            {
-                BaseList[index] = value;
-            }
+            get { return BaseList[index]; }
+            set { BaseList[index] = value; }
         }
 
         public int Count

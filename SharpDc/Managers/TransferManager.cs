@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -56,7 +57,9 @@ namespace SharpDc.Managers
         {
             get
             {
-                return _engine.Settings.MaxDownloadThreads == 0 || (_downloadThreadsCount < _engine.Settings.MaxDownloadThreads || _allowedUsers.Count < _engine.Settings.MaxDownloadThreads);
+                return _engine.Settings.MaxDownloadThreads == 0 ||
+                       (_downloadThreadsCount < _engine.Settings.MaxDownloadThreads ||
+                        _allowedUsers.Count < _engine.Settings.MaxDownloadThreads);
             }
         }
 
@@ -79,7 +82,7 @@ namespace SharpDc.Managers
         }
 
         public event EventHandler<TransferEventArgs> TransferAdded;
-        
+
         private void OnTransferAdded(TransferEventArgs e)
         {
             var handler = TransferAdded;
@@ -186,15 +189,14 @@ namespace SharpDc.Managers
             transfer.SlotRequest += TransferSlotRequest;
 
             OnTransferAdded(new TransferEventArgs { Transfer = transfer });
-
         }
 
-        void TransferUploadItemDisposeHandler(object sender, UploadItemEventArgs e)
+        private void TransferUploadItemDisposeHandler(object sender, UploadItemEventArgs e)
         {
             OnTransferUploadItemDispose(e);
         }
 
-        void TransferConnectionStatusChanged(object sender, ConnectionStatusEventArgs e)
+        private void TransferConnectionStatusChanged(object sender, ConnectionStatusEventArgs e)
         {
             if (e.Status == ConnectionStatus.Disconnected)
             {
@@ -210,19 +212,19 @@ namespace SharpDc.Managers
                 }
 
                 transfer.ConnectionStatusChanged -= TransferConnectionStatusChanged;
-                transfer.UploadItemNeeded        -= TransferUploadItemNeededHandler;
-                transfer.UploadItemDispose       -= TransferUploadItemDisposeHandler;
-                transfer.DirectionChanged        -= TransferDirectionChanged;
-                transfer.DownloadItemNeeded      -= TransferDownloadItemNeeded;
-                transfer.Authorization           -= TransferAuthorizationHandler;
-                transfer.Error                   -= TransferError;
-                transfer.SlotRequest             -= TransferSlotRequest;
+                transfer.UploadItemNeeded -= TransferUploadItemNeededHandler;
+                transfer.UploadItemDispose -= TransferUploadItemDisposeHandler;
+                transfer.DirectionChanged -= TransferDirectionChanged;
+                transfer.DownloadItemNeeded -= TransferDownloadItemNeeded;
+                transfer.Authorization -= TransferAuthorizationHandler;
+                transfer.Error -= TransferError;
+                transfer.SlotRequest -= TransferSlotRequest;
 
                 OnTransferRemoved(new TransferEventArgs { Transfer = transfer, Exception = e.Exception });
             }
         }
 
-        void TransferSlotRequest(object sender, System.ComponentModel.CancelEventArgs e)
+        private void TransferSlotRequest(object sender, System.ComponentModel.CancelEventArgs e)
         {
             if (_engine.Settings.MaxUploadThreads == 0)
                 return;
@@ -275,22 +277,21 @@ namespace SharpDc.Managers
                 e.UploadItem.Error += UploadItemError;
                 e.UploadItem.Disposed += UploadItemDisposed;
             }
-
         }
 
-        void UploadItemDisposed(object sender, EventArgs e)
+        private void UploadItemDisposed(object sender, EventArgs e)
         {
             var item = (UploadItem)sender;
             item.Error -= UploadItemError;
             item.Disposed -= UploadItemDisposed;
         }
 
-        void UploadItemError(object sender, UploadItemErrorEventArgs e)
+        private void UploadItemError(object sender, UploadItemErrorEventArgs e)
         {
             OnUploadItemError(e);
         }
 
-        void TransferError(object sender, TransferErrorEventArgs e)
+        private void TransferError(object sender, TransferErrorEventArgs e)
         {
             var transfer = (TransferConnection)sender;
             _engine.SourceManager.Error(transfer.Source);
@@ -299,7 +300,7 @@ namespace SharpDc.Managers
                 _engine.DownloadManager.RemoveSource(transfer.Source, transfer.DownloadItem);
         }
 
-        void TransferDirectionChanged(object sender, TransferDirectionChangedEventArgs e)
+        private void TransferDirectionChanged(object sender, TransferDirectionChangedEventArgs e)
         {
             lock (_synRoot)
             {
@@ -307,7 +308,6 @@ namespace SharpDc.Managers
                     _downloadThreadsCount--;
                 if (e.Previous == TransferDirection.Upload)
                     _uploadThreadsCount--;
-                
 
                 if (e.Download)
                     _downloadThreadsCount++;
@@ -341,13 +341,12 @@ namespace SharpDc.Managers
             {
                 Logger.Warn("Slow DeleteOldReq L:{0} D:{1}", swLock.ElapsedMilliseconds, swRemove.ElapsedMilliseconds);
             }
-
         }
 
-        void TransferAuthorizationHandler(object sender, TransferAuthorizationEventArgs e)
+        private void TransferAuthorizationHandler(object sender, TransferAuthorizationEventArgs e)
         {
             var transfer = (TransferConnection)sender;
-            
+
             // NOTE: we should remember that active users don't have allow records
             // They will have an address of a hub in the Source property
             // defined in ConnectToMe command handle section
@@ -386,7 +385,7 @@ namespace SharpDc.Managers
                     connection.DisconnectAsync();
                     Logger.Info("Disconnecting old transfer {0}", source);
                 }
-                
+
                 var ea = new TransferManagerAuthorizationEventArgs
                              {
                                  Connection = (TransferConnection)sender,
@@ -429,7 +428,7 @@ namespace SharpDc.Managers
             }
         }
 
-        void TransferDownloadItemNeeded(object sender, DownloadItemNeededEventArgs e)
+        private void TransferDownloadItemNeeded(object sender, DownloadItemNeededEventArgs e)
         {
             var transfer = (TransferConnection)sender;
             e.DownloadItem = _engine.DownloadManager.GetDownloadItem(transfer.Source);
@@ -468,14 +467,17 @@ namespace SharpDc.Managers
                 {
                     var idleSeconds = (DateTime.Now - transferConnection.LastEventTime).TotalSeconds;
 
-                    if (transferConnection.DownloadItem != null && DownloadInactivityTimeout > 0 && idleSeconds > DownloadInactivityTimeout)
+                    if (transferConnection.DownloadItem != null && DownloadInactivityTimeout > 0 &&
+                        idleSeconds > DownloadInactivityTimeout)
                     {
-                        Logger.Info("Download inactivity timeout reached [{0}, {1}]. Disconnect.", DownloadInactivityTimeout, transferConnection.Source);
+                        Logger.Info("Download inactivity timeout reached [{0}, {1}]. Disconnect.",
+                                    DownloadInactivityTimeout, transferConnection.Source);
                         transferConnection.DisconnectAsync();
                     }
                     else if (UploadInactivityTimeout > 0 && idleSeconds > UploadInactivityTimeout)
                     {
-                        Logger.Info("Upload inactivity timeout reached [{0}, {1}]. Disconnect.", UploadInactivityTimeout, transferConnection.Source);
+                        Logger.Info("Upload inactivity timeout reached [{0}, {1}]. Disconnect.", UploadInactivityTimeout,
+                                    transferConnection.Source);
                         transferConnection.DisconnectAsync();
                     }
                 }
@@ -486,12 +488,11 @@ namespace SharpDc.Managers
             {
                 Logger.Warn("Slow TransferUpdate L:{0} U:{1}", swLock.ElapsedMilliseconds, swUpdate.ElapsedMilliseconds);
             }
-
         }
 
         public void RequestTransfers(DownloadItem di)
         {
-            if (di.Sources.Count == 0 || di.Priority == DownloadPriority.Pause) 
+            if (di.Sources.Count == 0 || di.Priority == DownloadPriority.Pause)
                 return;
 
             if (_engine.Settings.MaxDownloadThreads != 0 && _allowedUsers.Count >= _engine.Settings.MaxDownloadThreads)
@@ -502,12 +503,13 @@ namespace SharpDc.Managers
 
             var reqLimit = maxThreads - _downloadThreadsCount;
             if (reqLimit <= 0) return;
-            
+
             var sources = di.Sources;
             var sortedSources = _engine.SourceManager.SortByQualityDesc(sources);
 
-
-            var freeSegments = di.TotalSegmentsCount == 0 ? (int)(di.Magnet.Size / DownloadItem.SegmentSize + 1) : di.TotalSegmentsCount - di.DoneSegmentsCount - di.ActiveSegmentsCount;
+            var freeSegments = di.TotalSegmentsCount == 0
+                                   ? (int)(di.Magnet.Size / DownloadItem.SegmentSize + 1)
+                                   : di.TotalSegmentsCount - di.DoneSegmentsCount - di.ActiveSegmentsCount;
 
             reqLimit = Math.Min(reqLimit, freeSegments);
 
@@ -528,7 +530,7 @@ namespace SharpDc.Managers
                         if (_connections.Any(t => t.Source == source))
                             // we already have connection with that source
                             continue;
-                        
+
                         if (_allowedUsers.Any(r => r.Nickname == source.UserNickname && r.Hub == hub))
                             // we already sent him a request
                             continue;
@@ -540,9 +542,19 @@ namespace SharpDc.Managers
                     Logger.Info("Requesting connection {0}", source.UserNickname);
 
                     if (_engine.Settings.ActiveMode)
-                        hub.SendMessage(new ConnectToMeMessage { RecipientNickname = source.UserNickname, SenderAddress = _engine.LocalTcpAddress }.Raw);
+                        hub.SendMessage(
+                            new ConnectToMeMessage
+                                {
+                                    RecipientNickname = source.UserNickname,
+                                    SenderAddress = _engine.LocalTcpAddress
+                                }.Raw);
                     else
-                        hub.SendMessage(new RevConnectToMeMessage { SenderNickname = hub.Settings.Nickname, TargetNickname = source.UserNickname }.Raw);
+                        hub.SendMessage(
+                            new RevConnectToMeMessage
+                                {
+                                    SenderNickname = hub.Settings.Nickname,
+                                    TargetNickname = source.UserNickname
+                                }.Raw);
                 }
             }
         }
@@ -595,7 +607,7 @@ namespace SharpDc.Managers
             {
                 foreach (var transferConnection in _connections)
                 {
-                    yield return transferConnection;    
+                    yield return transferConnection;
                 }
             }
         }
@@ -688,7 +700,6 @@ namespace SharpDc.Managers
         {
             return enumerable.Sum(t => t.DownloadSpeed.Total);
         }
-
     }
 
     public class TransferEventArgs : EventArgs

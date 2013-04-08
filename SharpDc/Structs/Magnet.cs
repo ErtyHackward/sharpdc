@@ -1,8 +1,9 @@
-//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Text;
 
@@ -23,46 +24,28 @@ namespace SharpDc.Structs
         /// </summary>
         public long Size
         {
-            get
-            {
-                return _size;
-            }
-            set
-            {
-                _size = value;
-            }
+            get { return _size; }
+            set { _size = value; }
         }
-        
+
         /// <summary>
         /// Tiger Tree Hash of the file
         /// </summary>
         public string TTH
         {
-            get
-            {
-                return _tth;
-            }
-            set
-            {
-                _tth = value;
-            }
+            get { return _tth; }
+            set { _tth = value; }
         }
-        
+
         /// <summary>
         /// File name
         /// </summary>
         public string FileName
         {
-            get
-            {
-                return _filename;
-            }
-            set
-            {
-                _filename = value;
-            }
+            get { return _filename; }
+            set { _filename = value; }
         }
-        
+
         /// <summary>
         /// Indicates whether the file play should be started before file was downloaded
         /// </summary>
@@ -77,10 +60,7 @@ namespace SharpDc.Structs
         /// </summary>
         public bool IsCorrect
         {
-            get
-            {
-                return !string.IsNullOrEmpty(_tth) && _size > 0 && !string.IsNullOrEmpty(_filename);
-            }
+            get { return !string.IsNullOrEmpty(_tth) && _size > 0 && !string.IsNullOrEmpty(_filename); }
         }
 
         public Magnet(string tth, long size, string fileName)
@@ -170,12 +150,14 @@ namespace SharpDc.Structs
 
         public override string ToString()
         {
-            return string.Format("magnet:?xt=urn:tree:tiger:{0}&xl={1}&dn={2}{3}", _tth, _size, Uri.EscapeDataString(_filename), Preview ? "&video=1" : "");
+            return string.Format("magnet:?xt=urn:tree:tiger:{0}&xl={1}&dn={2}{3}", _tth, _size,
+                                 Uri.EscapeDataString(_filename), Preview ? "&video=1" : "");
         }
 
         public string ToWebLink()
         {
-            return string.Format("[magnet=magnet:?xt=urn:tree:tiger:{0}&xl={1}&dn={2}]{3}[/magnet]", _tth, _size, Uri.EscapeDataString(_filename), _filename);
+            return string.Format("[magnet=magnet:?xt=urn:tree:tiger:{0}&xl={1}&dn={2}]{3}[/magnet]", _tth, _size,
+                                 Uri.EscapeDataString(_filename), _filename);
         }
 
         /// <summary>
@@ -202,7 +184,6 @@ namespace SharpDc.Structs
             }
             byte[] bytes = Encoding.GetEncoding(1252).GetBytes(sb.ToString());
             return Encoding.GetEncoding(1251).GetString(bytes, 0, bytes.Length);
-
         }
 
         internal static string ExplorerUnescape(string input)

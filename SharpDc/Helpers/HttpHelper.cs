@@ -1,8 +1,9 @@
-//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2013-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2013-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Net;
 using System.Reflection;
@@ -11,8 +12,8 @@ namespace SharpDc.Helpers
 {
     public static class HttpHelper
     {
-        static MethodInfo httpWebRequestAddRangeHelper = typeof(WebHeaderCollection).GetMethod
-                                        ("AddWithoutValidate", BindingFlags.Instance | BindingFlags.NonPublic);
+        private static MethodInfo httpWebRequestAddRangeHelper = typeof (WebHeaderCollection).GetMethod
+            ("AddWithoutValidate", BindingFlags.Instance | BindingFlags.NonPublic);
 
         /// <summary>Adds a byte range header to the request for a specified range.</summary>
         /// <param name="request">The <see cref="HttpWebRequest"/> to add the range specifier to.</param>
@@ -20,11 +21,11 @@ namespace SharpDc.Helpers
         /// <param name="end">The position at which to stop sending data.</param>
         public static void AddRangeTrick(this HttpWebRequest request, long start, long end)
         {
-            if (request == null) 
+            if (request == null)
                 throw new ArgumentNullException("request");
-            if (start < 0) 
+            if (start < 0)
                 throw new ArgumentOutOfRangeException("start", "Starting byte cannot be less than 0.");
-            if (end < start) 
+            if (end < start)
                 end = -1;
 
             string key = "Range";
@@ -49,7 +50,7 @@ namespace SharpDc.Helpers
             using (var stream = response.GetResponseStream())
             {
                 stream.ReadTimeout = 4000;
-                
+
                 int read = 0;
                 while (read < readLength)
                 {

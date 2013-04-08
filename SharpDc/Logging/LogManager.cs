@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System.Diagnostics;
 
 namespace SharpDc.Logging
@@ -24,22 +25,18 @@ namespace SharpDc.Logging
     {
         public void Info(string message, params object[] args)
         {
-            
         }
 
         public void Warn(string message, params object[] args)
         {
-            
         }
 
         public void Error(string message, params object[] args)
         {
-            
         }
 
         public void Fatal(string message, params object[] args)
         {
-            
         }
     }
 
@@ -69,7 +66,7 @@ namespace SharpDc.Logging
     public class TraceLogManager : ILogManager
     {
         private static readonly TraceLogger Logger = new TraceLogger();
-        
+
         public ILogger GetLogger(string className)
         {
             return Logger;

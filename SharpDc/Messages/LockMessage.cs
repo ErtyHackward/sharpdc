@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Text;
 
@@ -13,11 +14,12 @@ namespace SharpDc.Messages
         public bool ExtendedProtocol;
 
         private string _raw;
+
         public string Raw
         {
             get { return "$Lock EXTENDEDPROTOCOLABCABCABCABCABCABC Pk=SHARPDC"; }
         }
-        
+
         public static LockMessage Parse(string raw)
         {
             LockMessage lm;
@@ -72,15 +74,14 @@ namespace SharpDc.Messages
                         sKey += string.Format("/%DCN{0:000}%/", j);
                         break;
                     default:
-                        sKey += encoding.GetChars(new [] { Convert.ToByte((char)j) })[0];
+                        sKey += encoding.GetChars(new[] { Convert.ToByte((char)j) })[0];
                         break;
                 }
             }
 
             km.Key = sKey;
-            
+
             return km;
         }
-
     }
 }

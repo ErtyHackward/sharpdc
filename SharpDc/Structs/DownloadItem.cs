@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -79,7 +80,8 @@ namespace SharpDc.Structs
 
         public int TotalSegmentsCount
         {
-            get {
+            get
+            {
                 if (_totalSegmentsCount == 0)
                 {
                     // initiate the buffers
@@ -97,9 +99,8 @@ namespace SharpDc.Structs
                         _downloadedSegments = new BitArray(ttl);
                         _totalSegmentsCount = ttl;
                     }
-                    
                 }
-                return _totalSegmentsCount; 
+                return _totalSegmentsCount;
             }
         }
 
@@ -210,7 +211,6 @@ namespace SharpDc.Structs
             segment.Length = 0;
             segment.StartPosition = -1;
 
-
             if (StorageContainer == null)
             {
                 Logger.Error("Unable to take the segment, no storage container set");
@@ -255,8 +255,8 @@ namespace SharpDc.Structs
                 {
                     segment.StartPosition = (long)segment.Index * SegmentSize;
                     segment.Length = segment.Index == _totalSegmentsCount - 1
-                                            ? (int)(_magnet.Size % SegmentSize)
-                                            : SegmentSize;
+                                         ? (int)(_magnet.Size % SegmentSize)
+                                         : SegmentSize;
 
                     _activeSegmentsCount++;
                     _activeSegments[segment.Index] = true;
@@ -281,7 +281,12 @@ namespace SharpDc.Structs
                 ActiveSources.Remove(src);
             }
 
-            OnSegmentCancelled(new SegmentEventArgs { SegmentInfo = new SegmentInfo { Index = index }, DownloadItem = this, Source = src });
+            OnSegmentCancelled(new SegmentEventArgs
+                                   {
+                                       SegmentInfo = new SegmentInfo { Index = index },
+                                       DownloadItem = this,
+                                       Source = src
+                                   });
         }
 
         public void FinishSegment(int index, Source src)
@@ -298,7 +303,12 @@ namespace SharpDc.Structs
                 ActiveSources.Remove(src);
             }
 
-            OnSegmentFinished(new SegmentEventArgs { SegmentInfo = new SegmentInfo { Index = index }, DownloadItem = this, Source = src });
+            OnSegmentFinished(new SegmentEventArgs
+                                  {
+                                      SegmentInfo = new SegmentInfo { Index = index },
+                                      DownloadItem = this,
+                                      Source = src
+                                  });
 
             if (downloadFinished)
             {
@@ -316,8 +326,8 @@ namespace SharpDc.Structs
         protected bool CanRead(long startPos, int count, bool makeRequest = true)
         {
             var startIndex = GetSegmentIndex(startPos);
-            var endIndex   = GetSegmentIndex(startPos + count);
-            var result     = true;
+            var endIndex = GetSegmentIndex(startPos + count);
+            var result = true;
 
             lock (SyncRoot)
             {
@@ -351,8 +361,8 @@ namespace SharpDc.Structs
                 return false;
 
             var startIndex = GetSegmentIndex(filePosition);
-            var endIndex   = GetSegmentIndex(filePosition + count);
-            
+            var endIndex = GetSegmentIndex(filePosition + count);
+
             lock (_syncRoot)
             {
                 if (startIndex == endIndex)

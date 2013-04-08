@@ -1,8 +1,9 @@
-//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -27,14 +28,8 @@ namespace SharpDc.Collections
         /// <returns></returns>
         public HubConnection this[int index]
         {
-            get
-            {
-                return _hubList[index];
-            }
-            set
-            {
-                _hubList[index] = value;
-            }
+            get { return _hubList[index]; }
+            set { _hubList[index] = value; }
         }
 
         /// <summary>
@@ -64,7 +59,7 @@ namespace SharpDc.Collections
         /// <param name="action"></param>
         public void ForEach(Action<HubConnection> action)
         {
-            lock (_syncRoot) 
+            lock (_syncRoot)
                 _hubList.ForEach(action);
         }
 
@@ -82,14 +77,10 @@ namespace SharpDc.Collections
 
         public object SyncRoot
         {
-            get
-            {
-                return _syncRoot;
-            }
+            get { return _syncRoot; }
         }
 
         #region Events
-
 
         public event EventHandler<HubsChangedEventArgs> HubAdded;
 
@@ -109,7 +100,6 @@ namespace SharpDc.Collections
 
         #endregion
 
-
         #region Collection
 
         /// <summary>
@@ -120,11 +110,11 @@ namespace SharpDc.Collections
         public HubConnection Add(string hubAddress, string nickname)
         {
             var hub = new HubConnection(new HubSettings
-                {
-                    HubAddress = hubAddress,
-                    HubName = hubAddress,
-                    Nickname = nickname
-                });
+                                            {
+                                                HubAddress = hubAddress,
+                                                HubName = hubAddress,
+                                                Nickname = nickname
+                                            });
             Add(hub);
             return hub;
         }
@@ -146,7 +136,6 @@ namespace SharpDc.Collections
         {
             lock (_syncRoot)
                 return _hubList.GetEnumerator();
-
         }
 
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
@@ -229,7 +218,5 @@ namespace SharpDc.Collections
         }
 
         #endregion
-
-
     }
 }

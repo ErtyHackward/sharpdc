@@ -1,8 +1,9 @@
-//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2013-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2013-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using SharpDc.Interfaces;
 using SharpDc.Structs;
 
@@ -23,7 +24,8 @@ namespace SharpDc.Storage
             throw new System.NotSupportedException();
         }
 
-        public int FreeSegments {
+        public int FreeSegments
+        {
             get { return int.MaxValue; }
         }
 
@@ -34,7 +36,6 @@ namespace SharpDc.Storage
 
         public void Dispose()
         {
-            
         }
     }
 }

@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -47,6 +48,7 @@ namespace SharpDc
         public static IThreadPoolProxy ThreadPool { get; set; }
 
         #region Properties
+
         /// <summary>
         /// Gets current engine settings
         /// </summary>
@@ -70,7 +72,7 @@ namespace SharpDc
         {
             get { return _udpConnection; }
         }
-        
+
         /// <summary>
         /// Gets a TcpListener
         /// Allows to accept new connections
@@ -86,7 +88,8 @@ namespace SharpDc
         public string LocalAddress
         {
             get { return _localAddress; }
-            set { 
+            set
+            {
                 _localAddress = value;
                 LocalUdpAddress = string.Format("{0}:{1}", _localAddress, Settings.UdpPort);
                 LocalTcpAddress = string.Format("{0}:{1}", _localAddress, Settings.TcpPort);
@@ -102,7 +105,7 @@ namespace SharpDc
         /// Gets local tcp end-point (address:port)
         /// </summary>
         public string LocalTcpAddress { get; private set; }
-        
+
         public SearchManager SearchManager { get; set; }
 
         public DownloadManager DownloadManager { get; set; }
@@ -136,15 +139,15 @@ namespace SharpDc
         {
             get { return _active > 0; }
         }
-        
+
         /// <summary>
         /// Gets or sets current share
         /// </summary>
         public IShare Share
         {
             get { return _share; }
-            set {
-
+            set
+            {
                 if (_share != null)
                 {
                     _share.TotalSharedChanged -= ShareTotalSharedChanged;
@@ -156,9 +159,9 @@ namespace SharpDc
                 {
                     _share.TotalSharedChanged += ShareTotalSharedChanged;
                 }
-
             }
         }
+
         #endregion
 
         #region Events
@@ -229,7 +232,9 @@ namespace SharpDc
             DcEngine.ThreadPool = new ThreadPoolProxy();
         }
 
-        public DcEngine() : this(EngineSettings.Default) { }
+        public DcEngine() : this(EngineSettings.Default)
+        {
+        }
 
         public DcEngine(EngineSettings settings)
         {
@@ -273,12 +278,12 @@ namespace SharpDc
                     }
                 }
             }
-            else 
+            else
                 LocalAddress = Settings.LocalAddress;
         }
 
         #endregion
-        
+
         /// <summary>
         /// Returns stream to read file from DC or from share
         /// Allows to read non-downloaded files
@@ -315,7 +320,7 @@ namespace SharpDc
         {
             _updateTimer = new Timer(o => Update(), null, 0, updateInterval);
         }
-        
+
         /// <summary>
         /// Performs engine control operations, need to be called periodically
         /// - Checks hub connections (and restores if needed)
@@ -330,13 +335,14 @@ namespace SharpDc
                 if (Settings.ReconnectTimeout != 0 && hub.ConnectionStatus == ConnectionStatus.Disconnected &&
                     hub.LastEventTime.AddSeconds(Settings.ReconnectTimeout) < DateTime.Now)
                 {
-                    Logger.Info("{0}: Hub inactivity timeout reached [{1}]. Reconnecting", hub.Settings.HubName, Settings.ReconnectTimeout);
+                    Logger.Info("{0}: Hub inactivity timeout reached [{1}]. Reconnecting", hub.Settings.HubName,
+                                Settings.ReconnectTimeout);
                     hub.ConnectAsync();
                 }
             }
-            
+
             // no need to do anything before we have at least one connection
-            if (!Active) 
+            if (!Active)
                 return;
 
             if (!Monitor.TryEnter(_updateSynRoot))
@@ -379,7 +385,9 @@ namespace SharpDc
             }
 
             if (sw.ElapsedMilliseconds > 300)
-                Logger.Warn("Slow engine update Total:{0}ms R:{1}ms T:{2}ms S:{3}ms", sw.ElapsedMilliseconds, swRequest.ElapsedMilliseconds, swTransfers.ElapsedMilliseconds, swSearches.ElapsedMilliseconds);
+                Logger.Warn("Slow engine update Total:{0}ms R:{1}ms T:{2}ms S:{3}ms", sw.ElapsedMilliseconds,
+                            swRequest.ElapsedMilliseconds, swTransfers.ElapsedMilliseconds,
+                            swSearches.ElapsedMilliseconds);
         }
 
         private void InitTcp(int p)
@@ -398,7 +406,7 @@ namespace SharpDc
                 _tcpConnectionListener.ListenAsync();
             }
         }
-        
+
         private void InitUdp(int port)
         {
             if (_udpConnection != null)
@@ -424,8 +432,7 @@ namespace SharpDc
 
         #region Handlers
 
-
-        void DownloadManagerDownloadAdding(object sender, CancelDownloadEventArgs e)
+        private void DownloadManagerDownloadAdding(object sender, CancelDownloadEventArgs e)
         {
             if (e.DownloadItem.SaveTargets == null)
                 return;
@@ -456,7 +463,8 @@ namespace SharpDc
             {
                 // maximum file size 16 Tb - 64 Kb
                 if (e.DownloadItem.Magnet.Size > 16L * 1024 * 1024 * 1024 * 1024 - 64 * 1024)
-                    throw new FileTooBigException(16L * 1024 * 1024 * 1024 * 1024 - 64 * 1024, e.DownloadItem.Magnet.Size);
+                    throw new FileTooBigException(16L * 1024 * 1024 * 1024 * 1024 - 64 * 1024,
+                                                  e.DownloadItem.Magnet.Size);
             }
 
             if (Settings.InstantAllocate)
@@ -469,19 +477,16 @@ namespace SharpDc
                 }
                 FileHelper.AllocateFile(path, e.DownloadItem.Magnet.Size);
             }
-
         }
 
-        void DownloadManager_DownloadCompleted(object sender, DownloadCompletedEventArgs e)
+        private void DownloadManager_DownloadCompleted(object sender, DownloadCompletedEventArgs e)
         {
             if (Share != null)
             {
-
             }
         }
 
-
-        void TcpConnectionListenerIncomingConnection(object sender, IncomingConnectionEventArgs e)
+        private void TcpConnectionListenerIncomingConnection(object sender, IncomingConnectionEventArgs e)
         {
             if (e.Socket.Connected)
             {
@@ -504,7 +509,7 @@ namespace SharpDc
             }
         }
 
-        void TransferManagerTransferRemoved(object sender, TransferEventArgs e)
+        private void TransferManagerTransferRemoved(object sender, TransferEventArgs e)
         {
             lock (_speedSyncRoot)
             {
@@ -521,7 +526,7 @@ namespace SharpDc
             e.Transfer.Dispose();
         }
 
-        void TransferManagerTransferAdded(object sender, TransferEventArgs e)
+        private void TransferManagerTransferAdded(object sender, TransferEventArgs e)
         {
             if (Settings.DumpTransferProtocolMessages)
             {
@@ -530,17 +535,17 @@ namespace SharpDc
             }
         }
 
-        void TransferManagerTransferUploadItemError(object sender, UploadItemErrorEventArgs e)
+        private void TransferManagerTransferUploadItemError(object sender, UploadItemErrorEventArgs e)
         {
             FileSourceManager.RegisterError(e.UploadItem.SystemPath);
         }
 
-        void UdpConnectionSearchResult(object sender, SearchResultEventArgs e)
+        private void UdpConnectionSearchResult(object sender, SearchResultEventArgs e)
         {
             SearchManager.InjectResult(e.Message);
         }
 
-        void SettingsChanged(object sender, EngineSettingsEventArgs e)
+        private void SettingsChanged(object sender, EngineSettingsEventArgs e)
         {
             switch (e.SettingType)
             {
@@ -574,20 +579,20 @@ namespace SharpDc
                     if (Settings.DumpHubProtocolMessages)
                     {
                         Hubs.ForEach(h =>
-                            {
-                                h.IncomingMessage += IncomingMessageHandler;
-                                h.OutgoingMessage += OutgoingMessageHandler;
-                            }
-                        );
+                                         {
+                                             h.IncomingMessage += IncomingMessageHandler;
+                                             h.OutgoingMessage += OutgoingMessageHandler;
+                                         }
+                            );
                     }
                     else
                     {
                         Hubs.ForEach(h =>
-                            {
-                                h.IncomingMessage -= IncomingMessageHandler;
-                                h.OutgoingMessage -= OutgoingMessageHandler;
-                            }
-                        );
+                                         {
+                                             h.IncomingMessage -= IncomingMessageHandler;
+                                             h.OutgoingMessage -= OutgoingMessageHandler;
+                                         }
+                            );
                     }
                     break;
                 case EngineSettingType.DumpTransferProtocolMessages:
@@ -625,7 +630,7 @@ namespace SharpDc
             }
         }
 
-        void HubsHubRemoved(object sender, HubsChangedEventArgs e)
+        private void HubsHubRemoved(object sender, HubsChangedEventArgs e)
         {
             e.Hub.ActiveStatusChanged -= HubActiveStatusChanged;
             e.Hub.IncomingConnectionRequest -= HubConnectionRequest;
@@ -641,7 +646,7 @@ namespace SharpDc
             }
         }
 
-        void HubsHubAdded(object sender, HubsChangedEventArgs e)
+        private void HubsHubAdded(object sender, HubsChangedEventArgs e)
         {
             if (Settings.NetworkInterface != null)
             {
@@ -665,24 +670,24 @@ namespace SharpDc
                 e.Hub.TagInfo = TagInfo;
         }
 
-        void HubOwnIpReceived(object sender, EventArgs e)
+        private void HubOwnIpReceived(object sender, EventArgs e)
         {
             var hub = (HubConnection)sender;
             LocalAddress = hub.CurrentUser.IP;
         }
 
-        void HubPassiveSearchResult(object sender, SearchResultEventArgs e)
+        private void HubPassiveSearchResult(object sender, SearchResultEventArgs e)
         {
             SearchManager.InjectResult(e.Message);
         }
-        
-        void HubSearchRequest(object sender, SearchRequestEventArgs e)
+
+        private void HubSearchRequest(object sender, SearchRequestEventArgs e)
         {
-            var ea = new EngineSearchRequestEventArgs 
-            {
-                HubConnection = (HubConnection)sender, 
-                Message = e.Message 
-            };
+            var ea = new EngineSearchRequestEventArgs
+                         {
+                             HubConnection = (HubConnection)sender,
+                             Message = e.Message
+                         };
 
             OnSearchRequest(ea);
 
@@ -691,7 +696,8 @@ namespace SharpDc
 
             if (Share != null && e.Message.SearchType == SearchType.TTH)
             {
-                var results = Share.Search(new SearchQuery { Query = e.Message.SearchRequest, SearchType = SearchType.TTH });
+                var results =
+                    Share.Search(new SearchQuery { Query = e.Message.SearchRequest, SearchType = SearchType.TTH });
                 if (results.Count > 0)
                 {
                     var result = results[0];
@@ -723,17 +729,17 @@ namespace SharpDc
             }
         }
 
-        void HubOutgoingConnectionRequest(object sender, OutgoingConnectionRequestEventArgs e)
+        private void HubOutgoingConnectionRequest(object sender, OutgoingConnectionRequestEventArgs e)
         {
             var hubConnection = (HubConnection)sender;
 
             var ea = new ConnectionRequestEventArgs
-            {
-                UserNickname = "", 
-                Address = e.Message.SenderAddress, 
-                HubConnection = hubConnection
-            };
-            
+                         {
+                             UserNickname = "",
+                             Address = e.Message.SenderAddress,
+                             HubConnection = hubConnection
+                         };
+
             OnConnectionRequest(ea);
 
             if (ea.Cancel)
@@ -745,33 +751,32 @@ namespace SharpDc
             try
             {
                 transfer = new TransferConnection(e.Message.SenderAddress)
-                {
-                    AllowedToConnect = true,
-                    Source = new Source { HubAddress = hubConnection.RemoteAddress }
-                };
+                               {
+                                   AllowedToConnect = true,
+                                   Source = new Source { HubAddress = hubConnection.RemoteAddress }
+                               };
 
                 if (!Equals(Settings.NetworkInterface, IPAddress.Any))
                 {
                     transfer.LocalAddress = new IPEndPoint(Settings.NetworkInterface, 0);
                 }
-
             }
             catch (Exception x)
             {
                 Logger.Error("Unable to create outgoing transfer thread {0}", x.Message);
                 return;
             }
-            
+
             TransferManager.AddTransfer(transfer);
             transfer.FirstMessages = new[]
-                                             {
-                                                 new MyNickMessage { Nickname = hubConnection.Settings.Nickname }.Raw,
-                                                 new LockMessage { ExtendedProtocol = true }.Raw
-                                             };
+                                         {
+                                             new MyNickMessage { Nickname = hubConnection.Settings.Nickname }.Raw,
+                                             new LockMessage { ExtendedProtocol = true }.Raw
+                                         };
             transfer.ConnectAsync();
         }
 
-        void HubConnectionRequest(object sender, IncomingConnectionRequestEventArgs e)
+        private void HubConnectionRequest(object sender, IncomingConnectionRequestEventArgs e)
         {
             // we have a request from a passive user, we need to be active to connect to him
             if (Settings.ActiveMode)
@@ -779,10 +784,10 @@ namespace SharpDc
                 var hubConnection = (HubConnection)sender;
 
                 var ea = new ConnectionRequestEventArgs
-                {
-                    UserNickname = e.Message.SenderNickname,
-                    HubConnection = hubConnection
-                };
+                             {
+                                 UserNickname = e.Message.SenderNickname,
+                                 HubConnection = hubConnection
+                             };
 
                 OnConnectionRequest(ea);
 
@@ -798,19 +803,19 @@ namespace SharpDc
             }
         }
 
-        void OutgoingMessageHandler(object sender, MessageEventArgs e)
+        private void OutgoingMessageHandler(object sender, MessageEventArgs e)
         {
             e.Connection = (TcpConnection)sender;
             OnOutgoingMessage(e);
         }
 
-        void IncomingMessageHandler(object sender, MessageEventArgs e)
+        private void IncomingMessageHandler(object sender, MessageEventArgs e)
         {
             e.Connection = (TcpConnection)sender;
             OnIncomingMessage(e);
         }
 
-        void HubActiveStatusChanged(object sender, EventArgs e)
+        private void HubActiveStatusChanged(object sender, EventArgs e)
         {
             var prevActive = _active;
 
@@ -828,7 +833,7 @@ namespace SharpDc
             }
         }
 
-        void ShareTotalSharedChanged(object sender, EventArgs e)
+        private void ShareTotalSharedChanged(object sender, EventArgs e)
         {
             foreach (var hub in Hubs)
             {
@@ -852,25 +857,26 @@ namespace SharpDc
             {
                 savePath = Path.Combine(Settings.PathDownload, magnet.FileName);
             }
-            
+
             if (!FileHelper.IsValidFilePath(savePath))
                 throw new InvalidFileNameException("Storage path of the file is invalid") { FileName = savePath };
 
             if (!FileHelper.IsValidFileName(Path.GetFileName(savePath)))
                 throw new InvalidFileNameException("Storage path of the file is invalid") { FileName = savePath };
-            
+
             if (!string.IsNullOrEmpty(magnet.FileName))
             {
                 if (!FileHelper.IsValidFileName(magnet.FileName))
                     throw new InvalidFileNameException("Name of the file is invalid") { FileName = magnet.FileName };
             }
-            
-            var di = new DownloadItem {
-                Magnet = magnet, 
-                SaveTargets = new List<string> {savePath}
-            };
-            
-            if(sources != null)
+
+            var di = new DownloadItem
+                         {
+                             Magnet = magnet,
+                             SaveTargets = new List<string> { savePath }
+                         };
+
+            if (sources != null)
             {
                 di.Sources.AddRange(sources);
             }
@@ -882,7 +888,6 @@ namespace SharpDc
                 di.Sources.AddRange(result.Sources);
             }
 
-            
             if (DownloadManager.AddDownload(di) && Active)
             {
                 if (di.Sources.Count == 0)
@@ -932,19 +937,17 @@ namespace SharpDc
             else
             {
                 DcEngine.ThreadPool.QueueWorkItem(delegate
-                {
-                    
-                    // start new connections gradually
+                                                      {
+                                                          // start new connections gradually
 
-                    var list = new List<HubConnection>(Hubs);
+                                                          var list = new List<HubConnection>(Hubs);
 
-                    for (int i = 0; i < list.Count; i++)
-                    {
-                        list[i].ConnectAsync();
-                        Thread.Sleep(100);
-                    }
-                    
-                });
+                                                          for (int i = 0; i < list.Count; i++)
+                                                          {
+                                                              list[i].ConnectAsync();
+                                                              Thread.Sleep(100);
+                                                          }
+                                                      });
             }
         }
 
@@ -975,7 +978,6 @@ namespace SharpDc
         public bool Cancel { get; set; }
 
         public SearchMessage Message { get; set; }
-
     }
 
     public class ConnectionRequestEventArgs : EventArgs
@@ -999,6 +1001,5 @@ namespace SharpDc
         /// Gets hub
         /// </summary>
         public HubConnection HubConnection { get; set; }
-
     }
 }

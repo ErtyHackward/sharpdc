@@ -1,8 +1,9 @@
-//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2013-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2013-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -39,7 +40,9 @@ namespace SharpDc.Structs
         {
             lock (SyncRoot)
             {
-                foreach (var httpTask in Tasks.Where(t =>  (Stopwatch.GetTimestamp() - t.CreatedTimestamp) / Stopwatch.Frequency > 4))
+                foreach (
+                    var httpTask in
+                        Tasks.Where(t => (Stopwatch.GetTimestamp() - t.CreatedTimestamp) / Stopwatch.Frequency > 4))
                 {
                     httpTask.Event.Set();
                 }
@@ -47,7 +50,7 @@ namespace SharpDc.Structs
                 Tasks.RemoveAll(t => (Stopwatch.GetTimestamp() - t.CreatedTimestamp) / Stopwatch.Frequency > 4);
             }
         }
-        
+
         public void StartTask(HttpTask task)
         {
             DeleteOldTasks();
@@ -61,7 +64,7 @@ namespace SharpDc.Structs
                     conn = _freeList[0];
                     _freeList.RemoveAt(0);
                 }
-                
+
                 if (conn == null && Connections.Count < ConnectionsLimit)
                 {
                     conn = new HttpConnection();
@@ -85,7 +88,7 @@ namespace SharpDc.Structs
                 task.SetConnection(conn);
         }
 
-        void HttpConRequestComplete(object sender, EventArgs e)
+        private void HttpConRequestComplete(object sender, EventArgs e)
         {
             var httpCon = (HttpConnection)sender;
 
@@ -107,7 +110,7 @@ namespace SharpDc.Structs
             }
         }
 
-        void HttpConConnectionStatusChanged(object sender, Events.ConnectionStatusEventArgs e)
+        private void HttpConConnectionStatusChanged(object sender, Events.ConnectionStatusEventArgs e)
         {
             if (e.Status == Events.ConnectionStatus.Disconnected)
             {
@@ -123,7 +126,7 @@ namespace SharpDc.Structs
                 }
             }
         }
-        
+
         public void Dispose()
         {
             lock (SyncRoot)

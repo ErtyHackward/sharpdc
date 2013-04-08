@@ -1,8 +1,9 @@
-//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2013-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2013-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using SharpDc.Managers;
 
 namespace SharpDc.Structs
@@ -13,9 +14,8 @@ namespace SharpDc.Structs
     /// </summary>
     public class NullUploadItem : UploadItem
     {
-        public NullUploadItem(ContentItem item) : base (item)
+        public NullUploadItem(ContentItem item) : base(item)
         {
-            
         }
 
         protected override int InternalRead(byte[] array, long start, int count)

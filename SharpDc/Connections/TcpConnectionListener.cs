@@ -1,8 +1,9 @@
-//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System.Net.Sockets;
 using System.Net;
 using System;
@@ -45,7 +46,7 @@ namespace SharpDc.Connections
             var handler = Exception;
             if (handler != null) handler(this, e);
         }
-        
+
         /// <summary>
         /// Creates new TcpConnectionListener on port specified
         /// </summary>
@@ -63,9 +64,9 @@ namespace SharpDc.Connections
 
             _backlog = backlog;
             _listenSocket = new Socket(
-                                        AddressFamily.InterNetwork,
-                                        SocketType.Stream,
-                                        ProtocolType.Tcp);
+                AddressFamily.InterNetwork,
+                SocketType.Stream,
+                ProtocolType.Tcp);
             _ep = new IPEndPoint(IPAddress.Any, port);
             _listenSocket.Bind(_ep);
             Port = port;
@@ -90,7 +91,7 @@ namespace SharpDc.Connections
                     if (!ea.Handled)
                     {
                         using (var pl = new PerfLimit("Tcp connection listener close"))
-                            socket.Close();                        
+                            socket.Close();
                     }
                 }
                 catch (ObjectDisposedException)
@@ -99,7 +100,7 @@ namespace SharpDc.Connections
                 }
                 catch (SocketException e)
                 {
-                    OnException(new ExceptionEventArgs {Exception = e});
+                    OnException(new ExceptionEventArgs { Exception = e });
                 }
             }
         }
@@ -120,8 +121,11 @@ namespace SharpDc.Connections
             {
                 sc.BeginAccept(_incomingConnectionCallback, sc);
             }
-            catch (ObjectDisposedException) { }
-            catch (SocketException e) {
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (SocketException e)
+            {
                 OnException(new ExceptionEventArgs { Exception = e });
             }
         }
@@ -132,8 +136,8 @@ namespace SharpDc.Connections
             try
             {
                 socket = new Socket(AddressFamily.InterNetwork,
-                                        SocketType.Stream,
-                                        ProtocolType.Tcp);
+                                    SocketType.Stream,
+                                    ProtocolType.Tcp);
                 var ep = new IPEndPoint(IPAddress.Any, port);
                 socket.Bind(ep);
 
@@ -164,13 +168,15 @@ namespace SharpDc.Connections
                 {
                     incomingSocket.Disconnect(false);
                 }
-                
+
                 // continue accepting
                 AcceptNext(s);
             }
-            catch (ObjectDisposedException) { }
-            catch (SocketException e) {
-
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (SocketException e)
+            {
                 OnException(new ExceptionEventArgs { Exception = e });
 
                 // try to continue listening
@@ -179,7 +185,8 @@ namespace SharpDc.Connections
                     var s = (Socket)ar.AsyncState;
                     AcceptNext(s);
                 }
-                catch (Exception x) {
+                catch (Exception x)
+                {
                     OnException(new ExceptionEventArgs { Exception = x });
                 }
             }
@@ -199,7 +206,6 @@ namespace SharpDc.Connections
     public class IncomingConnectionEventArgs : BaseEventArgs
     {
         public Socket Socket { get; set; }
-
     }
 
     public class BaseEventArgs : EventArgs

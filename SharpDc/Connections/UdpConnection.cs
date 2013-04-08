@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Net;
 using System.Net.Sockets;
@@ -18,7 +19,7 @@ namespace SharpDc.Connections
 
         private UdpClient _client;
         private IPEndPoint _endPoint;
-        
+
         public event EventHandler<SearchResultEventArgs> SearchResult;
 
         private void OnSearchResult(SearchResultEventArgs e)
@@ -62,11 +63,9 @@ namespace SharpDc.Connections
                     var args = new SearchResultEventArgs { Message = SRMessage.Parse(ea.Message) };
                     OnSearchResult(args);
                 }
-
             }
             catch (Exception x)
             {
-
             }
             finally
             {

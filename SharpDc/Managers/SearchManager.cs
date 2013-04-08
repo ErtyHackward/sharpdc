@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -29,12 +30,16 @@ namespace SharpDc.Managers
         private SearchMessage? _currentSearch;
 
         private DateTime _lastSeachAt;
+
         /// <summary>
         /// Gets or sets minimum search interval in seconds
         /// </summary>
         public int MinimumSearchInterval { get; set; }
 
-        public SearchMessage? CurrentSearch { get { return _currentSearch; } }
+        public SearchMessage? CurrentSearch
+        {
+            get { return _currentSearch; }
+        }
 
         #region Events
 
@@ -47,7 +52,7 @@ namespace SharpDc.Managers
         }
 
         #endregion
-        
+
         public SearchManager(DcEngine engine)
         {
             _engine = engine;
@@ -100,7 +105,7 @@ namespace SharpDc.Managers
         {
             if (_engine.Settings.ActiveMode)
                 return _engine.LocalUdpAddress;
-            return "" ;
+            return "";
         }
 
         public void Search(DownloadItem item)
@@ -111,15 +116,15 @@ namespace SharpDc.Managers
         public void SearchByTTH(string tth)
         {
             var msg = new SearchMessage
-            {
-                SearchRequest = tth,
-                SearchType = SearchType.TTH,
-                SearchAddress = _engine.LocalUdpAddress
-            };
+                          {
+                              SearchRequest = tth,
+                              SearchType = SearchType.TTH,
+                              SearchAddress = _engine.LocalUdpAddress
+                          };
 
             EnqueueSearch(ref msg, true);
         }
-        
+
         public void Search(SearchMessage msg)
         {
             EnqueueSearch(ref msg, true);
@@ -141,18 +146,17 @@ namespace SharpDc.Managers
             else
             {
                 msg = new SearchMessage
-                {
-                    SearchType = SearchType.Any,
-                    SizeRestricted = true,
-                    Size = item.Magnet.Size,
-                    SearchRequest = item.Magnet.FileName,
-                    SearchAddress = GetReturnAddress()
-                };
+                          {
+                              SearchType = SearchType.Any,
+                              SizeRestricted = true,
+                              Size = item.Magnet.Size,
+                              SearchRequest = item.Magnet.FileName,
+                              SearchAddress = GetReturnAddress()
+                          };
             }
 
             EnqueueSearch(ref msg, highPriority);
         }
-
 
         private void EnqueueSearch(ref SearchMessage search, bool highPriority)
         {
@@ -191,37 +195,35 @@ namespace SharpDc.Managers
             _results.Clear();
             _tthList.Clear();
 
-            _engine.Hubs.ForEach(h => 
-            {
-                if (h.Active)
-                {
-                    var search = _currentSearch.Value;
+            _engine.Hubs.ForEach(h =>
+                                     {
+                                         if (h.Active)
+                                         {
+                                             var search = _currentSearch.Value;
 
-                    if (string.IsNullOrEmpty(search.SearchAddress))
-                        search.SearchAddress = "Hub:" + h.Settings.Nickname;
+                                             if (string.IsNullOrEmpty(search.SearchAddress))
+                                                 search.SearchAddress = "Hub:" + h.Settings.Nickname;
 
-                    Logger.Info("Search for " + search.SearchRequest);
+                                             Logger.Info("Search for " + search.SearchRequest);
 
-                    h.SendMessage(search.Raw);
-                }
-            });
+                                             h.SendMessage(search.Raw);
+                                         }
+                                     });
 
             if (SearchStarted != null)
             {
-                OnSearchStarted(new SearchEventArgs {Message = _currentSearch.Value});
+                OnSearchStarted(new SearchEventArgs { Message = _currentSearch.Value });
             }
         }
 
-        void Hubs_HubRemoved(object sender, HubsChangedEventArgs e)
+        private void Hubs_HubRemoved(object sender, HubsChangedEventArgs e)
         {
-            
         }
 
-        void Hubs_HubAdded(object sender, HubsChangedEventArgs e)
+        private void Hubs_HubAdded(object sender, HubsChangedEventArgs e)
         {
-            
         }
-        
+
         public HubSearchResult GetHubResultByTTH(string tth)
         {
             HubSearchResult result;
@@ -242,7 +244,9 @@ namespace SharpDc.Managers
                     }
                     else
                     {
-                        if (_searchQueue[i].SearchType != SearchType.TTH && _searchQueue[i].SearchRequest == item.Magnet.FileName && _searchQueue[i].Size == item.Magnet.Size)
+                        if (_searchQueue[i].SearchType != SearchType.TTH &&
+                            _searchQueue[i].SearchRequest == item.Magnet.FileName &&
+                            _searchQueue[i].Size == item.Magnet.Size)
                             return i;
                     }
                 }
@@ -266,10 +270,10 @@ namespace SharpDc.Managers
                 }
             }
         }
-        
+
         public void CheckItem(DownloadItem downloadItem)
         {
-            if (_searchQueue.Count > 30) 
+            if (_searchQueue.Count > 30)
                 return;
 
             if ((DateTime.Now - downloadItem.LastSearch).TotalMinutes < _engine.Settings.SearchAlternativesInterval)
@@ -280,7 +284,8 @@ namespace SharpDc.Managers
             {
                 if (string.IsNullOrEmpty(downloadItem.Magnet.TTH))
                 {
-                    if (_currentSearch.Value.SearchRequest == downloadItem.Magnet.FileName && _currentSearch.Value.Size == downloadItem.Magnet.Size)
+                    if (_currentSearch.Value.SearchRequest == downloadItem.Magnet.FileName &&
+                        _currentSearch.Value.Size == downloadItem.Magnet.Size)
                         return;
                 }
                 else
@@ -289,7 +294,6 @@ namespace SharpDc.Managers
                         return;
                 }
             }
-
 
             if (IndexOf(downloadItem) != -1)
                 return;
@@ -301,6 +305,5 @@ namespace SharpDc.Managers
     public class SearchEventArgs : EventArgs
     {
         public SearchMessage Message { get; set; }
-
     }
 }

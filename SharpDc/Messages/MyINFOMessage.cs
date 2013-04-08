@@ -1,8 +1,9 @@
-﻿//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 
 namespace SharpDc.Messages
@@ -17,7 +18,6 @@ namespace SharpDc.Messages
         public string Email;
         public long Share;
 
-
         public static MyINFOMessage Parse(string raw)
         {
             //$MyINFO $ALL [Ник] [Описание][Тэг]$ $[Соедиенние][Флаг]$[E-Mail]$[Шара]$|
@@ -29,23 +29,23 @@ namespace SharpDc.Messages
             var tagEnd = raw.IndexOf('>', tagStart);
             var conStart = tagEnd + 4;
             var conEnd = raw.IndexOf('$', conStart);
-            var emailStart = conEnd +1;
+            var emailStart = conEnd + 1;
             var emailEnd = raw.IndexOf('$', emailStart);
-            var shareStart = emailEnd+1;
+            var shareStart = emailEnd + 1;
             var shareEnd = raw.IndexOf('$', shareStart);
 
             myinfo.Nickname = raw.Substring(13, nickEnd - 13);
-            myinfo.Description = raw.Substring(nickEnd + 1, tagStart - nickEnd -1);
+            myinfo.Description = raw.Substring(nickEnd + 1, tagStart - nickEnd - 1);
             myinfo.Tag = raw.Substring(tagStart, tagEnd - tagStart + 1);
-            myinfo.Connection = raw.Substring(conStart, conEnd-1- conStart);
-            if(string.IsNullOrEmpty(myinfo.Connection))
+            myinfo.Connection = raw.Substring(conStart, conEnd - 1 - conStart);
+            if (string.IsNullOrEmpty(myinfo.Connection))
                 myinfo.Flag = 0;
-            else 
+            else
                 myinfo.Flag = (byte)raw.Substring(conEnd - 1, 1)[0];
-            myinfo.Email = raw.Substring(emailStart, emailEnd-emailStart);
+            myinfo.Email = raw.Substring(emailStart, emailEnd - emailStart);
             var share = raw.Substring(shareStart, shareEnd - shareStart);
             long.TryParse(share, out myinfo.Share);
-            
+
             return myinfo;
         }
 
@@ -94,7 +94,11 @@ namespace SharpDc.Messages
 
         public string Raw
         {
-            get { return string.Format("$MyINFO $ALL {0} {1}{2}$ ${3}{4}${5}${6}$", Nickname, Description, Tag, Connection, (char)Flag, Email, Share ); }
+            get
+            {
+                return string.Format("$MyINFO $ALL {0} {1}{2}$ ${3}{4}${5}${6}$", Nickname, Description, Tag, Connection,
+                                     (char)Flag, Email, Share);
+            }
         }
     }
 }

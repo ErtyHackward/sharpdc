@@ -1,8 +1,9 @@
-//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.IO;
 using System.Threading;
@@ -17,10 +18,11 @@ namespace SharpDc.Structs
     public class UploadItem : IDisposable
     {
         #region Static
+
         private static readonly ILogger Logger = LogManager.GetLogger();
-        
+
         private static int _fileStreamsCount;
-        
+
         /// <summary>
         /// Gets total amount of FileSteam objects exists
         /// </summary>
@@ -28,8 +30,9 @@ namespace SharpDc.Structs
         {
             get { return _fileStreamsCount; }
         }
+
         #endregion
-        
+
         private bool _isDisposed;
         private readonly object _syncRoot = new object();
         private FileStream _fileStream;
@@ -47,7 +50,6 @@ namespace SharpDc.Structs
         public ContentItem Content { get; set; }
 
         public int FileStreamReadBufferSize { get; private set; }
-
 
         public event EventHandler<UploadItemErrorEventArgs> Error;
 
@@ -94,7 +96,6 @@ namespace SharpDc.Structs
                     _fileStream = fs;
                 }
             }
-            
 
             lock (_syncRoot)
             {
@@ -122,8 +123,8 @@ namespace SharpDc.Structs
 
         public bool IsLocked
         {
-            get {
-
+            get
+            {
                 if (Monitor.TryEnter(_syncRoot, 100))
                 {
                     Monitor.Exit(_syncRoot);
@@ -147,8 +148,6 @@ namespace SharpDc.Structs
             }
             OnDisposed();
         }
-
-        
     }
 
     public class UploadItemErrorEventArgs : EventArgs

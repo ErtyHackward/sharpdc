@@ -1,8 +1,9 @@
-//  -------------------------------------------------------------
-//  LiveDc project 
-//  written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
-//  licensed under the LGPL
-//  -------------------------------------------------------------
+// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// licensed under the LGPL
+// -------------------------------------------------------------
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -87,9 +88,7 @@ namespace SharpDc.WebServer
             }
             catch (Exception)
             {
-
             }
-
         }
 
         public override void Flush()
@@ -143,15 +142,16 @@ namespace SharpDc.WebServer
             set { throw new NotSupportedException(); }
         }
 
-        public override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
+        public override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback,
+                                               object state)
         {
             throw new NotSupportedException();
         }
 
-        public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
+        public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback,
+                                                object state)
         {
             throw new Exception("The method or operation is not implemented.");
         }
-
     }
 }
