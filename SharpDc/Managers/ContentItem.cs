@@ -12,6 +12,7 @@ namespace SharpDc.Managers
     /// <summary>
     /// Represents a single file in a share
     /// </summary>
+    [Serializable]
     public struct ContentItem
     {
         /// <summary>
