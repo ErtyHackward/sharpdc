@@ -28,6 +28,7 @@ namespace SharpDc
         TcpReceiveBufferSize,
         FileReadBufferSize,
         ConnectionsLimit,
-        NetworkInterface
+        NetworkInterface,
+        UseSparseFiles
     }
 }

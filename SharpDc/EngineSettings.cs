@@ -36,6 +36,7 @@ namespace SharpDc
         private int _fileReadBufferSize;
         private int _connectionsLimit;
         private IPAddress _netInterface;
+        private bool _useSparse;
 
         /// <summary>
         /// Occurs when some setting is changed
@@ -388,6 +389,24 @@ namespace SharpDc
         }
 
         /// <summary>
+        /// Uses sparse files if possible (only works in Windows)
+        /// Usefull for video on demand services, allows to quickly write at the end of huge and empty file
+        /// Read more at http://en.wikipedia.org/wiki/Sparse_file
+        /// </summary>
+        public bool UseSparseFiles
+        {
+            get { return _useSparse; }
+            set
+            {
+                if (_useSparse != value)
+                {
+                    _useSparse = value;
+                    OnChanged(EngineSettingType.UseSparseFiles);
+                }
+            }
+        }
+
+        /// <summary>
         /// Gets default settings
         /// </summary>
         public static EngineSettings Default
@@ -412,7 +431,8 @@ namespace SharpDc
                                _tcpBackLog = 10,
                                _tcpReceiveBufferSize = 64 * 1024,
                                _fileReadBufferSize = 64 * 1024,
-                               _netInterface = null
+                               _netInterface = null,
+                               _useSparse = false
                            };
             }
         }

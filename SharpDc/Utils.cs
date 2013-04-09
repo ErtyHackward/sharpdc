@@ -73,7 +73,7 @@ namespace SharpDc
 
             private const string fileSizeFormat = "fs";
 
-            private static readonly string[] letters = new[] { " B", " KiB", " MiB", " GiB", " TiB", " PiB" };
+            public static string[] BinaryModifiers = new[] { " B", " KiB", " MiB", " GiB", " TiB", " PiB" };
 
             public string Format(string format, object arg, IFormatProvider formatProvider)
             {
@@ -93,7 +93,7 @@ namespace SharpDc
                 }
 
                 byte i = 0;
-                while ((size >= 1024) && (i < letters.Length - 1))
+                while ((size >= 1024) && (i < BinaryModifiers.Length - 1))
                 {
                     i++;
                     size /= 1024;
@@ -102,7 +102,7 @@ namespace SharpDc
                 string precision = format.Substring(2);
                 if (String.IsNullOrEmpty(precision)) precision = "2";
 
-                return String.Format("{0:N" + precision + "}{1}", size, letters[i]);
+                return String.Format("{0:N" + precision + "}{1}", size, BinaryModifiers[i]);
             }
 
             private static string defaultFormat(string format, object arg, IFormatProvider formatProvider)

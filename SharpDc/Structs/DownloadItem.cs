@@ -209,6 +209,7 @@ namespace SharpDc.Structs
         {
             segment.Index = -1;
             segment.Length = 0;
+            segment.Position = 0;
             segment.StartPosition = -1;
 
             if (StorageContainer == null)
@@ -326,8 +327,8 @@ namespace SharpDc.Structs
         protected bool CanRead(long startPos, int count, bool makeRequest = true)
         {
             var startIndex = GetSegmentIndex(startPos);
-            var endIndex = GetSegmentIndex(startPos + count);
-            var result = true;
+            var endIndex   = GetSegmentIndex(startPos + count);
+            var result     = true;
 
             lock (SyncRoot)
             {
@@ -361,7 +362,7 @@ namespace SharpDc.Structs
                 return false;
 
             var startIndex = GetSegmentIndex(filePosition);
-            var endIndex = GetSegmentIndex(filePosition + count);
+            var endIndex   = GetSegmentIndex(filePosition + count);
 
             lock (_syncRoot)
             {

@@ -26,11 +26,13 @@ namespace SharpDc.Managers
         private long _totalShared;
         private int _totalFiles;
 
+        [XmlIgnore]
         public bool IsDirty { get; private set; }
 
         /// <summary>
         /// Gets total amount of bytes in the share
         /// </summary>
+        [XmlIgnore]
         public long TotalShared
         {
             get { return _totalShared; }
@@ -39,6 +41,7 @@ namespace SharpDc.Managers
         /// <summary>
         /// Gets total amount of files in the share
         /// </summary>
+        [XmlIgnore]
         public int TotalFiles
         {
             get { return _totalFiles; }
@@ -48,12 +51,12 @@ namespace SharpDc.Managers
         /// Don't use reserved for serialization/deserialization
         /// </summary>
         [XmlArray("Items")]
-        public List<ContentItem> SerializationItems
+        public ContentItem[] SerializationItems
         {
             get 
             {
                 lock (_tthIndex)
-                    return _tthIndex.Values.ToList();
+                    return _tthIndex.Values.ToArray();
             }
             set 
             { 

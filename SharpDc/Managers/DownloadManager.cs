@@ -325,7 +325,10 @@ namespace SharpDc.Managers
                 var tempDownloadPath = Path.Combine(folder,
                                                     string.Format("{0}.{1}.dctmp", Path.GetFileName(downloadPath),
                                                                   di.Magnet.TTH));
-                var fileStorageContainer = new FileStorageContainer(tempDownloadPath, di);
+                var fileStorageContainer = new FileStorageContainer(tempDownloadPath, di)
+                {
+                    UseSparseFiles = _engine.Settings.UseSparseFiles
+                };
                 di.StorageContainer = fileStorageContainer;
             }
 
@@ -640,6 +643,28 @@ namespace SharpDc.Managers
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Returns exact number of bytes received for particular DownloadItem
+        /// </summary>
+        /// <param name="currentDownload"></param>
+        /// <returns></returns>
+        public long GetTotalDownloadBytes(DownloadItem currentDownload)
+        {
+            if (currentDownload == null) 
+                throw new ArgumentNullException("currentDownload");
+
+            if (currentDownload.TotalSegmentsCount == currentDownload.DoneSegmentsCount)
+                return currentDownload.Magnet.Size;
+
+            // remember that the last segment may be smaller in size than others, so note that
+            var lastSegmentGap = 0L;
+
+            if (currentDownload.DoneSegments[currentDownload.TotalSegmentsCount - 1] && currentDownload.Magnet.Size % DownloadItem.SegmentSize > 0)
+                lastSegmentGap = DownloadItem.SegmentSize - currentDownload.Magnet.Size % DownloadItem.SegmentSize;
+
+            return (long)DownloadItem.SegmentSize * currentDownload.DoneSegmentsCount + _engine.TransferManager.Transfers().Where(t => t.DownloadItem == currentDownload).Select(t => t.SegmentInfo.Position).Sum() - lastSegmentGap;
         }
     }
 }
