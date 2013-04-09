@@ -483,6 +483,7 @@ namespace SharpDc
         {
             if (Share != null)
             {
+                Share.AddFile(new ContentItem(e.DownloadItem));
             }
         }
 
@@ -555,26 +556,6 @@ namespace SharpDc
                 case EngineSettingType.UdpPort:
                     InitUdp(Settings.UdpPort);
                     break;
-                case EngineSettingType.PathDownload:
-                    break;
-                case EngineSettingType.PathFileLists:
-                    break;
-                case EngineSettingType.MaxDownloadThreads:
-                    break;
-                case EngineSettingType.MaxUploadThreads:
-                    break;
-                case EngineSettingType.ReconnectTimeout:
-                    break;
-                case EngineSettingType.ActiveMode:
-                    break;
-                case EngineSettingType.MaxFiles:
-                    break;
-                case EngineSettingType.VerifyFiles:
-                    break;
-                case EngineSettingType.InstantAllocate:
-                    break;
-                case EngineSettingType.GetUsersList:
-                    break;
                 case EngineSettingType.DumpHubProtocolMessages:
                     if (Settings.DumpHubProtocolMessages)
                     {
@@ -613,20 +594,12 @@ namespace SharpDc
                         }
                     }
                     break;
-                case EngineSettingType.LocalAddress:
-                    break;
-                case EngineSettingType.SearchAlternativesInterval:
-                    break;
                 case EngineSettingType.TcpBacklog:
                     InitTcp(Settings.TcpPort);
                     break;
                 case EngineSettingType.TcpReceiveBufferSize:
                     TcpConnection.DefaultConnectionBufferSize = Settings.TcpReceiveBufferSize;
                     break;
-                case EngineSettingType.FileReadBufferSize:
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException();
             }
         }
 

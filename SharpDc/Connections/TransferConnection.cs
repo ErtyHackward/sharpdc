@@ -23,7 +23,6 @@ namespace SharpDc.Connections
     {
         private static readonly ILogger Logger = LogManager.GetLogger();
 
-        private int _segmentPosition;
         private Source _source;
         private SegmentInfo _segmentInfo;
         private string _tail;
@@ -218,9 +217,9 @@ namespace SharpDc.Connections
                 _tail = null;
             }
 
-            if (_segmentInfo.Length < _segmentPosition + length)
+            if (_segmentInfo.Length < _segmentInfo.Position + length)
             {
-                var writeLength = (int)(_segmentInfo.Length - _segmentPosition);
+                var writeLength = (int)(_segmentInfo.Length - _segmentInfo.Position);
                 _tail = _encoding.GetString(buffer, writeLength, length - writeLength);
                 var extra = length - writeLength;
                 length = writeLength;
@@ -228,12 +227,12 @@ namespace SharpDc.Connections
                             _tail.Substring(0, Math.Min(extra, 5)));
             }
 
-            if (DownloadItem.StorageContainer.WriteData(_segmentInfo, _segmentPosition, buffer, length))
+            if (DownloadItem.StorageContainer.WriteData(_segmentInfo, _segmentInfo.Position, buffer, length))
             {
-                _segmentPosition += length;
+                _segmentInfo.Position += length;
 
                 // segment finished
-                if (_segmentPosition >= _segmentInfo.Length)
+                if (_segmentInfo.Position >= _segmentInfo.Length)
                 {
                     _binaryMode = false;
                     // tell that it is finished
@@ -251,7 +250,7 @@ namespace SharpDc.Connections
                     // request another segment
                     if (DownloadItem.TakeFreeSegment(_source, out _segmentInfo))
                     {
-                        _segmentPosition = 0;
+                        _segmentInfo.Position = 0;
                     }
                     else
                     {
@@ -264,7 +263,7 @@ namespace SharpDc.Connections
                         }
                         if (DownloadItem.TakeFreeSegment(_source, out _segmentInfo))
                         {
-                            _segmentPosition = 0;
+                            _segmentInfo.Position = 0;
                         }
                         else
                         {
@@ -327,7 +326,6 @@ namespace SharpDc.Connections
             // request a segment
             if (DownloadItem.TakeFreeSegment(_source, out _segmentInfo))
             {
-                _segmentPosition = 0;
                 RequestSegment();
             }
         }
@@ -598,7 +596,6 @@ namespace SharpDc.Connections
 
                 if (DownloadItem.TakeFreeSegment(_source, out _segmentInfo))
                 {
-                    _segmentPosition = 0;
                     // we won, request a segment
                     RequestSegment();
                 }

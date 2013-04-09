@@ -15,10 +15,18 @@ namespace SharpDc.Managers
     [Serializable]
     public struct ContentItem
     {
+        private Magnet _magnet;
+        private string[] _systemPaths;
+        private string _virtualPath;
+
         /// <summary>
         /// Gets or sets content file magnet
         /// </summary>
-        public Magnet Magnet { get; set; }
+        public Magnet Magnet
+        {
+            get { return _magnet; }
+            set { _magnet = value; }
+        }
 
         /// <summary>
         /// Gets first file location or null
@@ -31,12 +39,27 @@ namespace SharpDc.Managers
         /// <summary>
         /// Gets or sets array of available file locations
         /// </summary>
-        public string[] SystemPaths { get; set; }
+        public string[] SystemPaths
+        {
+            get { return _systemPaths; }
+            set { _systemPaths = value; }
+        }
 
         /// <summary>
         /// Share virtual path
         /// </summary>
-        public string VirtualPath { get; set; }
+        public string VirtualPath
+        {
+            get { return _virtualPath; }
+            set { _virtualPath = value; }
+        }
+
+        public ContentItem(DownloadItem item)
+        {
+            _magnet = item.Magnet;
+            _systemPaths = item.SaveTargets.ToArray();
+            _virtualPath = "Downloads\\" + _magnet.FileName;
+        }
 
         public void AddSystemPath(string path)
         {

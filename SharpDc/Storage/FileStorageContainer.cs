@@ -8,6 +8,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using SharpDc.Helpers;
 using SharpDc.Interfaces;
 using SharpDc.Logging;
 using SharpDc.Structs;
@@ -35,6 +36,13 @@ namespace SharpDc.Storage
         // allows to tell if the segment is written to the file
         private readonly BitArray _segmentsWritten;
         private int _segmentsWrittenCount;
+
+        /// <summary>
+        /// Uses sparse files if possible (only works in Windows)
+        /// Usefull for video on demand services, allows to quickly write at the end of huge and empty file
+        /// Read more at http://en.wikipedia.org/wiki/Sparse_file
+        /// </summary>
+        public bool UseSparseFiles { get; set; }
 
         /// <summary>
         /// Allows to store data into a file
@@ -83,6 +91,11 @@ namespace SharpDc.Storage
                     {
                         stream = new FileStream(TempFilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite,
                                                 FileShare.ReadWrite, 1024 * 1024, true);
+                        if (UseSparseFiles)
+                        {
+                            Windows.SetSparse(stream);
+                        }
+
                         setupStream = true;
                     }
                     catch
