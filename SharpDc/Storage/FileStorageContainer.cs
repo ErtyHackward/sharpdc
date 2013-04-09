@@ -63,7 +63,7 @@ namespace SharpDc.Storage
         public bool WriteData(SegmentInfo segment, int offset, byte[] buffer, int length)
         {
             if (_isDisposed || _isDisposing)
-                return false;
+                throw new ObjectDisposedException("FileStorageContainer");
 
             if (length + offset > segment.Length)
                 length = (int)(segment.Length - offset);
@@ -151,6 +151,12 @@ namespace SharpDc.Storage
         /// <returns></returns>
         public int Read(int segmentIndex, int segmentOffset, byte[] buffer, int bufferOffset, int count)
         {
+            if (_isDisposed || _isDisposing)
+                throw new ObjectDisposedException("FileStorageContainer");
+
+            if (count == 0)
+                return 0;
+
             try
             {
                 using (var fs = new FileStream(TempFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, count)
@@ -181,6 +187,9 @@ namespace SharpDc.Storage
 
         public void Dispose()
         {
+            if (_isDisposed)
+                return;
+            
             _isDisposing = true;
             lock (_syncRoot)
             {

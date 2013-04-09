@@ -401,6 +401,14 @@ namespace SharpDc
 
             if (p > 0)
             {
+                if (Settings.AutoSelectPort)
+                {
+                    while (!TcpConnectionListener.IsPortFree(p))
+                    {
+                        p++;
+                    }
+                    Settings.TcpPort = p;
+                }
                 _tcpConnectionListener = new TcpConnectionListener(p, Settings.TcpBacklog);
                 _tcpConnectionListener.IncomingConnection += TcpConnectionListenerIncomingConnection;
                 _tcpConnectionListener.ListenAsync();
@@ -418,6 +426,15 @@ namespace SharpDc
 
             if (port > 0)
             {
+                if (Settings.AutoSelectPort)
+                {
+                    while (!UdpConnection.IsPortFree(port))
+                    {
+                        port++;
+                    }
+                    Settings.UdpPort = port;
+                }
+
                 try
                 {
                     _udpConnection = new UdpConnection(port, Settings.NetworkInterface);
@@ -729,7 +746,7 @@ namespace SharpDc
                                    Source = new Source { HubAddress = hubConnection.RemoteAddress }
                                };
 
-                if (!Equals(Settings.NetworkInterface, IPAddress.Any))
+                if (Settings.NetworkInterface != null)
                 {
                     transfer.LocalAddress = new IPEndPoint(Settings.NetworkInterface, 0);
                 }

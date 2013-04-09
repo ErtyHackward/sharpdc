@@ -37,6 +37,7 @@ namespace SharpDc
         private int _connectionsLimit;
         private IPAddress _netInterface;
         private bool _useSparse;
+        private bool _autoSelectPort;
 
         /// <summary>
         /// Occurs when some setting is changed
@@ -402,6 +403,23 @@ namespace SharpDc
                 {
                     _useSparse = value;
                     OnChanged(EngineSettingType.UseSparseFiles);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Engine will check for the TCP and UDP ports and change them if they are busy
+        /// If false will throw an exception
+        /// </summary>
+        public bool AutoSelectPort
+        {
+            get { return _autoSelectPort; }
+            set
+            {
+                if (_autoSelectPort != value)
+                {
+                    _autoSelectPort = value;
+                    OnChanged(EngineSettingType.AutoSelectPort);
                 }
             }
         }

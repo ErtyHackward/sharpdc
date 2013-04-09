@@ -440,6 +440,8 @@ namespace SharpDc.Managers
             {
                 var fileStorage = di.StorageContainer as FileStorageContainer;
 
+                di.StorageContainer.Dispose();
+
                 File.Delete(fileStorage.TempFilePath);
             }
 

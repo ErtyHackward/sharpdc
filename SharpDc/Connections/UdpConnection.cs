@@ -74,6 +74,30 @@ namespace SharpDc.Connections
             }
         }
 
+        public static bool IsPortFree(int port)
+        {
+            Socket socket = null;
+            try
+            {
+                socket = new Socket(AddressFamily.InterNetwork,
+                                    SocketType.Dgram,
+                                    ProtocolType.Udp);
+                var ep = new IPEndPoint(IPAddress.Any, port);
+                socket.Bind(ep);
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+            finally
+            {
+                if (socket != null)
+                    socket.Dispose();
+            }
+        }
+
         public void Dispose()
         {
             var cl = _client;
