@@ -29,6 +29,7 @@ namespace SharpDc
         FileReadBufferSize,
         ConnectionsLimit,
         NetworkInterface,
-        UseSparseFiles
+        UseSparseFiles,
+        AutoSelectPort
     }
 }

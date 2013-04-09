@@ -362,7 +362,7 @@ namespace SharpDc.Structs
                 return false;
 
             var startIndex = GetSegmentIndex(filePosition);
-            var endIndex   = GetSegmentIndex(filePosition + count);
+            var endIndex   = GetSegmentIndex(filePosition + count - 1);
 
             lock (_syncRoot)
             {
