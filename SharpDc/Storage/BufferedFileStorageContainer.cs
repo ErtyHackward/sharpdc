@@ -33,6 +33,10 @@ namespace SharpDc.Storage
             throw new NotImplementedException();
         }
 
+        public bool Available { get {
+            throw new NotImplementedException();
+        } }
+
         public void Dispose()
         {
             throw new NotImplementedException();

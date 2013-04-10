@@ -8,6 +8,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using SharpDc.Helpers;
 using SharpDc.Interfaces;
 using SharpDc.Logging;
@@ -26,12 +27,14 @@ namespace SharpDc.Storage
         private readonly Dictionary<int, FileStream> _aliveStreams = new Dictionary<int, FileStream>();
         private readonly Stack<FileStream> _idleStreams = new Stack<FileStream>();
         private readonly object _syncRoot = new object();
+        
 
         public string TempFilePath { get; set; }
 
         private bool _isDisposed;
         private bool _isDisposing;
         private long _maxPosition;
+        private int _readThreads;
 
         // allows to tell if the segment is written to the file
         private readonly BitArray _segmentsWritten;
@@ -43,6 +46,11 @@ namespace SharpDc.Storage
         /// Read more at http://en.wikipedia.org/wiki/Sparse_file
         /// </summary>
         public bool UseSparseFiles { get; set; }
+
+        /// <summary>
+        /// Indicates if this storage is available for read and write operations
+        /// </summary>
+        public bool Available { get { return !(_isDisposed || _isDisposing); } }
 
         /// <summary>
         /// Allows to store data into a file
@@ -122,8 +130,11 @@ namespace SharpDc.Storage
                     stream.Flush();
                     lock (_syncRoot)
                     {
-                        _segmentsWritten.Set(segment.Index, true);
-                        _segmentsWrittenCount++;
+                        if (!_segmentsWritten.Get(segment.Index))
+                        {
+                            _segmentsWritten.Set(segment.Index, true);
+                            _segmentsWrittenCount++;
+                        }
                         _idleStreams.Push(stream);
                         if (!_aliveStreams.Remove(segment.Index))
                             throw new InvalidDataException();
@@ -159,8 +170,8 @@ namespace SharpDc.Storage
 
             try
             {
-                using (var fs = new FileStream(TempFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, count)
-                    )
+                Interlocked.Increment(ref _readThreads);
+                using (var fs = new FileStream(TempFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, count))
                 {
                     fs.Position = (long)DownloadItem.SegmentSize * segmentIndex + segmentOffset;
                     return fs.Read(buffer, bufferOffset, count);
@@ -170,7 +181,11 @@ namespace SharpDc.Storage
             {
                 Logger.Error("File read error: " + x.Message);
             }
-
+            finally
+            {
+                Interlocked.Decrement(ref _readThreads);
+            }
+            
             return 0;
         }
 
@@ -191,6 +206,10 @@ namespace SharpDc.Storage
                 return;
             
             _isDisposing = true;
+
+            while (_readThreads != 0)
+                Thread.Sleep(10);
+
             lock (_syncRoot)
             {
                 foreach (var aliveStream in _aliveStreams)

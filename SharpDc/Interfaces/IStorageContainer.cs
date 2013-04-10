@@ -48,5 +48,10 @@ namespace SharpDc.Interfaces
         /// <param name="segmentIndex"></param>
         /// <returns></returns>
         bool CanReadSegment(int segmentIndex);
+
+        /// <summary>
+        /// Indicates if this storage is available for read and write operations
+        /// </summary>
+        bool Available { get; }
     }
 }

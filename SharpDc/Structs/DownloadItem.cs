@@ -326,6 +326,9 @@ namespace SharpDc.Structs
         /// <returns></returns>
         protected bool CanRead(long startPos, int count, bool makeRequest = true)
         {
+            if (!StorageContainer.Available)
+                return false;
+            
             var startIndex = GetSegmentIndex(startPos);
             var endIndex   = GetSegmentIndex(startPos + count);
             var result     = true;
@@ -364,16 +367,17 @@ namespace SharpDc.Structs
             var startIndex = GetSegmentIndex(filePosition);
             var endIndex   = GetSegmentIndex(filePosition + count - 1);
 
-            lock (_syncRoot)
+            try
             {
-                if (startIndex == endIndex)
+                lock (_syncRoot)
                 {
-                    var startOffset = (int)(filePosition % SegmentSize);
-                    return StorageContainer.Read(startIndex, startOffset, buffer, 0, count) == count;
-                }
-                else
-                {
-                    int position = 0;
+                    if (startIndex == endIndex)
+                    {
+                        var startOffset = (int)(filePosition % SegmentSize);
+                        return StorageContainer.Read(startIndex, startOffset, buffer, 0, count) == count;
+                    }
+
+                    var position = 0;
                     for (var i = startIndex; i <= endIndex; i++)
                     {
                         if (i == startIndex)
@@ -399,6 +403,11 @@ namespace SharpDc.Structs
                         }
                     }
                 }
+            }
+            catch (Exception x)
+            {
+                Logger.Error("Exception when reading data: {0}", x);
+                return false;
             }
 
             return true;

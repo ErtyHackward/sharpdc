@@ -129,5 +129,7 @@ namespace SharpDc.Storage
                 return _memoryBuffer.ContainsKey(segment) && _doneSegments.Contains(segment);
             }
         }
+
+        public bool Available { get { return true; } }
     }
 }
