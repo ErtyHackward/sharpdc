@@ -22,7 +22,10 @@ namespace SharpDc.Structs
 
         public override int GetHashCode()
         {
-            return UserNickname.GetHashCode() + (HubAddress.GetHashCode() << 16);
+            unchecked
+            {
+                return ( ( UserNickname != null ? UserNickname.GetHashCode() : 0 ) * 397 ) ^ ( HubAddress != null ? HubAddress.GetHashCode() : 0 );
+            }
         }
 
         public int CompareTo(Source other)
@@ -44,6 +47,17 @@ namespace SharpDc.Structs
         public static bool operator !=(Source one, Source two)
         {
             return !(one == two);
+        }
+
+        public bool Equals(Source other)
+        {
+            return string.Equals(UserNickname, other.UserNickname) && string.Equals(HubAddress, other.HubAddress);
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (ReferenceEquals(null, obj)) return false;
+            return obj is Source && Equals((Source)obj);
         }
     }
 }

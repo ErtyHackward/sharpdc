@@ -76,7 +76,7 @@ namespace SharpDc.Storage
             if (length + offset > segment.Length)
                 length = (int)(segment.Length - offset);
 
-            var setupStream = false;
+            var setupStream = offset == 0;
             FileStream stream;
             lock (_syncRoot)
             {

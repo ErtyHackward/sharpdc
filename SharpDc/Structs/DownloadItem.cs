@@ -161,7 +161,7 @@ namespace SharpDc.Structs
             if (handler != null) handler(this, e);
 
             if (LogSegmentEvents)
-                Logger.Info("SEG TAKEN ID:{0} POS:{1} {2}", e.SegmentInfo.Index, e.SegmentInfo.StartPosition, e.Source);
+                Logger.Info("SEG TAKEN ID:{0} POS:{1} {2} A:{3}", e.SegmentInfo.Index, e.SegmentInfo.StartPosition, e.Source, _activeSegmentsCount);
         }
 
         public event EventHandler<SegmentEventArgs> SegmentCancelled;
@@ -172,7 +172,7 @@ namespace SharpDc.Structs
             if (handler != null) handler(this, e);
 
             if (LogSegmentEvents)
-                Logger.Info("SEG CANCELLED ID:{0} {1}", e.SegmentInfo.Index, e.Source);
+                Logger.Info("SEG CANCELLED ID:{0} {1} A:{2}", e.SegmentInfo.Index, e.Source, _activeSegmentsCount);
         }
 
         public event EventHandler<SegmentEventArgs> SegmentFinished;
@@ -183,7 +183,7 @@ namespace SharpDc.Structs
             if (handler != null) handler(this, e);
 
             if (LogSegmentEvents)
-                Logger.Info("SEG FINISHED ID:{0} {1} ", e.SegmentInfo.Index, e.Source);
+                Logger.Info("SEG FINISHED ID:{0} {1} A:{2}", e.SegmentInfo.Index, e.Source, _activeSegmentsCount);
         }
 
         public event EventHandler DownloadFinished;
@@ -275,8 +275,16 @@ namespace SharpDc.Structs
 
         public void CancelSegment(int index, Source src)
         {
+            if (index < 0 || index >= _totalSegmentsCount)
+                throw new InvalidOperationException();
+
             lock (_syncRoot)
             {
+                if (!_activeSegments[index])
+                {
+                    return;
+                }
+
                 _activeSegmentsCount--;
                 _activeSegments[index] = false;
                 ActiveSources.Remove(src);
@@ -292,10 +300,16 @@ namespace SharpDc.Structs
 
         public void FinishSegment(int index, Source src)
         {
+            if (index < 0 || index >= _totalSegmentsCount)
+                throw new InvalidOperationException();
+
             bool downloadFinished;
 
             lock (_syncRoot)
             {
+                if (!_activeSegments[index] || _downloadedSegments[index])
+                    return;
+
                 _activeSegmentsCount--;
                 _activeSegments[index] = false;
                 _doneSegmentsCount++;
@@ -330,7 +344,7 @@ namespace SharpDc.Structs
                 return false;
             
             var startIndex = GetSegmentIndex(startPos);
-            var endIndex   = GetSegmentIndex(startPos + count);
+            var endIndex   = GetSegmentIndex(startPos + count - 1);
             var result     = true;
 
             lock (SyncRoot)
