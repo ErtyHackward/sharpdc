@@ -509,7 +509,6 @@ namespace SharpDc.Managers
                     {
                         File.Copy(item.SaveTargets[0], item.SaveTargets[i]);
                     }
-                    fileStorage.TempFilePath = item.SaveTargets[0];
                 }
                 catch (Exception x)
                 {

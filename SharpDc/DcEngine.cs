@@ -41,6 +41,7 @@ namespace SharpDc
         private long _totalUploaded;
         private long _totalDownloaded;
         private readonly object _speedSyncRoot = new object();
+        private readonly List<DcStream> _streams = new List<DcStream>();
 
         /// <summary>
         /// Gets or sets thread pool used by engine
@@ -292,6 +293,7 @@ namespace SharpDc
         /// <returns>Stream to read data according to the magnet or null</returns>
         public DcStream GetStream(Magnet magnet)
         {
+            DcStream stream = null;
             // first of all try to find an item in the share
             if (Share != null)
             {
@@ -300,16 +302,39 @@ namespace SharpDc
                 if (items.Count > 0)
                 {
                     // we have an item in the share...
-                    return new DcStream(items[0].SystemPath, magnet);
+                    
+                    stream = new DcStream(items[0].SystemPath, magnet);
                 }
             }
 
-            var item = DownloadManager.GetDownloadItem(magnet.TTH);
+            if (stream == null)
+            {
+                var item = DownloadManager.GetDownloadItem(magnet.TTH);
 
-            if (item != null)
-                return new DcStream(item);
+                if (item != null)
+                    stream = new DcStream(item);
+            }
 
-            return null;
+            if (stream != null)
+            {
+                lock (_streams)
+                {
+                    _streams.Add(stream);    
+                }
+                stream.Disposed += StreamDisposed;
+            }
+
+            return stream;
+        }
+
+        void StreamDisposed(object sender, EventArgs e)
+        {
+            var stream = (DcStream)sender;
+            lock (_streams)
+            {
+                _streams.Remove(stream);
+            }
+            stream.Disposed -= StreamDisposed;
         }
 
         /// <summary>
@@ -498,6 +523,16 @@ namespace SharpDc
 
         private void DownloadManager_DownloadCompleted(object sender, DownloadCompletedEventArgs e)
         {
+            lock (_streams)
+            {
+                var stream = _streams.FirstOrDefault(s => s.Magnet.TTH == e.DownloadItem.Magnet.TTH);
+
+                if (stream != null)
+                {
+                    stream.ReplaceDownloadItemWithFile(e.DownloadItem.SaveTargets[0]);
+                }
+            }
+
             if (Share != null)
             {
                 Share.AddFile(new ContentItem(e.DownloadItem));

@@ -34,6 +34,8 @@ namespace SharpDc.Storage
             return false;
         }
 
+        public bool Available { get { return true; } }
+
         public void Dispose()
         {
         }

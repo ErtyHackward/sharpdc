@@ -17,14 +17,24 @@ namespace SharpDc.Structs
     /// </summary>
     public class DcStream : Stream
     {
-        private readonly DownloadItem _downloadItem;
-        private readonly FileStream _fileStream;
-        private long _position;
+        private readonly object _synRoot = new object();
 
+        private DownloadItem _downloadItem;
+        private FileStream _fileStream;
+        private long _position;
+        
         /// <summary>
         /// Gets stream magnet
         /// </summary>
         public Magnet Magnet { get; private set; }
+
+        public event EventHandler Disposed;
+
+        protected virtual void OnDisposed()
+        {
+            var handler = Disposed;
+            if (handler != null) handler(this, EventArgs.Empty);
+        }
 
         /// <summary>
         /// Creates a new stream from the file in a share
@@ -101,9 +111,9 @@ namespace SharpDc.Structs
             get { return _fileStream == null ? _position : _fileStream.Position; }
             set
             {
-                if (_fileStream == null)
-                    _position = value;
-                else
+                _position = value;
+                
+                if (_fileStream != null)
                     _fileStream.Position = value;
             }
         }
@@ -119,13 +129,28 @@ namespace SharpDc.Structs
         {
             if (_fileStream != null)
             {
-                return _fileStream.Read(buffer, offset, count);
+                var read = _fileStream.Read(buffer, offset, count);
+                _position += read;
+                return read;
             }
 
+
             while (!_downloadItem.Read(buffer, _position + offset, count))
+            {
                 Thread.Sleep(50);
 
+
+                if (_fileStream != null)
+                {
+                    return Read(buffer, offset, count);
+                }
+
+            }
+
+            _position += count;
+
             return count;
+
         }
 
         /// <summary>
@@ -137,11 +162,6 @@ namespace SharpDc.Structs
         /// <param name="offset">A byte offset relative to the <paramref name="origin"/> parameter. </param><param name="origin">A value of type <see cref="T:System.IO.SeekOrigin"/> indicating the reference point used to obtain the new position. </param><exception cref="T:System.IO.IOException">An I/O error occurs. </exception><exception cref="T:System.NotSupportedException">The stream does not support seeking, such as if the stream is constructed from a pipe or console output. </exception><exception cref="T:System.ObjectDisposedException">Methods were called after the stream was closed. </exception><filterpriority>1</filterpriority>
         public override long Seek(long offset, SeekOrigin origin)
         {
-            if (_fileStream != null)
-            {
-                return _fileStream.Seek(offset, origin);
-            }
-
             switch (origin)
             {
                 case SeekOrigin.Begin:
@@ -155,7 +175,22 @@ namespace SharpDc.Structs
                     break;
             }
 
+            if (_fileStream != null)
+            {
+                return _fileStream.Seek(offset, origin);
+            }
+
             return _position;
+        }
+
+        public void ReplaceDownloadItemWithFile(string filePath)
+        {
+            if (_fileStream != null)
+                throw new InvalidOperationException("Already using filestream instad of DownloadItem");
+
+            _fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            _fileStream.Position = _position;
+            _downloadItem = null;
         }
 
         /// <summary>
@@ -178,6 +213,8 @@ namespace SharpDc.Structs
         {
             if (_fileStream != null)
                 _fileStream.Dispose();
+
+            OnDisposed();
 
             base.Dispose(disposing);
         }
