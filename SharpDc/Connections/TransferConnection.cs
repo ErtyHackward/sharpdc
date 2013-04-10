@@ -25,8 +25,8 @@ namespace SharpDc.Connections
 
         private Source _source;
         private SegmentInfo _segmentInfo;
-        private string _tail;
-        private Encoding _encoding = Encoding.ASCII;
+        private byte[] _tail;
+        private Encoding _encoding = Encoding.Default;
         private bool _binaryMode;
         private DirectionMessage _userDirection;
         private int _ourNumer;
@@ -204,27 +204,14 @@ namespace SharpDc.Connections
 
         private void ParseBinary(byte[] buffer, int length)
         {
-            if (_tail != null)
-            {
-                var tailBytes = _encoding.GetBytes(_tail);
-                var newBuffer = new byte[tailBytes.Length + length];
-
-                Buffer.BlockCopy(tailBytes, 0, newBuffer, 0, tailBytes.Length);
-                Buffer.BlockCopy(buffer, 0, newBuffer, tailBytes.Length, length);
-
-                length = length + tailBytes.Length;
-                buffer = newBuffer;
-                _tail = null;
-            }
-
             if (_segmentInfo.Length < _segmentInfo.Position + length)
             {
                 var writeLength = (int)(_segmentInfo.Length - _segmentInfo.Position);
-                _tail = _encoding.GetString(buffer, writeLength, length - writeLength);
+                _tail = new byte[length - writeLength];
+                Buffer.BlockCopy(buffer, writeLength, _tail, 0, _tail.Length);
                 var extra = length - writeLength;
                 length = writeLength;
-                Logger.Warn("Received extra data in parse binary ({0}): {1}...", extra,
-                            _tail.Substring(0, Math.Min(extra, 5)));
+                Logger.Warn("Received extra data in parse binary len={0}", extra);
             }
 
             if (DownloadItem.StorageContainer.WriteData(_segmentInfo, _segmentInfo.Position, buffer, length))
@@ -237,6 +224,7 @@ namespace SharpDc.Connections
                     _binaryMode = false;
                     // tell that it is finished
                     DownloadItem.FinishSegment(_segmentInfo.Index, Source);
+                    _segmentInfo.Index = -1;
 
                     if (SegmentCompleted != null)
                     {
@@ -248,11 +236,7 @@ namespace SharpDc.Connections
                     }
 
                     // request another segment
-                    if (DownloadItem.TakeFreeSegment(_source, out _segmentInfo))
-                    {
-                        _segmentInfo.Position = 0;
-                    }
-                    else
+                    if (!DownloadItem.TakeFreeSegment(_source, out _segmentInfo))
                     {
                         //request another download item
                         if (!GetNewDownloadItem())
@@ -261,11 +245,8 @@ namespace SharpDc.Connections
                             Dispose();
                             return;
                         }
-                        if (DownloadItem.TakeFreeSegment(_source, out _segmentInfo))
-                        {
-                            _segmentInfo.Position = 0;
-                        }
-                        else
+
+                        if (!DownloadItem.TakeFreeSegment(_source, out _segmentInfo))
                         {
                             Dispose();
                             return;
@@ -345,42 +326,43 @@ namespace SharpDc.Connections
             if (_disposed)
                 return;
 
+            if (_tail != null)
+            {
+                var newBuffer = new byte[_tail.Length + length];
+
+                Buffer.BlockCopy(_tail, 0, newBuffer, 0, _tail.Length);
+                Buffer.BlockCopy(buffer, 0, newBuffer, _tail.Length, length);
+
+                length = length + _tail.Length;
+                buffer = newBuffer;
+                _tail = null;
+            }
+
             if (_binaryMode)
             {
                 ParseBinary(buffer, length);
                 return;
             }
+            
+            int cmdEndIndex = 0;
 
-            var received = _encoding.GetString(buffer, 0, length);
-
-            if (!string.IsNullOrEmpty(_tail))
+            while (true)
             {
-                received = _tail + received;
-                _tail = null;
-            }
+                var prevPos = cmdEndIndex == 0 ? 0 : cmdEndIndex + 1;
+                cmdEndIndex = Array.IndexOf(buffer, (byte)'|', prevPos);
 
-            int currentIndex = 0;
-            string command;
-            while (currentIndex < received.Length)
-            {
-                //Debug.WriteLine("RCV:" + received);
-                var cmdEnd = received.IndexOf('|', currentIndex);
-
-                if (cmdEnd == -1)
+                if (cmdEndIndex == -1)
                 {
-                    _tail = received.Substring(currentIndex);
+                    if (prevPos < length)
+                    {
+                        _tail = new byte[length - prevPos];
+                        Buffer.BlockCopy(buffer, prevPos, _tail, 0, _tail.Length);
+                    }
 
-                    //Trace.WriteLine(string.Format("length: {0} current: {1} strlen: {2}", length, currentIndex, received.Length));
-                    //Trace.WriteLine("TAILED:" + received);
-                    //Trace.WriteLine("TAILEDUTF8:" + Encoding.UTF8.GetString(buffer,0, length));
-                    //Trace.WriteLine("TAIL:" + _tail);
-                    return;
+                    break;
                 }
-                else
-                {
-                    command = received.Substring(currentIndex, cmdEnd - currentIndex);
-                    currentIndex = cmdEnd + 1;
-                }
+
+                var command = _encoding.GetString(buffer, prevPos, cmdEndIndex - prevPos);
 
                 if (IncomingMessage != null)
                 {
@@ -436,8 +418,12 @@ namespace SharpDc.Connections
                                 var arg = ADCSNDMessage.Parse(command);
                                 if (OnMessageAdcsnd(ref arg))
                                 {
-                                    if (currentIndex != length)
-                                        _tail = received.Substring(currentIndex);
+                                    prevPos = cmdEndIndex + 1;
+                                    if (prevPos < length)
+                                    {
+                                        _tail = new byte[length - prevPos];
+                                        Buffer.BlockCopy(buffer, prevPos, _tail, 0, _tail.Length);
+                                    }
 
                                     _binaryMode = true;
                                     return;

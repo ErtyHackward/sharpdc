@@ -138,8 +138,7 @@ namespace SharpDc.Structs
             while (!_downloadItem.Read(buffer, _position + offset, count))
             {
                 Thread.Sleep(50);
-
-
+                
                 if (_fileStream != null)
                 {
                     return Read(buffer, offset, count);
@@ -190,7 +189,6 @@ namespace SharpDc.Structs
 
             _fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             _fileStream.Position = _position;
-            _downloadItem = null;
         }
 
         /// <summary>
