@@ -7,6 +7,7 @@
 using System;
 using System.Collections.Generic;
 using SharpDc.Managers;
+using SharpDc.Messages;
 
 namespace SharpDc.Interfaces
 {
@@ -30,8 +31,14 @@ namespace SharpDc.Interfaces
         /// <param name="item"></param>
         void AddFile(ContentItem item);
 
+        /// <summary>
+        /// Performs share search
+        /// </summary>
+        /// <param name="query">query string</param>
+        /// <param name="limit">results limit, leave 0 for unlimited</param>
+        /// <returns></returns>
         List<ContentItem> Search(SearchQuery query, int limit = 0);
-
+        
         /// <summary>
         /// Checks all content to be in the system
         /// </summary>
@@ -48,4 +55,17 @@ namespace SharpDc.Interfaces
         /// <returns></returns>
         IEnumerable<ContentItem> Items();
     }
+
+    public static class ShareExtensions
+    {
+        public static ContentItem? SearchByTth(this IShare share, string tth)
+        {
+            var results = share.Search(new SearchQuery { Query = tth, SearchType = SearchType.TTH });
+
+            if (results.Count > 0)
+                return results[0];
+            return null;
+        }
+    }
+
 }
