@@ -100,6 +100,26 @@ namespace SharpDc.Managers
             OnTotalSharedChanged();
         }
 
+        public void RemoveFile(string tth)
+        {
+            bool updated = false;
+
+            lock (_tthIndex)
+            {
+                ContentItem item;
+
+                if (_tthIndex.TryGetValue(tth, out item))
+                {
+                    _totalShared -= item.Magnet.Size;
+                    _totalFiles--;
+                    updated = true;
+                    _tthIndex.Remove(tth);
+                }
+            }
+            if (updated)
+                OnTotalSharedChanged();
+        }
+
         /// <summary>
         /// Allows to enumerate all items in a share
         /// </summary>
