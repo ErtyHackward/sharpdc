@@ -133,8 +133,7 @@ namespace SharpDc.Structs
                 _position += read;
                 return read;
             }
-
-
+            
             while (!_downloadItem.Read(buffer, _position + offset, count))
             {
                 Thread.Sleep(50);

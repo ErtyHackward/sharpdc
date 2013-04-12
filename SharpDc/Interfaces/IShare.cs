@@ -32,6 +32,12 @@ namespace SharpDc.Interfaces
         void AddFile(ContentItem item);
 
         /// <summary>
+        /// Removes file from share
+        /// </summary>
+        /// <param name="tth"></param>
+        void RemoveFile(string tth);
+
+        /// <summary>
         /// Performs share search
         /// </summary>
         /// <param name="query">query string</param>

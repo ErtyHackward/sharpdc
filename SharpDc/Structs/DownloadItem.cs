@@ -212,6 +212,12 @@ namespace SharpDc.Structs
             segment.Position = 0;
             segment.StartPosition = -1;
 
+            if (Priority == DownloadPriority.Pause)
+            {
+                Logger.Warn("Attemt to take segment on paused download item");
+                return false;
+            }
+
             if (StorageContainer == null)
             {
                 Logger.Error("Unable to take the segment, no storage container set");
