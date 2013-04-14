@@ -19,26 +19,20 @@ namespace SharpDc.Storage
     /// <summary>
     /// Allows to save the data into a file
     /// </summary>
+    [Serializable]
     public class FileStorageContainer : IStorageContainer
     {
         private static readonly ILogger Logger = LogManager.GetLogger();
 
-        private readonly DownloadItem _downloadItem;
         private readonly Dictionary<int, FileStream> _aliveStreams = new Dictionary<int, FileStream>();
         private readonly Stack<FileStream> _idleStreams = new Stack<FileStream>();
         private readonly object _syncRoot = new object();
         
-
-        public string TempFilePath { get; set; }
-
         private bool _isDisposed;
         private bool _isDisposing;
         private long _maxPosition;
         private int _readThreads;
-
-        // allows to tell if the segment is written to the file
-        private readonly BitArray _segmentsWritten;
-        private int _segmentsWrittenCount;
+        private string _tempFilePath;
 
         /// <summary>
         /// Uses sparse files if possible (only works in Windows)
@@ -50,25 +44,42 @@ namespace SharpDc.Storage
         /// <summary>
         /// Indicates if this storage is available for read and write operations
         /// </summary>
-        public bool Available { get { return !(_isDisposed || _isDisposing); } }
+        public override bool Available { get { return !(_isDisposed || _isDisposing); } }
+
+        /// <summary>
+        /// Gets or sets current 
+        /// </summary>
+        public string TempFilePath
+        {
+            get { return _tempFilePath; }
+            set
+            {
+                if (_tempFilePath != null)
+                    throw new InvalidOperationException("Path is already set");
+
+                _tempFilePath = value;
+
+                var folderPath = Path.GetDirectoryName(_tempFilePath);
+                if (folderPath != null && !Directory.Exists(folderPath))
+                    Directory.CreateDirectory(folderPath);
+            }
+        }
+
+        public FileStorageContainer()
+        {
+
+        }
 
         /// <summary>
         /// Allows to store data into a file
         /// </summary>
         /// <param name="tempFilePath"></param>
-        /// <param name="item"> </param>
-        public FileStorageContainer(string tempFilePath, DownloadItem item)
+        public FileStorageContainer(string tempFilePath)
         {
-            _downloadItem = item;
             TempFilePath = tempFilePath;
-            var folderPath = Path.GetDirectoryName(tempFilePath);
-            if (folderPath != null && !Directory.Exists(folderPath))
-                Directory.CreateDirectory(folderPath);
-
-            _segmentsWritten = new BitArray(item.TotalSegmentsCount);
         }
-
-        public bool WriteData(SegmentInfo segment, int offset, byte[] buffer, int length)
+        
+        public override bool WriteData(SegmentInfo segment, int offset, byte[] buffer, int length)
         {
             if (_isDisposed || _isDisposing)
                 throw new ObjectDisposedException("FileStorageContainer");
@@ -130,11 +141,6 @@ namespace SharpDc.Storage
                     stream.Flush();
                     lock (_syncRoot)
                     {
-                        if (!_segmentsWritten.Get(segment.Index))
-                        {
-                            _segmentsWritten.Set(segment.Index, true);
-                            _segmentsWrittenCount++;
-                        }
                         _idleStreams.Push(stream);
                         if (!_aliveStreams.Remove(segment.Index))
                             throw new InvalidDataException();
@@ -160,7 +166,7 @@ namespace SharpDc.Storage
         /// <param name="bufferOffset">buffer write offset</param>
         /// <param name="count"></param>
         /// <returns></returns>
-        public int Read(int segmentIndex, int segmentOffset, byte[] buffer, int bufferOffset, int count)
+        public override int Read(int segmentIndex, int segmentOffset, byte[] buffer, int bufferOffset, int count)
         {
             if (_isDisposed || _isDisposing)
                 throw new ObjectDisposedException("FileStorageContainer");
@@ -189,18 +195,17 @@ namespace SharpDc.Storage
             return 0;
         }
 
-        public int FreeSegments
+        public override int FreeSegments
         {
-            get { return _segmentsWritten.Count - _segmentsWrittenCount; }
+            get { return int.MaxValue; }
         }
 
-        public bool CanReadSegment(int index)
+        public override bool CanReadSegment(int index)
         {
-            lock (_syncRoot)
-                return _segmentsWritten[index];
+            return true;
         }
 
-        public void Dispose()
+        public override void Dispose()
         {
             if (_isDisposed)
                 return;

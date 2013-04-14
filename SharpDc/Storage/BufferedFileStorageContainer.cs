@@ -16,28 +16,28 @@ namespace SharpDc.Storage
     /// </summary>
     public class BufferedFileStorageContainer : IStorageContainer
     {
-        public bool WriteData(Structs.SegmentInfo segment, int offset, byte[] buffer, int length)
+        public override bool WriteData(Structs.SegmentInfo segment, int offset, byte[] buffer, int length)
         {
             throw new NotImplementedException();
         }
 
-        public int Read(int segmentIndex, int segmentOffset, byte[] buffer, int bufferOffset, int count)
+        public override int Read(int segmentIndex, int segmentOffset, byte[] buffer, int bufferOffset, int count)
         {
             throw new NotImplementedException();
         }
 
-        public int FreeSegments { get; private set; }
+        public override int FreeSegments { get { throw new NotImplementedException(); } }
 
-        public bool CanReadSegment(int segmentIndex)
+        public override bool CanReadSegment(int segmentIndex)
         {
             throw new NotImplementedException();
         }
 
-        public bool Available { get {
+        public override bool Available { get {
             throw new NotImplementedException();
         } }
 
-        public void Dispose()
+        public override void Dispose()
         {
             throw new NotImplementedException();
         }

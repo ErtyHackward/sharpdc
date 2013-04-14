@@ -26,7 +26,7 @@ namespace UnitTests
             {
                 var fileName = "C:\\temp\\" + Path.GetRandomFileName();
                 share.AddFile(new ContentItem { 
-                    SystemPath = fileName, 
+                    SystemPaths = new[] { fileName }, 
                     Magnet = new Magnet { TTH = GetRandomTTH(rand) } 
                 });
                 if (rand.NextDouble() < 0.01)

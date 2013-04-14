@@ -5,6 +5,7 @@
 // -------------------------------------------------------------
 
 using System;
+using System.Collections;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
@@ -168,6 +169,17 @@ namespace SharpDc
                 throw new FormatException("Invalid port");
             }
             return new IPEndPoint(ip, port);
+        }
+
+        public static int[] BitArraySerialize(BitArray bitArray)
+        {
+            var len = bitArray.Length / 32;
+            if (bitArray.Length % 32 != 0)
+                len++;
+            var array = new int[len];
+            bitArray.CopyTo(array, 0);
+
+            return array;
         }
     }
 }

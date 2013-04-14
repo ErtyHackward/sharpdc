@@ -37,7 +37,15 @@ namespace SharpDc.Messages
 
                 var search = (SearchType == SearchType.TTH ? "TTH:" : "") + SearchRequest;
 
+                search = search.Replace('$', ' ');
+                search = search.Replace('|', ' ');
+                search = search.Replace('?', ' ');
+                search = search.Replace('&', ' ');
+
                 search = search.Replace(' ', '$');
+
+                while (search != search.Replace("$$", "$"))
+                    search = search.Replace("$$", "$");
 
                 return string.Format("$Search {0} {1}?{2}?{3}", SearchAddress, size, (int)SearchType, search);
             }
