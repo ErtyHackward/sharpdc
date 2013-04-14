@@ -220,6 +220,9 @@ namespace SharpDc.Managers
         {
             var xml = new XmlSerializer(GetType());
 
+            if (File.Exists(filePath))
+                File.Delete(filePath);
+
             using (var fs = File.OpenWrite(filePath))
             {
                 xml.Serialize(fs, this);

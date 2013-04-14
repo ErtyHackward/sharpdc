@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Xml.Serialization;
 using SharpDc.Collections;
 using SharpDc.Events;
 using SharpDc.Logging;
@@ -325,7 +326,7 @@ namespace SharpDc.Managers
                 var tempDownloadPath = Path.Combine(folder,
                                                     string.Format("{0}.{1}.dctmp", Path.GetFileName(downloadPath),
                                                                   di.Magnet.TTH));
-                var fileStorageContainer = new FileStorageContainer(tempDownloadPath, di)
+                var fileStorageContainer = new FileStorageContainer(tempDownloadPath)
                 {
                     UseSparseFiles = _engine.Settings.UseSparseFiles
                 };
@@ -666,6 +667,34 @@ namespace SharpDc.Managers
                 lastSegmentGap = DownloadItem.SegmentSize - currentDownload.Magnet.Size % DownloadItem.SegmentSize;
 
             return (long)DownloadItem.SegmentSize * currentDownload.DoneSegmentsCount + _engine.TransferManager.Transfers().Where(t => t.DownloadItem == currentDownload).Select(t => t.SegmentInfo.Position).Sum() - lastSegmentGap;
+        }
+
+        public void Save(string fileName)
+        {
+            var list = _tthList.Values.ToList();
+
+            var xml = new XmlSerializer(typeof(List<DownloadItem>), new []{ typeof(FileStorageContainer) });
+
+            if (File.Exists(fileName))
+                File.Delete(fileName);
+
+            using (var fs = File.OpenWrite(fileName))
+            {
+                xml.Serialize(fs, list);
+            }
+        }
+
+        public void Load(string fileName)
+        {
+            var xml = new XmlSerializer(typeof(List<DownloadItem>), new[] { typeof(FileStorageContainer) });
+
+            List<DownloadItem> list;
+            using (var fs = File.OpenRead(fileName))
+            {
+                list = (List<DownloadItem>)xml.Deserialize(fs);
+            }
+ 
+            ImportDownloads(list);
         }
     }
 }

@@ -14,29 +14,29 @@ namespace SharpDc.Storage
     /// </summary>
     public class NullStorageContainer : IStorageContainer
     {
-        public bool WriteData(SegmentInfo segment, int offset, byte[] buffer, int length)
+        public override bool WriteData(SegmentInfo segment, int offset, byte[] buffer, int length)
         {
             return true;
         }
 
-        public int Read(int segmentIndex, int segmentOffset, byte[] buffer, int bufferOffset, int count)
+        public override int Read(int segmentIndex, int segmentOffset, byte[] buffer, int bufferOffset, int count)
         {
             throw new System.NotSupportedException();
         }
 
-        public int FreeSegments
+        public override int FreeSegments
         {
             get { return int.MaxValue; }
         }
 
-        public bool CanReadSegment(int segmentIndex)
+        public override bool CanReadSegment(int segmentIndex)
         {
             return false;
         }
 
-        public bool Available { get { return true; } }
+        public override bool Available { get { return true; } }
 
-        public void Dispose()
+        public override void Dispose()
         {
         }
     }

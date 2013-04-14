@@ -29,7 +29,7 @@ namespace SharpDc.Managers
 
         private SearchMessage? _currentSearch;
 
-        private DateTime _lastSeachAt;
+        private DateTime _lastSearchAt;
 
         /// <summary>
         /// Gets or sets minimum search interval in seconds
@@ -43,11 +43,25 @@ namespace SharpDc.Managers
 
         #region Events
 
+        /// <summary>
+        /// Occurs when new search is started
+        /// </summary>
         public event EventHandler<SearchEventArgs> SearchStarted;
 
-        public void OnSearchStarted(SearchEventArgs e)
+        protected void OnSearchStarted(SearchEventArgs e)
         {
             var handler = SearchStarted;
+            if (handler != null) handler(this, e);
+        }
+
+        /// <summary>
+        /// Occurs when new search result has come
+        /// </summary>
+        public event EventHandler<SearchManagerResultEventArgs> SearchResult;
+
+        protected virtual void OnSearchResult(SearchManagerResultEventArgs e)
+        {
+            var handler = SearchResult;
             if (handler != null) handler(this, e);
         }
 
@@ -68,7 +82,7 @@ namespace SharpDc.Managers
             var resultMagnet = new Magnet(resultMsg.HubName, resultMsg.FileSize, Path.GetFileName(resultMsg.FileName));
             var resultSource = new Source { UserNickname = resultMsg.Nickname, HubAddress = resultMsg.HubAddress };
 
-            Logger.Info("Found source {0}", resultSource);
+            //Logger.Info("Found source {0}", resultSource);
 
             HubSearchResult result;
 
@@ -82,16 +96,15 @@ namespace SharpDc.Managers
                 }
                 else
                 {
-                    if (
-                        result.Sources.FindIndex(
-                            s => s.UserNickname == resultSource.UserNickname && s.HubAddress == resultSource.HubAddress) ==
-                        -1)
+                    if (result.Sources.FindIndex(s => s.UserNickname == resultSource.UserNickname && s.HubAddress == resultSource.HubAddress) == -1)
                     {
                         result.Sources.Add(resultSource);
                         result.VirtualDirs.Add(resultMsg.FileName);
                     }
                 }
             }
+
+            OnSearchResult(new SearchManagerResultEventArgs { Result = result });
 
             var item = _engine.DownloadManager.GetDownloadItem(resultMagnet.TTH);
 
@@ -162,7 +175,7 @@ namespace SharpDc.Managers
         {
             lock (_syncRoot)
             {
-                if ((DateTime.Now - _lastSeachAt).TotalSeconds > MinimumSearchInterval)
+                if ((DateTime.Now - _lastSearchAt).TotalSeconds > MinimumSearchInterval)
                 {
                     StartSearch(ref search);
                     return;
@@ -190,7 +203,7 @@ namespace SharpDc.Managers
                 }
             }
 
-            _lastSeachAt = DateTime.Now;
+            _lastSearchAt = DateTime.Now;
             _currentSearch = msg;
             _results.Clear();
             _tthList.Clear();
@@ -257,7 +270,7 @@ namespace SharpDc.Managers
 
         public void CheckPendingSearches()
         {
-            if ((DateTime.Now - _lastSeachAt).TotalSeconds <= MinimumSearchInterval)
+            if ((DateTime.Now - _lastSearchAt).TotalSeconds <= MinimumSearchInterval)
                 return;
 
             lock (_syncRoot)
@@ -269,6 +282,22 @@ namespace SharpDc.Managers
                     StartSearch(ref msg);
                 }
             }
+        }
+
+
+        /// <summary>
+        /// Returns estimated time when the search for the downloadItem will be started
+        /// </summary>
+        /// <param name="downloadItem"></param>
+        /// <returns></returns>
+        public TimeSpan EstimateSearch(DownloadItem downloadItem)
+        {
+            var index = _searchQueue.FindIndex(s => s.SearchType == SearchType.TTH && s.SearchRequest == downloadItem.Magnet.TTH);
+
+            if (index < 0)
+                return TimeSpan.MaxValue;
+
+            return TimeSpan.FromSeconds((double)MinimumSearchInterval - (DateTime.Now - _lastSearchAt).TotalSeconds + index * MinimumSearchInterval);
         }
 
         public void CheckItem(DownloadItem downloadItem)
@@ -300,6 +329,11 @@ namespace SharpDc.Managers
 
             Search(downloadItem, false);
         }
+    }
+
+    public class SearchManagerResultEventArgs : EventArgs
+    {
+        public HubSearchResult Result { get; set; }
     }
 
     public class SearchEventArgs : EventArgs

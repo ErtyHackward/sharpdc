@@ -30,7 +30,7 @@ namespace SharpDc.Storage
             _doneSegments = new List<int>();
         }
 
-        public void Dispose()
+        public override void Dispose()
         {
             _memoryBuffer.Clear();
             _doneSegments.Clear();
@@ -46,7 +46,7 @@ namespace SharpDc.Storage
         /// <param name="bufferOffset"></param>
         /// <param name="count"></param>
         /// <returns></returns>
-        public int Read(int segmentIndex, int segmentOffset, byte[] buffer, int bufferOffset, int count)
+        public override int Read(int segmentIndex, int segmentOffset, byte[] buffer, int bufferOffset, int count)
         {
             byte[] memorySegment;
             lock (_syncRoot)
@@ -85,7 +85,7 @@ namespace SharpDc.Storage
         /// <param name="buffer">data buffer to write</param>
         /// <param name="length">amount of bytes to write</param>
         /// <returns></returns>
-        public bool WriteData(SegmentInfo segment, int offset, byte[] buffer, int length)
+        public override bool WriteData(SegmentInfo segment, int offset, byte[] buffer, int length)
         {
             byte[] memorySegment;
             lock (_syncRoot)
@@ -112,7 +112,7 @@ namespace SharpDc.Storage
         /// <summary>
         /// Gets how much new segments the container can accept
         /// </summary>
-        public int FreeSegments
+        public override int FreeSegments
         {
             get { return _maxSegments - _memoryBuffer.Count; }
         }
@@ -122,7 +122,7 @@ namespace SharpDc.Storage
         /// i.e. is completely downloaded
         /// </summary>
         /// <returns></returns>
-        public bool CanReadSegment(int segment)
+        public override bool CanReadSegment(int segment)
         {
             lock (_syncRoot)
             {
@@ -130,6 +130,6 @@ namespace SharpDc.Storage
             }
         }
 
-        public bool Available { get { return true; } }
+        public override bool Available { get { return true; } }
     }
 }

@@ -521,9 +521,7 @@ namespace SharpDc.Managers
             {
                 var source = sortedSources[i];
 
-                var hub = _engine.Hubs.Find(h => h.RemoteAddress == source.HubAddress);
-
-                if (hub != null)
+                foreach (var hub in GetHubsForSource(source))
                 {
                     lock (_synRoot)
                     {
@@ -558,6 +556,28 @@ namespace SharpDc.Managers
                 }
             }
         }
+
+        private IEnumerable<HubConnection> GetHubsForSource(Source src)
+        {
+            var hub = _engine.Hubs.Find(h => h.RemoteAddress == src.HubAddress);
+
+            if (hub != null)
+                yield return hub;
+            else
+            {
+                // we don't know the exact hub so send request to every possible
+                foreach (var hub1 in _engine.Hubs)
+                {
+                    if (hub1.Settings.GetUsersList && !hub1.Users.ContainsKey(src.UserNickname))
+                    {
+                        continue;
+                    }
+
+                    yield return hub1;
+                }
+            }
+        }
+
 
         public void DropSource(Source source)
         {

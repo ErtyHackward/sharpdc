@@ -385,6 +385,9 @@ namespace SharpDc
                 swRequest.Start();
                 foreach (var downloadItem in DownloadManager.EnumeratesItemsForProcess())
                 {
+                    if (downloadItem.Priority == DownloadPriority.Pause)
+                        continue;
+
                     if (TransferManager.RequestsAvailable)
                         TransferManager.RequestTransfers(downloadItem);
 
@@ -944,6 +947,12 @@ namespace SharpDc
             }
 
             DownloadManager.RemoveDownload(di);
+        }
+
+        public void PauseDownload(DownloadItem item)
+        {
+            item.Priority = DownloadPriority.Pause;
+            TransferManager.StopTransfers(item);
         }
 
         /// <summary>

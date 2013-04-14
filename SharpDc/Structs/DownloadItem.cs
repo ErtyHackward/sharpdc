@@ -7,7 +7,9 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Threading;
+using System.Xml.Serialization;
 using SharpDc.Collections;
 using SharpDc.Events;
 using SharpDc.Interfaces;
@@ -25,6 +27,7 @@ namespace SharpDc.Structs
         Highest = 5
     }
 
+    [Serializable]
     public class DownloadItem
     {
         private static readonly ILogger Logger = LogManager.GetLogger();
@@ -47,16 +50,19 @@ namespace SharpDc.Structs
 
         private Magnet _magnet;
 
+        [XmlIgnore]
         public List<int> HighPrioritySegments
         {
             get { return _highPrioritySegments; }
         }
 
+        [XmlIgnore]
         public BitArray DoneSegments
         {
             get { return _downloadedSegments; }
         }
 
+        [XmlIgnore]
         public object SyncRoot
         {
             get { return _syncRoot; }
@@ -108,6 +114,7 @@ namespace SharpDc.Structs
 
         public string FolderUnitPath { get; set; }
 
+        [XmlIgnore]
         public DownloadItemsGroup FolderUnit { get; set; }
 
         public IStorageContainer StorageContainer { get; set; }
@@ -131,6 +138,7 @@ namespace SharpDc.Structs
             }
         }
 
+        [XmlIgnore]
         public List<Source> ActiveSources { get; set; }
 
         /// <summary>
@@ -141,6 +149,7 @@ namespace SharpDc.Structs
         /// <summary>
         /// Tells if download is finished
         /// </summary>
+        [XmlIgnore]
         public bool Downloaded
         {
             get { return TotalSegmentsCount == DoneSegmentsCount; }
@@ -149,7 +158,31 @@ namespace SharpDc.Structs
         /// <summary>
         /// Whether or not to log segment take/done/cancel events
         /// </summary>
+        [XmlIgnore]
         public bool LogSegmentEvents { get; set; }
+
+        [XmlArray("DoneSegments")]
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public int[] SerializeDoneSegments
+        {
+            get
+            {
+                return Utils.BitArraySerialize(_downloadedSegments);
+            }
+            set
+            {
+                _totalSegmentsCount = TotalSegmentsCount;
+                _downloadedSegments = new BitArray(value);
+                _downloadedSegments.Length = _totalSegmentsCount;
+
+                foreach (bool bit in _downloadedSegments)
+                {
+                    if (bit)
+                        _doneSegmentsCount++;    
+                }
+                
+            }
+        }
 
         #region Events
 
@@ -351,31 +384,25 @@ namespace SharpDc.Structs
             
             var startIndex = GetSegmentIndex(startPos);
             var endIndex   = GetSegmentIndex(startPos + count - 1);
-            var result     = true;
 
             lock (SyncRoot)
             {
                 for (int i = startIndex; i <= endIndex; i++)
                 {
-                    lock (_syncRoot)
+                    if (!StorageContainer.CanReadSegment(i) || !_downloadedSegments[i])
                     {
-                        if (!StorageContainer.CanReadSegment(i))
+                        if (makeRequest)
                         {
-                            result = false;
-
-                            if (makeRequest)
+                            if (!HighPrioritySegments.Contains(i))
                             {
-                                if (!HighPrioritySegments.Contains(i))
-                                {
-                                    Logger.Info("Add high priority segment {0}", i);
-                                    HighPrioritySegments.Add(i);
-                                }
+                                Logger.Info("Add high priority segment {0}", i);
+                                HighPrioritySegments.Add(i);
                             }
-                            else return false;
                         }
+                        return false;
                     }
                 }
-                return result;
+                return true;
             }
         }
 

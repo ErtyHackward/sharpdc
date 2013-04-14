@@ -31,6 +31,7 @@ namespace SharpDc.Managers
         }
 
         public Magnet Magnet { get; set; }
+
         public List<IPEndPoint> UserAddress { get; set; }
 
         /// <summary>
