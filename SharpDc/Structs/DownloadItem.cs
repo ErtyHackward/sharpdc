@@ -281,12 +281,28 @@ namespace SharpDc.Structs
 
                 if (segment.Index == -1)
                 {
-                    for (var i = 0; i < _totalSegmentsCount; i++)
+                    if (_highPrioritySegments.Count > 0)
                     {
-                        if (!_downloadedSegments[i] && !_activeSegments[i])
+                        // first try to download after the last high priority segment
+                        for (var i = _highPrioritySegments[_highPrioritySegments.Count - 1]; i < _totalSegmentsCount; i++)
                         {
-                            segment.Index = i;
-                            break;
+                            if (!_downloadedSegments[i] && !_activeSegments[i])
+                            {
+                                segment.Index = i;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (segment.Index == -1)
+                    {
+                        for (var i = 0; i < _totalSegmentsCount; i++)
+                        {
+                            if (!_downloadedSegments[i] && !_activeSegments[i])
+                            {
+                                segment.Index = i;
+                                break;
+                            }
                         }
                     }
                 }
@@ -355,6 +371,7 @@ namespace SharpDc.Structs
                 _downloadedSegments[index] = true;
                 downloadFinished = _doneSegmentsCount == _totalSegmentsCount;
                 ActiveSources.Remove(src);
+                HighPrioritySegments.Remove(index);
             }
 
             OnSegmentFinished(new SegmentEventArgs
