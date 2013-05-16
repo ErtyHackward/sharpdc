@@ -42,7 +42,7 @@ namespace SharpDc.Connections
         private ConnectionStatus _connectionStatus;
         private readonly Queue<SendTask> _delayedMessages = new Queue<SendTask>();
         private DateTime _lastUpdate = DateTime.Now;
-        private bool _closingSocket;
+        protected bool _closingSocket;
         private byte[] _connectionBuffer;
 
         private readonly object _sendLock = new object();

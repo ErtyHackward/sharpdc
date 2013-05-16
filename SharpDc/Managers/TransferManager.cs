@@ -587,7 +587,7 @@ namespace SharpDc.Managers
                 foreach (var transferConnection in _connections)
                 {
                     if (transferConnection.Source == source)
-                        transferConnection.Dispose();
+                        transferConnection.DisconnectAsync();
                 }
                 swDispose.Stop();
                 if (swDispose.ElapsedMilliseconds > 500)

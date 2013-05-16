@@ -6,6 +6,7 @@
 
 using System;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Net.Sockets;
 using System.Text;
 using SharpDc.Events;
@@ -22,6 +23,8 @@ namespace SharpDc.Connections
     public class TransferConnection : TcpConnection
     {
         private static readonly ILogger Logger = LogManager.GetLogger();
+
+        private readonly object _syncRoot = new object();
 
         private Source _source;
         private SegmentInfo _segmentInfo;
@@ -222,9 +225,8 @@ namespace SharpDc.Connections
                 if (_segmentInfo.Position >= _segmentInfo.Length)
                 {
                     _binaryMode = false;
-                    // tell that it is finished
-                    DownloadItem.FinishSegment(_segmentInfo.Index, Source);
-                    _segmentInfo.Index = -1;
+                    
+                    FinishSegment();
 
                     if (SegmentCompleted != null)
                     {
@@ -236,7 +238,7 @@ namespace SharpDc.Connections
                     }
 
                     // request another segment
-                    if (!DownloadItem.TakeFreeSegment(_source, out _segmentInfo))
+                    if (!TakeSegment())
                     {
                         //request another download item
                         if (!GetNewDownloadItem())
@@ -246,7 +248,7 @@ namespace SharpDc.Connections
                             return;
                         }
 
-                        if (!DownloadItem.TakeFreeSegment(_source, out _segmentInfo))
+                        if (!TakeSegment())
                         {
                             Dispose();
                             return;
@@ -263,19 +265,50 @@ namespace SharpDc.Connections
             }
         }
 
+        private bool TakeSegment()
+        {
+            lock (_syncRoot)
+            {
+                if (_closingSocket || _disposed)
+                    return false;
+
+                if (_segmentInfo.Index != -1)
+                    throw new InvalidOperationException();
+
+                return DownloadItem.TakeFreeSegment(_source, out _segmentInfo);
+            }
+        }
+
         private void ReleaseSegment()
         {
-            if (_segmentInfo.Index != -1)
+            lock (_syncRoot)
             {
-                DownloadItem.CancelSegment(_segmentInfo.Index, Source);
+                if (_segmentInfo.Index != -1)
+                {
+                    DownloadItem.CancelSegment(_segmentInfo.Index, Source);
+                    _segmentInfo.Index = -1;
+                    _segmentInfo.Length = -1;
+                    _segmentInfo.StartPosition = -1;
+                }
+            }
+        }
+
+        public void FinishSegment()
+        {
+            lock (_syncRoot)
+            {
+                DownloadItem.FinishSegment(_segmentInfo.Index, Source);
                 _segmentInfo.Index = -1;
-                _segmentInfo.Length = -1;
-                _segmentInfo.StartPosition = -1;
             }
         }
 
         public bool GetNewDownloadItem()
         {
+            if (_closingSocket || _disposed)
+            {
+                return false;
+            }
+
             var ea = new DownloadItemNeededEventArgs();
             OnDownloadItemNeeded(ea);
             DownloadItem = ea.DownloadItem;
@@ -305,7 +338,7 @@ namespace SharpDc.Connections
         public void ResumeDownload()
         {
             // request a segment
-            if (DownloadItem.TakeFreeSegment(_source, out _segmentInfo))
+            if (TakeSegment())
             {
                 RequestSegment();
             }
@@ -580,7 +613,7 @@ namespace SharpDc.Connections
 
                 OnDirectionChanged(new TransferDirectionChangedEventArgs { Download = true });
 
-                if (DownloadItem.TakeFreeSegment(_source, out _segmentInfo))
+                if (TakeSegment())
                 {
                     // we won, request a segment
                     RequestSegment();

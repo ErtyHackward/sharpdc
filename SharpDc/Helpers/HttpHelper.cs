@@ -63,6 +63,7 @@ namespace SharpDc.Helpers
         {
             var request = WebRequest.Create(new Uri(uri));
             request.Method = "HEAD";
+            request.Timeout = 4000;
             try
             {
                 using (var response = request.GetResponse())
