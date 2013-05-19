@@ -566,6 +566,24 @@ namespace SharpDc.Managers
                     }
                 }
 
+                if (subList == null)
+                {
+                    // possible that we have invalid hub information here, check by nickname only
+
+                    var pair = _sourcesList.FirstOrDefault(s => s.Key.UserNickname == source.UserNickname);
+
+                    if (pair.Value != null)
+                    {
+                        var list = pair.Value;
+
+                        if (list.Count > 1)
+                        {
+                            subList = new List<DownloadItem>(list);
+                        }
+                        else return list.FirstOrDefault();
+                    }
+                }
+
                 if (subList != null)
                 {
                     for (int i = subList.Count - 1; i >= 0; i--)
@@ -587,6 +605,9 @@ namespace SharpDc.Managers
                     }
                     return di;
                 }
+
+
+
             }
             return null;
         }
