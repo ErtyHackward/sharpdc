@@ -537,7 +537,7 @@ namespace SharpDc.Managers
                     }
                     _engine.SourceManager.UpdateRequests(source, 1);
 
-                    Logger.Info("Requesting connection {0}", source.UserNickname);
+                    Logger.Info("Requesting connection {0}", source);
 
                     if (_engine.Settings.ActiveMode)
                         hub.SendMessage(
