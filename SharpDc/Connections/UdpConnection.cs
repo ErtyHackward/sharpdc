@@ -48,6 +48,8 @@ namespace SharpDc.Connections
             _endPoint = new IPEndPoint(IPAddress.Any, listenPort);
             _client.BeginReceive(OnReceived, null);
             Port = listenPort;
+
+            Logger.Info("{0} udp port binded", listenPort);
         }
 
         private void OnReceived(IAsyncResult result)

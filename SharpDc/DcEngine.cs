@@ -260,9 +260,39 @@ namespace SharpDc
             SourceManager = new SourceManager();
             FileSourceManager = new FileSourceManager();
 
-            InitUdp(Settings.UdpPort);
-            InitTcp(Settings.TcpPort);
+            if (Settings.AutoSelectPort)
+            {
+                var tcpPort = Settings.TcpPort;
+                var udpPort = Settings.UdpPort;
 
+                while (!TcpConnectionListener.IsPortFree(tcpPort))
+                {
+                    tcpPort++;
+                }
+                if (Settings.TcpPort != tcpPort)
+                    Settings.TcpPort = tcpPort;
+                else
+                {
+                    InitTcp(Settings.TcpPort);
+                }
+                
+                while (!UdpConnection.IsPortFree(udpPort))
+                {
+                    udpPort++;
+                }
+                if (Settings.UdpPort != udpPort)
+                    Settings.UdpPort = udpPort;
+                else
+                {
+                    InitUdp(Settings.UdpPort);
+                }
+            }
+            else
+            {
+                InitUdp(Settings.UdpPort);
+                InitTcp(Settings.TcpPort);
+            }
+            
             if (string.IsNullOrEmpty(Settings.LocalAddress))
             {
                 // find local ip
@@ -429,14 +459,6 @@ namespace SharpDc
 
             if (p > 0)
             {
-                if (Settings.AutoSelectPort)
-                {
-                    while (!TcpConnectionListener.IsPortFree(p))
-                    {
-                        p++;
-                    }
-                    Settings.TcpPort = p;
-                }
                 _tcpConnectionListener = new TcpConnectionListener(p, Settings.TcpBacklog);
                 _tcpConnectionListener.IncomingConnection += TcpConnectionListenerIncomingConnection;
                 _tcpConnectionListener.ListenAsync();
@@ -454,15 +476,6 @@ namespace SharpDc
 
             if (port > 0)
             {
-                if (Settings.AutoSelectPort)
-                {
-                    while (!UdpConnection.IsPortFree(port))
-                    {
-                        port++;
-                    }
-                    Settings.UdpPort = port;
-                }
-
                 try
                 {
                     _udpConnection = new UdpConnection(port, Settings.NetworkInterface);

@@ -70,6 +70,8 @@ namespace SharpDc.Connections
             _ep = new IPEndPoint(IPAddress.Any, port);
             _listenSocket.Bind(_ep);
             Port = port;
+
+            Logger.Info("{0} tcp port binded", port);
         }
 
         /// <summary>

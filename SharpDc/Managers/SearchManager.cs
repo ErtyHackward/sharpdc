@@ -74,6 +74,8 @@ namespace SharpDc.Managers
             _engine.Hubs.HubAdded += Hubs_HubAdded;
             _engine.Hubs.HubRemoved += Hubs_HubRemoved;
 
+            _engine.ActiveStatusChanged += (sender, args) => _lastSearchAt = DateTime.Now.AddSeconds(-10);
+
             MinimumSearchInterval = 20;
         }
 
@@ -175,7 +177,7 @@ namespace SharpDc.Managers
         {
             lock (_syncRoot)
             {
-                if ((DateTime.Now - _lastSearchAt).TotalSeconds > MinimumSearchInterval)
+                if (_engine.Active && (DateTime.Now - _lastSearchAt).TotalSeconds > MinimumSearchInterval)
                 {
                     StartSearch(ref search);
                     return;
