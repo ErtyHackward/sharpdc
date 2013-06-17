@@ -22,6 +22,7 @@ namespace SharpDc.Connections
         private UserInfo _currentUser;
         private bool _active;
         private HubSettings _settings;
+        private MyINFOMessage _prevMessage;
 
         /// <summary>
         /// Contains public information of this client
@@ -405,28 +406,36 @@ namespace SharpDc.Connections
 
         private void OnMessageHello(ref HelloMessage helloMessage)
         {
-            var myInfo = new MyINFOMessage
-                             {
-                                 Nickname = _currentUser.Nickname,
-                                 Tag =
-                                     string.Format("<{0},M:{1},H:{2},S:{3}{4}>", TagInfo.Version,
-                                                   Settings.PassiveMode ? "P" : "A", "0/0/0", "100",
-                                                   string.IsNullOrEmpty(TagInfo.City) ? "" : ",C:" + TagInfo.City),
-                                 Connection = TagInfo.Connection,
-                                 Flag = TagInfo.Flag,
-                                 Share = _settings.FakeShare == 0 ? _currentUser.Share : _settings.FakeShare
-                             };
+
 
             SendMessage(new VersionMessage().Raw);
             if (Settings.GetUsersList)
                 SendMessage(new GetNickListMessage().Raw);
-            SendMessage(myInfo.Raw);
+            SendMyINFO();
 
             if (!Settings.GetUsersList)
             {
                 // tell everybody that we are ready to work
                 Active = true;
             }
+        }
+
+        public void SendMyINFO()
+        {
+            var myInfo = new MyINFOMessage
+            {
+                Nickname = _currentUser.Nickname,
+                Tag =
+                    string.Format("<{0},M:{1},H:{2},S:{3}{4}>", TagInfo.Version,
+                                  Settings.PassiveMode ? "P" : "A", "0/0/0", "100",
+                                  string.IsNullOrEmpty(TagInfo.City) ? "" : ",C:" + TagInfo.City),
+                Connection = TagInfo.Connection,
+                Flag = TagInfo.Flag,
+                Share = _settings.FakeShare == 0 ? _currentUser.Share : _settings.FakeShare
+            };
+
+            if (!myInfo.Equals(_prevMessage))
+                SendMessage(myInfo.Raw);
         }
     }
 }

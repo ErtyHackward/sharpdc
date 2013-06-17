@@ -233,7 +233,7 @@ namespace SharpDc.Connections
                 {
                     if (_socket == null)
                     {
-                        _socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                        _socket = new Socket(RemoteEndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
                         _socket.SendTimeout = SendTimeout;
                     }
                     _closingSocket = false;
