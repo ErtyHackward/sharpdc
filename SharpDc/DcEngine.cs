@@ -151,18 +151,18 @@ namespace SharpDc
             {
                 if (_share != null)
                 {
-                    _share.TotalSharedChanged -= ShareTotalSharedChanged;
+                    _share.TotalSharedChanged -= _share_TotalSharedChanged;
                 }
 
                 _share = value;
 
                 if (_share != null)
                 {
-                    _share.TotalSharedChanged += ShareTotalSharedChanged;
+                    _share.TotalSharedChanged +=_share_TotalSharedChanged;
                 }
+                UpdateShared();
             }
         }
-
         #endregion
 
         #region Events
@@ -874,14 +874,19 @@ namespace SharpDc
             }
         }
 
-        private void ShareTotalSharedChanged(object sender, EventArgs e)
+        private void UpdateShared()
         {
             foreach (var hub in Hubs)
             {
                 var userInfo = hub.CurrentUser;
-                userInfo.Share = _share.TotalShared;
+                userInfo.Share = _share == null ? 0 : _share.TotalShared;
                 hub.CurrentUser = userInfo;
             }
+        }
+
+        void _share_TotalSharedChanged(object sender, EventArgs e)
+        {
+            UpdateShared();
         }
 
         #endregion

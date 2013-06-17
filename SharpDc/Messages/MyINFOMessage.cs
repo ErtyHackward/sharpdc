@@ -18,6 +18,32 @@ namespace SharpDc.Messages
         public string Email;
         public long Share;
 
+        public bool Equals(MyINFOMessage other)
+        {
+            return string.Equals(Nickname, other.Nickname) && string.Equals(Description, other.Description) && string.Equals(Tag, other.Tag) && string.Equals(Connection, other.Connection) && Flag == other.Flag && string.Equals(Email, other.Email) && Share == other.Share;
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                int hashCode = ( Nickname != null ? Nickname.GetHashCode() : 0 );
+                hashCode = ( hashCode * 397 ) ^ ( Description != null ? Description.GetHashCode() : 0 );
+                hashCode = ( hashCode * 397 ) ^ ( Tag != null ? Tag.GetHashCode() : 0 );
+                hashCode = ( hashCode * 397 ) ^ ( Connection != null ? Connection.GetHashCode() : 0 );
+                hashCode = ( hashCode * 397 ) ^ Flag.GetHashCode();
+                hashCode = ( hashCode * 397 ) ^ ( Email != null ? Email.GetHashCode() : 0 );
+                hashCode = ( hashCode * 397 ) ^ Share.GetHashCode();
+                return hashCode;
+            }
+        }
+        
+        public override bool Equals(object obj)
+        {
+            if (ReferenceEquals(null, obj)) return false;
+            return obj is MyINFOMessage && Equals((MyINFOMessage)obj);
+        }
+
         public static MyINFOMessage Parse(string raw)
         {
             //$MyINFO $ALL [Ник] [Описание][Тэг]$ $[Соедиенние][Флаг]$[E-Mail]$[Шара]$|
