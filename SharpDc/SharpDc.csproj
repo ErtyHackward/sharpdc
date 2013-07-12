@@ -48,6 +48,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Base32Encoding.cs" />
     <Compile Include="Collections\HubCollection.cs" />
     <Compile Include="Collections\ObservableList.cs" />
     <Compile Include="Collections\SourceList.cs" />

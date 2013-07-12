@@ -81,8 +81,16 @@ namespace SharpDc.Managers
 
         public void InjectResult(SRMessage resultMsg)
         {
-            var resultMagnet = new Magnet(resultMsg.HubName, resultMsg.FileSize, Path.GetFileName(resultMsg.FileName));
-            var resultSource = new Source { UserNickname = resultMsg.Nickname, HubAddress = resultMsg.HubAddress };
+            var resultMagnet = new Magnet { 
+                TTH = resultMsg.HubName, 
+                Size = resultMsg.FileSize, 
+                FileName = Path.GetFileName(resultMsg.FileName) 
+            };
+
+            var resultSource = new Source { 
+                UserNickname = resultMsg.Nickname, 
+                HubAddress = resultMsg.HubAddress 
+            };
 
             //Logger.Info("Found source {0}", resultSource);
 
