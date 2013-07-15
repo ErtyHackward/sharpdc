@@ -54,7 +54,7 @@ namespace SharpDc.Structs
                 if (_tth != null)
                 {
                     if (_tth.Length != 39)
-                        throw new FormatException("Invalid tiger tree hash length 39 expected");
+                        throw new FormatException("Invalid tiger tree hash length, 39 (base32) expected");
 
                     for (int i = 0; i < _tth.Length; i++)
                     {
@@ -74,7 +74,12 @@ namespace SharpDc.Structs
         public string SHA1
         {
             get { return _sha1; }
-            set { _sha1 = value; }
+            set 
+            { 
+                _sha1 = value;
+                if (_sha1.Length != 40 && _sha1.Length != 32)
+                    throw new FormatException("Invalid sha1 hash length, 32 (base32) or 40 (hex) expected");
+            }
         }
 
         /// <summary>
@@ -84,7 +89,12 @@ namespace SharpDc.Structs
         public string BTIH
         {
             get { return _btih; }
-            set { _btih = value; }
+            set
+            {
+                _btih = value; 
+                if (_btih.Length != 40 && _btih.Length != 32)
+                    throw new FormatException("Invalid BitTorrentInfo hash length, 32 (base32) or 40 (hex) expected");
+            }
         }
 
         /// <summary>
@@ -94,7 +104,12 @@ namespace SharpDc.Structs
         public string MD5
         {
             get { return _md5; }
-            set { _md5 = value; }
+            set
+            {
+                _md5 = value;
+                if (_md5.Length != 32)
+                    throw new FormatException("Invalid MD5 hash length, 32 expected");
+            }
         }
 
         /// <summary>
@@ -104,7 +119,11 @@ namespace SharpDc.Structs
         public string ED2K
         {
             get { return _ed2K; }
-            set { _ed2K = value; }
+            set { 
+                _ed2K = value;
+                if (_ed2K.Length != 32)
+                    throw new FormatException("Invalid ED2K hash length, 32 expected");
+            }
         }
 
         /// <summary>
@@ -200,40 +219,25 @@ namespace SharpDc.Structs
                             {
                                 TTH = p[1].Substring(15);
                             }
-                            // IXE2K3JMCPUZWTW3YQZZOIB5XD6KZIEQ len = 32
+                            
                             if (p[1].StartsWith("urn:sha1:", StringComparison.InvariantCultureIgnoreCase))
                             {
-                                _sha1 = p[1].Substring(9);
-
-                                if (_sha1.Length != 32)
-                                    throw new FormatException("Invalid tiger tree hash length");
+                                SHA1 = p[1].Substring(9);
                             }
 
-                            // e111b5b5f803ee4bc29237178a10dd567315748b len = 40
                             if (p[1].StartsWith("urn:btih:", StringComparison.InvariantCultureIgnoreCase))
                             {
-                                _btih = p[1].Substring(9);
-
-                                if (_btih.Length != 40)
-                                    throw new FormatException("Invalid tiger tree hash length");
+                                BTIH = p[1].Substring(9);
                             }
 
-                            // d41d8cd98f00b204e9800998ecf8427e len = 32
                             if (p[1].StartsWith("urn:md5:", StringComparison.InvariantCultureIgnoreCase))
                             {
-                                _md5 = p[1].Substring(9);
-
-                                if (_md5.Length != 32)
-                                    throw new FormatException("Invalid MD5 hash length");
+                                MD5 = p[1].Substring(8);
                             }
 
-                            // 354B15E68FB8F36D7CD88FF94116CDC1 len = 32
                             if (p[1].StartsWith("urn:ed2k:", StringComparison.InvariantCultureIgnoreCase))
                             {
-                                _md5 = p[1].Substring(9);
-
-                                if (_md5.Length != 32)
-                                    throw new FormatException("Invalid ED2K hash length");
+                                ED2K = p[1].Substring(9);
                             }
                             break;
                         case "xl":
@@ -350,15 +354,11 @@ namespace SharpDc.Structs
                 arguments.Add("video=1");
 
             return "magnet:?" + string.Join("&", arguments);
-
-            return string.Format("magnet:?xt=urn:tree:tiger:{0}&xl={1}&dn={2}{3}", _tth, _size,
-                                 Uri.EscapeDataString(_filename), Preview ? "&video=1" : "");
         }
 
         public string ToWebLink()
         {
-            return string.Format("[magnet=magnet:?xt=urn:tree:tiger:{0}&xl={1}&dn={2}]{3}[/magnet]", _tth, _size,
-                                 Uri.EscapeDataString(_filename), _filename);
+            return string.Format("[magnet={0}]{1}[/magnet]", this.ToString(), _filename);
         }
 
         /// <summary>

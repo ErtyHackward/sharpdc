@@ -752,7 +752,7 @@ namespace SharpDc
                                           Settings.MaxUploadThreads > 0
                                               ? Settings.MaxUploadThreads - TransferManager.TransfersCount
                                               : 0,
-                                      HubAddress = hub.RemoteAddress,
+                                      HubAddress = hub.RemoteAddressString,
                                       HubName = "TTH:" + result.Magnet.TTH,
                                       TotalSlots = Settings.MaxUploadThreads
                                   };
@@ -794,7 +794,7 @@ namespace SharpDc
                 transfer = new TransferConnection(e.Message.SenderAddress)
                                {
                                    AllowedToConnect = true,
-                                   Source = new Source { HubAddress = hubConnection.RemoteAddress }
+                                   Source = new Source { HubAddress = hubConnection.RemoteAddressString }
                                };
 
                 if (Settings.NetworkInterface != null)

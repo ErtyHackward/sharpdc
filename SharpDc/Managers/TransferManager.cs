@@ -373,7 +373,7 @@ namespace SharpDc.Managers
                 var source = new Source
                                  {
                                      UserNickname = e.UserNickname,
-                                     HubAddress = req.IsEmpty ? transfer.Source.HubAddress : req.Hub.RemoteAddress
+                                     HubAddress = req.IsEmpty ? transfer.Source.HubAddress : req.Hub.RemoteAddressString
                                  };
 
                 // find connections with the same user
@@ -406,7 +406,7 @@ namespace SharpDc.Managers
                 {
                     e.HubAddress = source.HubAddress;
 
-                    var hub = _engine.Hubs.FirstOrDefault(h => h.RemoteAddress == e.HubAddress);
+                    var hub = _engine.Hubs.FirstOrDefault(h => h.RemoteAddressString == e.HubAddress);
                     if (hub != null)
                     {
                         e.OwnNickname = hub.Settings.Nickname;
@@ -421,7 +421,7 @@ namespace SharpDc.Managers
                 else
                 {
                     e.OwnNickname = req.Hub.CurrentUser.Nickname;
-                    e.HubAddress = req.Hub.RemoteAddress;
+                    e.HubAddress = req.Hub.RemoteAddressString;
                 }
 
                 _engine.SourceManager.UpdateRequests(source, -1);
@@ -559,7 +559,7 @@ namespace SharpDc.Managers
 
         private IEnumerable<HubConnection> GetHubsForSource(Source src)
         {
-            var hub = _engine.Hubs.Find(h => h.RemoteAddress == src.HubAddress);
+            var hub = _engine.Hubs.Find(h => h.RemoteAddressString == src.HubAddress);
 
             if (hub != null)
                 yield return hub;
