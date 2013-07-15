@@ -64,7 +64,7 @@ namespace SharpDc.Connections
             }
         }
 
-        public string RemoteAddress { get; private set; }
+        public string RemoteAddressString { get; private set; }
 
         public ConcurrentDictionary<string, UserInfo> Users { get; private set; }
 
@@ -169,7 +169,7 @@ namespace SharpDc.Connections
         private void HubConnectionConnectionStatusChanged(object sender, ConnectionStatusEventArgs e)
         {
             if (e.Status == ConnectionStatus.Connected)
-                RemoteAddress = RemoteEndPoint.ToString();
+                RemoteAddressString = RemoteEndPoint.ToString();
 
             if (e.Status == ConnectionStatus.Disconnected)
                 Active = false;
@@ -436,6 +436,8 @@ namespace SharpDc.Connections
 
             if (!myInfo.Equals(_prevMessage))
                 SendMessage(myInfo.Raw);
+
+            _prevMessage = myInfo;
         }
     }
 }

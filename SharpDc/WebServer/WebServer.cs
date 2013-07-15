@@ -92,7 +92,7 @@ namespace SharpDc.WebServer
         /// </summary>
         public void Start()
         {
-            _listener = new TcpListener(Port);
+            _listener = new TcpListener(IPAddress.Any, Port);
             _listener.Start();
             new Thread(delegate()
                            {
