@@ -332,8 +332,11 @@ namespace SharpDc.Structs
             if (arguments.Count == 0)
                 throw new InvalidProgramException("Impossible to create magnet link without any hash data");
 
-            arguments.Add("xl=" + _size);
-            arguments.Add("dn=" + Uri.EscapeDataString(_filename));
+            if (_size !=0 )
+                arguments.Add("xl=" + _size);
+
+            if (!string.IsNullOrEmpty(_filename))
+                arguments.Add("dn=" + Uri.EscapeDataString(_filename));
 
             if (_webSources != null)
             {
