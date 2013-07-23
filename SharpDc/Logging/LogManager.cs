@@ -8,11 +8,18 @@ using System.Diagnostics;
 
 namespace SharpDc.Logging
 {
+    /// <summary>
+    /// LogManager provides logger object for a specific class
+    /// This allows to filter information by class if supported
+    /// </summary>
     public interface ILogManager
     {
         ILogger GetLogger(string className);
     }
 
+    /// <summary>
+    /// Performs actual logging implementation
+    /// </summary>
     public interface ILogger
     {
         void Info(string message, params object[] args);
@@ -21,6 +28,9 @@ namespace SharpDc.Logging
         void Fatal(string message, params object[] args);
     }
 
+    /// <summary>
+    /// Provides object that is used when no logging is required
+    /// </summary>
     public class NullLogger : ILogger
     {
         public void Info(string message, params object[] args)
@@ -40,6 +50,9 @@ namespace SharpDc.Logging
         }
     }
 
+    /// <summary>
+    /// Redirects all messages to the TraceListener
+    /// </summary>
     public class TraceLogger : ILogger
     {
         public void Info(string message, params object[] args)
@@ -63,6 +76,9 @@ namespace SharpDc.Logging
         }
     }
 
+    /// <summary>
+    /// Provides single trace logger for every class
+    /// </summary>
     public class TraceLogManager : ILogManager
     {
         private static readonly TraceLogger Logger = new TraceLogger();
@@ -73,6 +89,9 @@ namespace SharpDc.Logging
         }
     }
 
+    /// <summary>
+    /// Provides single null logger if no logging is required
+    /// </summary>
     public class NullLogManager : ILogManager
     {
         private static readonly NullLogger Logger = new NullLogger();
@@ -83,6 +102,9 @@ namespace SharpDc.Logging
         }
     }
 
+    /// <summary>
+    /// Helper to obtain class logger
+    /// </summary>
     public static class LogManager
     {
         public static ILogManager LogManagerInstance = new NullLogManager();
@@ -94,7 +116,7 @@ namespace SharpDc.Logging
                 return LogManagerInstance.GetLogger(string.Empty);
             }
 
-            if (LogManagerInstance is TraceLogger)
+            if (LogManagerInstance is TraceLogManager)
             {
                 return LogManagerInstance.GetLogger(string.Empty);
             }
