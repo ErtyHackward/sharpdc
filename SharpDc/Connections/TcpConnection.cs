@@ -486,6 +486,7 @@ namespace SharpDc.Connections
         /// <param name="address">String like dchub://hub.host.com:411</param>
         /// <param name="defaultPort"></param>
         /// <returns></returns>
+        [DebuggerStepThrough]
         public static IPEndPoint ParseAddress(string address, int defaultPort = 411)
         {
             if (address.StartsWith("dchub://", StringComparison.CurrentCultureIgnoreCase))
