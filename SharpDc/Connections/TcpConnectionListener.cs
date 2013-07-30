@@ -4,6 +4,7 @@
 // licensed under the LGPL
 // -------------------------------------------------------------
 
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Net;
 using System;
@@ -58,7 +59,7 @@ namespace SharpDc.Connections
 
             if (backlog <= 0)
             {
-                Logger.Warn("Invalid backlog value {0}, using 10 instead ", backlog);
+                Logger.Warn("Invalid backlog value {0}, using 10 instead", backlog);
                 backlog = 10;
             }
 
@@ -142,6 +143,17 @@ namespace SharpDc.Connections
                                     ProtocolType.Tcp);
                 var ep = new IPEndPoint(IPAddress.Any, port);
                 socket.Bind(ep);
+
+                var ipGlobalProperties = IPGlobalProperties.GetIPGlobalProperties();
+                var tcpConnInfoArray = ipGlobalProperties.GetActiveTcpConnections();
+
+                foreach (var tcpi in tcpConnInfoArray)
+                {
+                    if (tcpi.LocalEndPoint.Port == port)
+                    {
+                        return false;
+                    }
+                }
 
                 return true;
             }
