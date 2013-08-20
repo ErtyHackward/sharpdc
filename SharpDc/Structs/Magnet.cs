@@ -6,6 +6,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -138,6 +139,7 @@ namespace SharpDc.Structs
         /// <summary>
         /// Indicates whether the file play should be started before file was downloaded
         /// </summary>
+        [DefaultValue(false)]
         public bool Preview
         {
             get { return _preview; }
@@ -196,7 +198,7 @@ namespace SharpDc.Structs
 
             ParseInternal(magnet);
         }
-
+        
         private void ParseInternal(string magnet)
         {
             if (!magnet.StartsWith("magnet:", StringComparison.CurrentCultureIgnoreCase))
