@@ -46,7 +46,7 @@ namespace SharpDc.Connections
                 _client = new UdpClient(listenPort);
 
             _endPoint = new IPEndPoint(IPAddress.Any, listenPort);
-            _client.BeginReceive(OnReceived, null);
+            _client.BeginReceive(OnReceived, _client);
             Port = listenPort;
 
             Logger.Info("{0} udp port binded", listenPort);
@@ -56,6 +56,13 @@ namespace SharpDc.Connections
         {
             try
             {
+                if (_client == null)
+                {
+                    var client = (UdpClient)result.AsyncState;
+                    client.EndReceive(result, ref _endPoint);
+                    return;
+                }
+
                 var ea = new IncomingUdpMessageEventArgs();
                 ea.Message = Encoding.Default.GetString(_client.EndReceive(result, ref _endPoint));
                 OnIncomingMessage(ea);
