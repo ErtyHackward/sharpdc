@@ -75,10 +75,11 @@ namespace SharpDc.Structs
         public string SHA1
         {
             get { return _sha1; }
-            set 
-            { 
+            set
+            {
                 _sha1 = value;
-                if (_sha1.Length != 40 && _sha1.Length != 32)
+                
+                if (_sha1 != null && _sha1.Length != 40 && _sha1.Length != 32)
                     throw new FormatException("Invalid sha1 hash length, 32 (base32) or 40 (hex) expected");
             }
         }
@@ -92,8 +93,8 @@ namespace SharpDc.Structs
             get { return _btih; }
             set
             {
-                _btih = value; 
-                if (_btih.Length != 40 && _btih.Length != 32)
+                _btih = value;
+                if (_btih != null && _btih.Length != 40 && _btih.Length != 32)
                     throw new FormatException("Invalid BitTorrentInfo hash length, 32 (base32) or 40 (hex) expected");
             }
         }
@@ -108,7 +109,7 @@ namespace SharpDc.Structs
             set
             {
                 _md5 = value;
-                if (_md5.Length != 32)
+                if (_md5 != null && _md5.Length != 32)
                     throw new FormatException("Invalid MD5 hash length, 32 expected");
             }
         }
@@ -122,7 +123,7 @@ namespace SharpDc.Structs
             get { return _ed2K; }
             set { 
                 _ed2K = value;
-                if (_ed2K.Length != 32)
+                if (_ed2K != null && _ed2K.Length != 32)
                     throw new FormatException("Invalid ED2K hash length, 32 expected");
             }
         }
@@ -201,6 +202,9 @@ namespace SharpDc.Structs
         
         private void ParseInternal(string magnet)
         {
+            if (magnet == null) 
+                throw new ArgumentNullException("magnet");
+
             if (!magnet.StartsWith("magnet:", StringComparison.CurrentCultureIgnoreCase))
                 throw new ApplicationException("Unable to parse magnet link, the link should start with 'magnet:'");
 
