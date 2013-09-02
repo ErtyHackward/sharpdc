@@ -283,11 +283,14 @@ namespace SharpDc.Connections
                 while (_connectionStatus == ConnectionStatus.Connected &&
                        (bytesReceived = _socket.Receive(_connectionBuffer)) != 0)
                 {
-                    _downloadSpeed.Update(bytesReceived);
-                    _lastUpdate = DateTime.Now;
-                    ParseRaw(_connectionBuffer, bytesReceived);
-                    DownloadSpeedLimit.Update(bytesReceived);
-                    DownloadSpeedLimitGlobal.Update(bytesReceived);
+                    if (_connectionBuffer != null)
+                    {
+                        _downloadSpeed.Update(bytesReceived);
+                        _lastUpdate = DateTime.Now;
+                        ParseRaw(_connectionBuffer, bytesReceived);
+                        DownloadSpeedLimit.Update(bytesReceived);
+                        DownloadSpeedLimitGlobal.Update(bytesReceived);
+                    }
                 }
 
                 SetConnectionStatus(ConnectionStatus.Disconnected);

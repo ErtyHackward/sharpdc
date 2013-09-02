@@ -79,6 +79,13 @@
     <Compile Include="Exceptions\FileTooBigException.cs" />
     <Compile Include="Exceptions\InvalidFileNameException.cs" />
     <Compile Include="Exceptions\NoFreeSpaceException.cs" />
+    <Compile Include="Hash\HashHelper.cs" />
+    <Compile Include="Hash\ThexThreaded.cs" />
+    <Compile Include="Hash\Tiger.cs" />
+    <Compile Include="Hash\tigerhash.cs" />
+    <Compile Include="Hash\TigerNative.cs" />
+    <Compile Include="Hash\tigersbox.cs" />
+    <Compile Include="Hash\TthStreamHeader.cs" />
     <Compile Include="Helpers\FileHelper.cs" />
     <Compile Include="Helpers\HttpHelper.cs" />
     <Compile Include="Helpers\Windows.cs" />
