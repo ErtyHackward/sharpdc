@@ -303,11 +303,20 @@ namespace SharpDc.Managers
         public TimeSpan EstimateSearch(DownloadItem downloadItem)
         {
             var index = _searchQueue.FindIndex(s => s.SearchType == SearchType.TTH && s.SearchRequest == downloadItem.Magnet.TTH);
+            return EstimateSearch(index);
+        }
 
+        public TimeSpan EstimateSearch(SearchMessage message)
+        {
+            return EstimateSearch(_searchQueue.IndexOf(message));
+        }
+
+        private TimeSpan EstimateSearch(int index)
+        {
             if (index < 0)
                 return TimeSpan.MaxValue;
 
-            return TimeSpan.FromSeconds((double)MinimumSearchInterval - (DateTime.Now - _lastSearchAt).TotalSeconds + index * MinimumSearchInterval);
+            return TimeSpan.FromSeconds(MinimumSearchInterval - (DateTime.Now - _lastSearchAt).TotalSeconds + index * MinimumSearchInterval);
         }
 
         public void CheckItem(DownloadItem downloadItem)
