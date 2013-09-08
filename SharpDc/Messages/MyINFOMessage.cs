@@ -48,29 +48,48 @@ namespace SharpDc.Messages
         {
             //$MyINFO $ALL [Ник] [Описание][Тэг]$ $[Соедиенние][Флаг]$[E-Mail]$[Шара]$|
             //$MyINFO $ALL pas143 <OGODC 2.4.83.701,M:A,H:2/0/0,S:7,C:Ленинск-Кузнецкий>$ $$$4098067221$
+            //$MyINFO $ALL мшефдшш $ $$$17583300011$
             MyINFOMessage myinfo;
 
-            var nickEnd = raw.IndexOf(' ', 13);
-            var tagStart = raw.IndexOf('<', nickEnd);
-            var tagEnd = raw.IndexOf('>', tagStart);
-            var conStart = tagEnd + 4;
-            var conEnd = raw.IndexOf('$', conStart);
-            var emailStart = conEnd + 1;
-            var emailEnd = raw.IndexOf('$', emailStart);
-            var shareStart = emailEnd + 1;
-            var shareEnd = raw.IndexOf('$', shareStart);
+            var spl = raw.Remove(0, 13).Split('$');
 
-            myinfo.Nickname = raw.Substring(13, nickEnd - 13);
-            myinfo.Description = raw.Substring(nickEnd + 1, tagStart - nickEnd - 1);
-            myinfo.Tag = raw.Substring(tagStart, tagEnd - tagStart + 1);
-            myinfo.Connection = raw.Substring(conStart, conEnd - 1 - conStart);
+            var spaceIndex = spl[0].IndexOf(' ');
+            if (spaceIndex == -1)
+                throw new FormatException("Invalid MyINFO message format");
+            myinfo.Nickname = spl[0].Substring(0, spaceIndex);
+
+            if (spaceIndex + 1 < spl[0].Length)
+            {
+                // parse tag
+                myinfo.Description = spl[0].Substring(spaceIndex + 1);
+
+                var tagStart = spl[0].IndexOf('<', spaceIndex);
+
+                if (tagStart != -1)
+                {
+                    myinfo.Tag = spl[0].Substring(tagStart);
+                    myinfo.Description = spl[0].Substring(spaceIndex + 1, tagStart - (spaceIndex + 1));
+                }
+                else
+                {
+                    myinfo.Tag = null;
+                }
+            }
+            else
+            {
+                myinfo.Description = null;
+                myinfo.Tag = null;
+            }
+
+            myinfo.Connection = spl[2];
             if (string.IsNullOrEmpty(myinfo.Connection))
                 myinfo.Flag = 0;
             else
-                myinfo.Flag = (byte)raw.Substring(conEnd - 1, 1)[0];
-            myinfo.Email = raw.Substring(emailStart, emailEnd - emailStart);
-            var share = raw.Substring(shareStart, shareEnd - shareStart);
-            long.TryParse(share, out myinfo.Share);
+                myinfo.Flag = (byte)myinfo.Connection.Substring(myinfo.Connection.Length - 1, 1)[0];
+
+            myinfo.Email = spl[3];
+            
+            long.TryParse(spl[4], out myinfo.Share);
 
             return myinfo;
         }
