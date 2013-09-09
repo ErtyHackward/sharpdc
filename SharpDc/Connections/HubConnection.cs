@@ -23,6 +23,7 @@ namespace SharpDc.Connections
         private bool _active;
         private HubSettings _settings;
         private MyINFOMessage _prevMessage;
+        private string _lastChatMessage;
 
         /// <summary>
         /// Contains public information of this client
@@ -168,11 +169,20 @@ namespace SharpDc.Connections
 
         private void HubConnectionConnectionStatusChanged(object sender, ConnectionStatusEventArgs e)
         {
-            if (e.Status == ConnectionStatus.Connected)
-                RemoteAddressString = RemoteEndPoint.ToString();
-
-            if (e.Status == ConnectionStatus.Disconnected)
-                Active = false;
+            switch (e.Status)
+            {
+                case ConnectionStatus.Connecting:
+                    _lastChatMessage = null;
+                    break;
+                case ConnectionStatus.Connected:
+                    RemoteAddressString = RemoteEndPoint.ToString();
+                    break;
+                case ConnectionStatus.Disconnected:
+                    if (!string.IsNullOrEmpty(_lastChatMessage))
+                        Logger.Info("Last hub chat message: {0}", _lastChatMessage);
+                    Active = false;
+                    break;
+            }
         }
 
         protected override void ParseRaw(byte[] buffer, int length)
@@ -303,6 +313,7 @@ namespace SharpDc.Connections
                 else
                 {
                     // chat message
+                    _lastChatMessage = cmd;
                 }
             }
         }
@@ -406,8 +417,6 @@ namespace SharpDc.Connections
 
         private void OnMessageHello(ref HelloMessage helloMessage)
         {
-
-
             SendMessage(new VersionMessage().Raw);
             if (Settings.GetUsersList)
                 SendMessage(new GetNickListMessage().Raw);
