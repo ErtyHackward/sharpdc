@@ -613,7 +613,9 @@ namespace SharpDc.Connections
 
                 OnDirectionChanged(new TransferDirectionChangedEventArgs { Download = true });
 
-                if (TakeSegment())
+                if (_segmentInfo.Index != -1)
+                    RequestSegment();
+                else if (TakeSegment())
                 {
                     // we won, request a segment
                     RequestSegment();
