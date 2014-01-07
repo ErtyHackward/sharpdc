@@ -6,6 +6,7 @@
 
 using System;
 using System.Net;
+using System.Net.Mime;
 using System.Reflection;
 
 namespace SharpDc.Helpers
@@ -71,12 +72,59 @@ namespace SharpDc.Helpers
                     return response.ContentLength;
                 }
             }
-            catch (Exception x)
+            catch (Exception)
             {
                 return -1;
             }
         }
 
+        public static long GetFileSize(string uri, out Exception exception)
+        {
+            exception = null;
+            var request = WebRequest.Create(new Uri(uri));
+            request.Method = "HEAD";
+            request.Timeout = 4000;
+            try
+            {
+                using (var response = request.GetResponse())
+                {
+                    return response.ContentLength;
+                }
+            }
+            catch (Exception x)
+            {
+                exception = x;
+                return -1;
+            }
+        }
+
+        public static void GetFileNameAndSize(string uri, out string fileName, out long size, out Exception exception)
+        {
+            exception = null;
+            size = -1;
+            fileName = null;
+            
+            var request = WebRequest.Create(new Uri(uri));
+            request.Method = "HEAD";
+            request.Timeout = 4000;
+            try
+            {
+                using (var response = request.GetResponse())
+                {
+                    var headerContentDisposition = response.Headers["content-disposition"];
+                    if (headerContentDisposition != null)
+                    {
+                        fileName = new ContentDisposition(headerContentDisposition).FileName;
+                    }
+                    size = response.ContentLength;
+                }
+            }
+            catch (Exception x)
+            {
+                exception = x;
+            }
+        }
+        
         public static bool FileExists(string uri)
         {
             return GetFileSize(uri) > 0;

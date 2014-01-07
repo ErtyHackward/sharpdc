@@ -335,9 +335,6 @@ namespace SharpDc.Structs
                 arguments.Add("xt=urn:md5:" + MD5);
             }
 
-            if (arguments.Count == 0)
-                throw new InvalidProgramException("Impossible to create magnet link without any hash data");
-
             if (_size !=0 )
                 arguments.Add("xl=" + _size);
 

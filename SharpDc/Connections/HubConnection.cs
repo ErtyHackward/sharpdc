@@ -178,6 +178,7 @@ namespace SharpDc.Connections
                     RemoteAddressString = RemoteEndPoint.ToString();
                     break;
                 case ConnectionStatus.Disconnected:
+                    _prevMessage = default(MyINFOMessage);
                     if (!string.IsNullOrEmpty(_lastChatMessage))
                         Logger.Info("Last hub chat message: {0}", _lastChatMessage);
                     Active = false;
