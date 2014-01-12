@@ -132,6 +132,14 @@ namespace SharpDc.Managers
             }
         }
 
+        public IEnumerable<ContentItem> OldestItems()
+        {
+            lock (_tthIndex)
+            {
+                return _tthIndex.Values.OrderBy(i => i.CreateDate);
+            }
+        }
+
         public List<ContentItem> SearchByTth(string tth)
         {
             return Search(new SearchQuery { Query = tth, SearchType = SearchType.TTH });

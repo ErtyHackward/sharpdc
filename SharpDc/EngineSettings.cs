@@ -45,6 +45,7 @@ namespace SharpDc
         public event EventHandler<EngineSettingsEventArgs> Changed;
 
         private int _searchAlternativesInterval;
+        private bool _backgroundSeedMode;
 
         protected void OnChanged(EngineSettingType st)
         {
@@ -425,6 +426,22 @@ namespace SharpDc
         }
 
         /// <summary>
+        /// If true all upload threads will work in background mode consuming less resources
+        /// Affected only Windows Vista or later
+        /// </summary>
+        public bool BackgroundSeedMode
+        {
+            get { return _backgroundSeedMode; }
+            set {
+                if (_backgroundSeedMode != value)
+                {
+                    _backgroundSeedMode = value;
+                    OnChanged(EngineSettingType.BackgroundSeedMode);
+                }
+            }
+        }
+        
+        /// <summary>
         /// Gets default settings
         /// </summary>
         public static EngineSettings Default
@@ -450,7 +467,8 @@ namespace SharpDc
                                _tcpReceiveBufferSize = 64 * 1024,
                                _fileReadBufferSize = 64 * 1024,
                                _netInterface = null,
-                               _useSparse = false
+                               _useSparse = false,
+                               _backgroundSeedMode = true
                            };
             }
         }

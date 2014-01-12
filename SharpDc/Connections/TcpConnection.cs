@@ -48,6 +48,9 @@ namespace SharpDc.Connections
         private readonly object _sendLock = new object();
         private readonly object _threadLock = new object();
 
+        private readonly SpeedAverage _uploadSpeed = new SpeedAverage();
+        private readonly SpeedAverage _downloadSpeed = new SpeedAverage();
+
         public Socket Socket
         {
             get { return _socket; }
@@ -75,9 +78,6 @@ namespace SharpDc.Connections
         {
             get { return RemoteEndPoint; }
         }
-
-        private readonly SpeedAverage _uploadSpeed = new SpeedAverage();
-        private readonly SpeedAverage _downloadSpeed = new SpeedAverage();
 
         /// <summary>
         /// Gets an object to obtain upload speed

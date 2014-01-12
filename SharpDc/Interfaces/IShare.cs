@@ -60,6 +60,12 @@ namespace SharpDc.Interfaces
         /// </summary>
         /// <returns></returns>
         IEnumerable<ContentItem> Items();
+
+        /// <summary>
+        /// Returns all items sorted by date asc
+        /// </summary>
+        /// <returns></returns>
+        IEnumerable<ContentItem> OldestItems();
     }
 
     public static class ShareExtensions

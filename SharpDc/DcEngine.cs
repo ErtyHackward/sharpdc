@@ -602,6 +602,11 @@ namespace SharpDc
                 e.Transfer.IncomingMessage += IncomingMessageHandler;
                 e.Transfer.OutgoingMessage += OutgoingMessageHandler;
             }
+
+            if (Settings.BackgroundSeedMode)
+            {
+                e.Transfer.UseBackgroundSeedMode = true;
+            }
         }
 
         private void TransferManagerTransferUploadItemError(object sender, UploadItemErrorEventArgs e)
@@ -988,7 +993,7 @@ namespace SharpDc
             }
             else
             {
-                DcEngine.ThreadPool.QueueWorkItem(delegate
+                ThreadPool.QueueWorkItem(delegate
                                                       {
                                                           // start new connections gradually
 

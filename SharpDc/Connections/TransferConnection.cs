@@ -9,7 +9,9 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using SharpDc.Events;
+using SharpDc.Helpers;
 using SharpDc.Logging;
 using SharpDc.Managers;
 using SharpDc.Messages;
@@ -37,6 +39,8 @@ namespace SharpDc.Connections
         private byte[] _readBuffer;
 
         private TransferDirection _direction;
+
+        internal bool UseBackgroundSeedMode { get; set; }
 
         /// <summary>
         /// Indicates that this connection uses one slot
@@ -548,42 +552,45 @@ namespace SharpDc.Connections
                 adcgetMessage.Length = UploadItem.Content.Magnet.Size - adcgetMessage.Start;
             }
 
-            for (var position = adcgetMessage.Start;
-                 !_disposed && position < adcgetMessage.Start + adcgetMessage.Length;
-                 position += _readBuffer.Length)
+            using (UseBackgroundSeedMode ? Thread.CurrentThread.EnterBackgroundProcessingMode() : Scope.Empty)
             {
-                if (position == adcgetMessage.Start)
+                for (var position = adcgetMessage.Start;
+                     !_disposed && position < adcgetMessage.Start + adcgetMessage.Length;
+                     position += _readBuffer.Length)
                 {
-                    SendMessage(
-                        new ADCSNDMessage
-                            {
-                                Type = ADCGETType.File,
-                                Request = adcgetMessage.Request,
-                                Start = adcgetMessage.Start,
-                                Length = adcgetMessage.Length
-                            }.Raw);
-                }
+                    if (position == adcgetMessage.Start)
+                    {
+                        SendMessage(
+                            new ADCSNDMessage
+                                {
+                                    Type = ADCGETType.File,
+                                    Request = adcgetMessage.Request,
+                                    Start = adcgetMessage.Start,
+                                    Length = adcgetMessage.Length
+                                }.Raw);
+                    }
 
-                var length = _readBuffer.Length;
+                    var length = _readBuffer.Length;
 
-                if (adcgetMessage.Start + adcgetMessage.Length < position + length)
-                    length = (int)(adcgetMessage.Start + adcgetMessage.Length - position);
+                    if (adcgetMessage.Start + adcgetMessage.Length < position + length)
+                        length = (int)(adcgetMessage.Start + adcgetMessage.Length - position);
 
-                var read = UploadItem.Read(_readBuffer, position, length);
+                    var read = UploadItem.Read(_readBuffer, position, length);
 
-                if (read != length)
-                {
-                    Logger.Error("Upload read error ({0}/{1}): {2}", read, length, UploadItem.Content.SystemPath);
-                    Dispose();
-                    return;
-                }
+                    if (read != length)
+                    {
+                        Logger.Error("Upload read error ({0}/{1}): {2}", read, length, UploadItem.Content.SystemPath);
+                        Dispose();
+                        return;
+                    }
 
-                var sent = Send(_readBuffer, 0, read);
+                    var sent = Send(_readBuffer, 0, read);
 
-                if (sent != read)
-                {
-                    Dispose();
-                    return;
+                    if (sent != read)
+                    {
+                        Dispose();
+                        return;
+                    }
                 }
             }
         }
