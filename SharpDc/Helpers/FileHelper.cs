@@ -175,7 +175,6 @@ namespace SharpDc.Helpers
         {
 #if MONO
             return File.Exists(path);
-
 #else
             // 10 times faster than System.IO.File.Exists()
             var s = new STAT();

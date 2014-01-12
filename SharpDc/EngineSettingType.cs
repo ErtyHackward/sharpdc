@@ -30,6 +30,7 @@ namespace SharpDc
         ConnectionsLimit,
         NetworkInterface,
         UseSparseFiles,
-        AutoSelectPort
+        AutoSelectPort,
+        BackgroundSeedMode
     }
 }

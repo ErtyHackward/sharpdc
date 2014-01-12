@@ -104,7 +104,7 @@ namespace SharpDc.Helpers
             size = -1;
             fileName = null;
             
-            var request = WebRequest.Create(new Uri(uri));
+            var request = (HttpWebRequest)WebRequest.Create(new Uri(uri));
             request.Method = "HEAD";
             request.Timeout = 4000;
             try

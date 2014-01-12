@@ -18,6 +18,7 @@ namespace SharpDc.Managers
         private Magnet _magnet;
         private string[] _systemPaths;
         private string _virtualPath;
+        private DateTime _createDate;
 
         /// <summary>
         /// Gets or sets content file magnet
@@ -54,11 +55,21 @@ namespace SharpDc.Managers
             set { _virtualPath = value; }
         }
 
+        /// <summary>
+        /// Gets time when this item was created
+        /// </summary>
+        public DateTime CreateDate
+        {
+            get { return _createDate; }
+            set { _createDate = value; }
+        }
+
         public ContentItem(DownloadItem item)
         {
             _magnet = item.Magnet;
             _systemPaths = item.SaveTargets.ToArray();
             _virtualPath = "Downloads\\" + _magnet.FileName;
+            _createDate = DateTime.Now;
         }
 
         public void AddSystemPath(string path)
