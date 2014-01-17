@@ -148,6 +148,7 @@
     <Compile Include="Structs\SpeedLimiter.cs" />
     <Compile Include="Structs\TagInfo.cs" />
     <Compile Include="Structs\UploadItem.cs" />
+    <Compile Include="Structs\UploadSourceQuality.cs" />
     <Compile Include="Structs\UserInfo.cs" />
     <Compile Include="ThreadPoolProxy.cs" />
     <Compile Include="Utils.cs" />

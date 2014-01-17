@@ -38,6 +38,7 @@ namespace SharpDc
         private IPAddress _netInterface;
         private bool _useSparse;
         private bool _autoSelectPort;
+        private bool _measureUploadSourceQuality;
 
         /// <summary>
         /// Occurs when some setting is changed
@@ -441,6 +442,25 @@ namespace SharpDc
             }
         }
         
+        
+        /// <summary>
+        /// If enabled, all upload sources will be measured for errors and better sources will be selected for new uploads
+        /// Reasonable only for servers
+        /// </summary>
+        public bool UploadSourceQualityEnabled
+        {
+            get { return _measureUploadSourceQuality; }
+            set {
+                if (_measureUploadSourceQuality != value)
+                {
+                    _measureUploadSourceQuality = value;
+                    OnChanged(EngineSettingType.UploadSourceQuality);
+                }
+            }
+        }
+
+        
+
         /// <summary>
         /// Gets default settings
         /// </summary>
@@ -468,7 +488,8 @@ namespace SharpDc
                                _fileReadBufferSize = 64 * 1024,
                                _netInterface = null,
                                _useSparse = false,
-                               _backgroundSeedMode = true
+                               _backgroundSeedMode = true,
+                               _measureUploadSourceQuality = false
                            };
             }
         }

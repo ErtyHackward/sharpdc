@@ -771,6 +771,7 @@ namespace SharpDc.Connections
         public TransferConnection Transfer { get; set; }
         public ContentItem Content { get; set; }
         public UploadItem UploadItem { get; set; }
+        public Exception Exception { get; set; }
     }
 
     public class TransferErrorEventArgs : BaseEventArgs
