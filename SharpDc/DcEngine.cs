@@ -908,20 +908,26 @@ namespace SharpDc
         /// Allows to start a file download easily
         /// </summary>
         /// <param name="magnet">Magnet-link to search file</param>
-        /// <param name="savePath">optional complete file path to be saved</param>
+        /// <param name="fullSystemPath">optional complete file path to be saved</param>
         /// <param name="sources">optional set of sources to use</param>
-        public DownloadItem DownloadFile(Magnet magnet, string savePath = null, IEnumerable<Source> sources = null)
+        public DownloadItem DownloadFile(Magnet magnet, string fullSystemPath = null, IEnumerable<Source> sources = null)
         {
-            if (string.IsNullOrEmpty(savePath))
+            if (string.IsNullOrEmpty(fullSystemPath))
             {
-                savePath = Path.Combine(Settings.PathDownload, magnet.FileName);
+                fullSystemPath = Path.Combine(Settings.PathDownload, magnet.FileName);
             }
+            else
+            {
+                if (Directory.Exists(fullSystemPath))
+                    throw new ArgumentException("Provide full system path to the file, not the directory", fullSystemPath);
+            }
+            
 
-            if (!FileHelper.IsValidFilePath(savePath))
-                throw new InvalidFileNameException("Storage path of the file is invalid") { FileName = savePath };
+            if (!FileHelper.IsValidFilePath(fullSystemPath))
+                throw new InvalidFileNameException("Storage path of the file is invalid") { FileName = fullSystemPath };
 
-            if (!FileHelper.IsValidFileName(Path.GetFileName(savePath)))
-                throw new InvalidFileNameException("Storage path of the file is invalid") { FileName = savePath };
+            if (!FileHelper.IsValidFileName(Path.GetFileName(fullSystemPath)))
+                throw new InvalidFileNameException("Storage path of the file is invalid") { FileName = fullSystemPath };
 
             if (!string.IsNullOrEmpty(magnet.FileName))
             {
@@ -932,7 +938,7 @@ namespace SharpDc
             var di = new DownloadItem
                          {
                              Magnet = magnet,
-                             SaveTargets = new List<string> { savePath }
+                             SaveTargets = new List<string> { fullSystemPath }
                          };
 
             if (sources != null)
