@@ -73,11 +73,19 @@ namespace SharpDc.Managers
 
         #region Events 
 
-        public event EventHandler<UploadItemErrorEventArgs> TransferUploadItemError;
+        public event EventHandler<UploadItemEventArgs> TransferUploadItemError;
 
-        private void OnUploadItemError(UploadItemErrorEventArgs e)
+        private void OnUploadItemError(UploadItemEventArgs e)
         {
             var handler = TransferUploadItemError;
+            if (handler != null) handler(this, e);
+        }
+
+        public event EventHandler<UploadItemEventArgs> TransferUploadItemRequest;
+
+        private void OnUploadItemRequest(UploadItemEventArgs e)
+        {
+            var handler = TransferUploadItemRequest;
             if (handler != null) handler(this, e);
         }
 
@@ -274,19 +282,28 @@ namespace SharpDc.Managers
                     e.UploadItem.SystemPath = _engine.FileSourceManager.GetBestSource(e.UploadItem.Content.SystemPaths);
                 }
 
+                e.UploadItem.EnableRequestEventFire = _engine.Settings.UploadSourceQualityEnabled;
+
                 e.UploadItem.Error += UploadItemError;
                 e.UploadItem.Disposed += UploadItemDisposed;
+                e.UploadItem.Request += UploadItemRequest;
             }
+        }
+
+        void UploadItemRequest(object sender, UploadItemEventArgs e)
+        {
+            OnUploadItemRequest(e);
         }
 
         private void UploadItemDisposed(object sender, EventArgs e)
         {
             var item = (UploadItem)sender;
             item.Error -= UploadItemError;
+            item.Request -= UploadItemRequest;
             item.Disposed -= UploadItemDisposed;
         }
 
-        private void UploadItemError(object sender, UploadItemErrorEventArgs e)
+        private void UploadItemError(object sender, UploadItemEventArgs e)
         {
             OnUploadItemError(e);
         }

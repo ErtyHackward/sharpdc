@@ -7,6 +7,7 @@
 using System;
 using System.IO;
 using System.Threading;
+using SharpDc.Connections;
 using SharpDc.Logging;
 using SharpDc.Managers;
 
@@ -33,6 +34,8 @@ namespace SharpDc.Structs
 
         #endregion
 
+        internal bool EnableRequestEventFire;
+
         private bool _isDisposed;
         private readonly object _syncRoot = new object();
         private FileStream _fileStream;
@@ -51,14 +54,24 @@ namespace SharpDc.Structs
 
         public int FileStreamReadBufferSize { get; private set; }
 
-        public event EventHandler<UploadItemErrorEventArgs> Error;
+        public event EventHandler<UploadItemEventArgs> Error;
 
-        protected void OnError(UploadItemErrorEventArgs e)
+        protected void OnError(UploadItemEventArgs e)
         {
             e.UploadItem = this;
             var handler = Error;
             if (handler != null) handler(this, e);
         }
+
+        public event EventHandler<UploadItemEventArgs> Request;
+
+        protected virtual void OnRequest(UploadItemEventArgs e)
+        {
+            e.UploadItem = this;
+            var handler = Request;
+            if (handler != null) handler(this, e);
+        }
+
 
         public event EventHandler Disposed;
 
@@ -111,11 +124,13 @@ namespace SharpDc.Structs
         {
             try
             {
+                if (EnableRequestEventFire)
+                    OnRequest(new UploadItemEventArgs());
                 return InternalRead(array, start, count);
             }
             catch (Exception x)
             {
-                OnError(new UploadItemErrorEventArgs { Exception = x });
+                OnError(new UploadItemEventArgs { Exception = x });
                 Logger.Error("Unable to read the data for upload: " + x.Message);
                 return 0;
             }
@@ -148,11 +163,5 @@ namespace SharpDc.Structs
             }
             OnDisposed();
         }
-    }
-
-    public class UploadItemErrorEventArgs : EventArgs
-    {
-        public UploadItem UploadItem { get; set; }
-        public Exception Exception { get; set; }
     }
 }

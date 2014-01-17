@@ -257,6 +257,8 @@ namespace SharpDc
             TransferManager.TransferAdded += TransferManagerTransferAdded;
             TransferManager.TransferRemoved += TransferManagerTransferRemoved;
             TransferManager.TransferUploadItemError += TransferManagerTransferUploadItemError;
+            TransferManager.TransferUploadItemRequest += TransferManager_TransferUploadItemRequest;
+            
             SourceManager = new SourceManager();
             FileSourceManager = new FileSourceManager();
 
@@ -609,9 +611,15 @@ namespace SharpDc
             }
         }
 
-        private void TransferManagerTransferUploadItemError(object sender, UploadItemErrorEventArgs e)
+        private void TransferManagerTransferUploadItemError(object sender, UploadItemEventArgs e)
         {
-            FileSourceManager.RegisterError(e.UploadItem.SystemPath);
+            if (Settings.UploadSourceQualityEnabled)
+                FileSourceManager.RegisterError(e.UploadItem.SystemPath);
+        }
+
+        void TransferManager_TransferUploadItemRequest(object sender, UploadItemEventArgs e)
+        {
+            FileSourceManager.RegisterRequest(e.UploadItem.SystemPath);
         }
 
         private void UdpConnectionSearchResult(object sender, SearchResultEventArgs e)

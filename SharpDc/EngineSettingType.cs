@@ -31,6 +31,7 @@ namespace SharpDc
         NetworkInterface,
         UseSparseFiles,
         AutoSelectPort,
-        BackgroundSeedMode
+        BackgroundSeedMode,
+        UploadSourceQuality
     }
 }

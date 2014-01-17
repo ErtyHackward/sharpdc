@@ -13,12 +13,12 @@ namespace SharpDc.Managers
 {
     /// <summary>
     /// Allows to compare file sources for upload
-    /// In case when the CententItem have more than one SystemPaths
+    /// In case when the ContentItem have more than one SystemPaths
     /// </summary>
     public class FileSourceManager
     {
-        private readonly List<KeyValuePair<string, SpeedAverage>> _fileSources =
-            new List<KeyValuePair<string, SpeedAverage>>();
+        private readonly List<UploadSourceQuality> _fileSources =
+            new List<UploadSourceQuality>();
 
         private readonly object _syncRoot = new object();
 
@@ -38,10 +38,10 @@ namespace SharpDc.Managers
         {
             lock (_syncRoot)
             {
-                if (_fileSources.FindIndex(p => p.Key.StartsWith(fileSource)) != -1)
+                if (_fileSources.FindIndex(p => p.Id.StartsWith(fileSource)) != -1)
                     throw new InvalidOperationException("Alredy have this source or similar");
 
-                _fileSources.Add(new KeyValuePair<string, SpeedAverage>(fileSource, new SpeedAverage(Period, Window)));
+                _fileSources.Add(new UploadSourceQuality(fileSource,Period, Window));
             }
         }
 
@@ -49,11 +49,24 @@ namespace SharpDc.Managers
         {
             lock (_syncRoot)
             {
-                var index = _fileSources.FindIndex(p => filePath.StartsWith(p.Key));
+                var index = _fileSources.FindIndex(p => filePath.StartsWith(p.Id));
 
                 if (index != -1)
                 {
-                    _fileSources[index].Value.Update(1);
+                    _fileSources[index].Errors.Update(1);
+                }
+            }
+        }
+
+        public void RegisterRequest(string filePath)
+        {
+            lock (_syncRoot)
+            {
+                var index = _fileSources.FindIndex(p => filePath.StartsWith(p.Id));
+
+                if (index != -1)
+                {
+                    _fileSources[index].Requests.Update(1);
                 }
             }
         }
@@ -67,8 +80,8 @@ namespace SharpDc.Managers
             {
                 var list = fileSources.Select(s =>
                                                   {
-                                                      var ind = _fileSources.FindIndex(p => s.StartsWith(p.Key));
-                                                      var q = ind == -1 ? 1d : _fileSources[ind].Value.GetSpeed();
+                                                      var ind = _fileSources.FindIndex(p => s.StartsWith(p.Id));
+                                                      var q = ind == -1 ? 1d : _fileSources[ind].Errors.GetSpeed();
                                                       return new KeyValuePair<string, double>(s, q);
                                                   }).ToList();
 
@@ -95,7 +108,7 @@ namespace SharpDc.Managers
             }
         }
 
-        public IEnumerable<KeyValuePair<string, SpeedAverage>> Sources()
+        public IEnumerable<UploadSourceQuality> Sources()
         {
             lock (_syncRoot)
             {

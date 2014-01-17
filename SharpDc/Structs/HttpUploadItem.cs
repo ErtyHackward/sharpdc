@@ -5,6 +5,7 @@
 // -------------------------------------------------------------
 
 using System;
+using SharpDc.Connections;
 using SharpDc.Logging;
 using SharpDc.Managers;
 
@@ -47,7 +48,7 @@ namespace SharpDc.Structs
             }
             catch (Exception x)
             {
-                OnError(new UploadItemErrorEventArgs { Exception = x });
+                OnError(new UploadItemEventArgs { Exception = x });
                 Logger.Error("Http read error: " + x.Message);
                 return false;
             }
@@ -57,7 +58,7 @@ namespace SharpDc.Structs
         {
             if (!ValidateBuffer(start, count))
             {
-                OnError(new UploadItemErrorEventArgs());
+                OnError(new UploadItemEventArgs());
                 return 0;
             }
 
