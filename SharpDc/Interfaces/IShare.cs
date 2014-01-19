@@ -40,9 +40,9 @@ namespace SharpDc.Interfaces
         /// <summary>
         /// Performs share search
         /// </summary>
-        /// <param name="query">query string</param>
+        /// <param name="query"></param>
         /// <param name="limit">results limit, leave 0 for unlimited</param>
-        /// <returns></returns>
+        /// <returns>list of results or null</returns>
         List<ContentItem> Search(SearchQuery query, int limit = 0);
         
         /// <summary>
@@ -66,6 +66,34 @@ namespace SharpDc.Interfaces
         /// </summary>
         /// <returns></returns>
         IEnumerable<ContentItem> OldestItems();
+
+        /// <summary>
+        /// Add specified path to ignore list, this path will not be scanned
+        /// </summary>
+        /// <param name="path"></param>
+        void AddIgnoreDirectory(string path);
+
+        /// <summary>
+        /// Removes specified path from the ignore list
+        /// </summary>
+        /// <param name="path"></param>
+        void RemoveIgnoreDirectory(string path);
+
+        /// <summary>
+        /// Adds directory to scan files from
+        /// Subdirectories included. Use AddIgnoreDirectory to exlude child directory from scanning
+        /// Call Reload to update files
+        /// </summary>
+        /// <param name="systemPath"></param>
+        /// <param name="virtualPath"></param>
+        void AddDirectory(string systemPath, string virtualPath = null);
+
+        /// <summary>
+        /// Removes directory from scan 
+        /// Call Reload to update files
+        /// </summary>
+        /// <param name="systemPath"></param>
+        void RemoveDirectory(string systemPath);
     }
 
     public static class ShareExtensions

@@ -1,7 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System.IO;
+using System.Reflection;
 
 namespace SharpDc.Hash
 {
@@ -11,10 +10,22 @@ namespace SharpDc.Hash
 
         static HashHelper()
         {
+            if (!TigerNative.SelfTest())
+            {
+                // try to setup path for dlls
+                string codeBase = Assembly.GetExecutingAssembly().CodeBase;
+                string path = Uri.UnescapeDataString(codeBase);
+                var dllDirectory = Path.Combine(Path.GetDirectoryName(path), Environment.Is64BitProcess ? "x64" : "x86");
+                Environment.SetEnvironmentVariable("PATH", Environment.GetEnvironmentVariable("PATH") + ";" + dllDirectory);
+            }
+            
             if (TigerNative.SelfTest())
                 _hashCalculator = new ThexThreaded<TigerNative>();
             else
+            {
+                // use managed tth calculation
                 _hashCalculator = new ThexThreaded<softwareunion.Tiger>();
+            }
         }
 
         public static string GetTTH(string filePath)
@@ -25,8 +36,6 @@ namespace SharpDc.Hash
 
         public static string GetTTH(string filePath, out byte[][][] tigerTree)
         {
-
-
             lock (_hashCalculator)
             {
                 tigerTree = _hashCalculator.GetTTHTree(filePath);

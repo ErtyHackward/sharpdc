@@ -10,6 +10,7 @@
 
 
 using System;
+using System.Runtime.CompilerServices;
 using HashAlgorithm=System.Security.Cryptography.HashAlgorithm;
 
 
@@ -128,70 +129,6 @@ namespace softwareunion
 		/// <param name="inputCount">How many bytes need to be processed.</param>
 		/// <returns>The results of the completed hash calculation.</returns>
 		protected abstract byte[] ProcessFinalBlock(byte[] inputBuffer,int inputOffset,int inputCount);
-
-
-		internal static class BitTools
-		{
-			public static UInt16 RotLeft(UInt16 v,int b)
-			{
-				UInt32 i=v; i<<=16; i|=v;
-				b%=16; i>>=b;
-				return (UInt16)i;
-			}
-			public static UInt32 RotLeft(UInt32 v,int b)
-			{
-				UInt64 i=v; i<<=32; i|=v;
-				b%=32; i>>=(32-b);
-				return (UInt32)i;
-			}
-
-			public static void TypeBlindCopy(byte[] sourceArray,int sourceIndex,
-					UInt32[] destinationArray,int destinationIndex,int sourceLength)
-			{
-				if(sourceIndex+sourceLength>sourceArray.Length ||
-						destinationIndex+(sourceLength+3)/4>destinationArray.Length ||
-						sourceLength%4!=0)
-					throw new ArgumentException("BitTools.TypeBlindCopy: index or length boundary mismatch.");
-
-				int iCtr; for(iCtr=0;iCtr<sourceLength;iCtr+=4,sourceIndex+=4,++destinationIndex)
-					destinationArray[destinationIndex]=BitConverter.ToUInt32(sourceArray,sourceIndex);
-			}
-			public static void TypeBlindCopy(UInt32[] sourceArray,int sourceIndex,
-					byte[] destinationArray,int destinationIndex,int sourceLength)
-			{
-				if(sourceIndex+sourceLength>sourceArray.Length ||
-						destinationIndex+sourceLength*4>destinationArray.Length)
-					throw new ArgumentException("BitTools.TypeBlindCopy: index or length boundary mismatch.");
-
-				int iCtr; for(iCtr=0;iCtr<sourceLength;++iCtr,++sourceIndex,destinationIndex+=4)
-					Array.Copy(BitConverter.GetBytes(sourceArray[sourceIndex]),
-							0,destinationArray,destinationIndex,4);
-			}
-			public static void TypeBlindCopy(byte[] sourceArray,int sourceIndex,
-					UInt64[] destinationArray,int destinationIndex,int sourceLength)
-			{
-				if(sourceIndex+sourceLength>sourceArray.Length ||
-						destinationIndex+(sourceLength+7)/8>destinationArray.Length ||
-						sourceLength%8!=0)
-					throw new ArgumentException("BitTools.TypeBlindCopy: index or length boundary mismatch.");
-
-				int iCtr; for(iCtr=0;iCtr<sourceLength;iCtr+=8,sourceIndex+=8,++destinationIndex)
-					destinationArray[destinationIndex]=BitConverter.ToUInt64(sourceArray,sourceIndex);
-			}
-			public static void TypeBlindCopy(UInt64[] sourceArray,int sourceIndex,
-					byte[] destinationArray,int destinationIndex,int sourceLength)
-			{
-				if(sourceIndex+sourceLength>sourceArray.Length ||
-						destinationIndex+sourceLength*8>destinationArray.Length)
-					throw new ArgumentException("BitTools.TypeBlindCopy: index or length boundary mismatch.");
-
-				int iCtr; for(iCtr=0;iCtr<sourceLength;++iCtr,++sourceIndex,destinationIndex+=8)
-					Array.Copy(BitConverter.GetBytes(sourceArray[sourceIndex]),
-							0,destinationArray,destinationIndex,8);
-			}
-
-		}
-
 	}
 
 	public partial class Tiger:BlockHashAlgorithm
@@ -200,93 +137,242 @@ namespace softwareunion
 		private ulong[] accu, x;
 
 		public Tiger():base(64,192)
-		{	Initialize();
+		{	
+            Initialize();
 		}
 
 		public override void Initialize()
 		{
 			base.Initialize();
 
-			accu=new ulong[] { 0x0123456789ABCDEFUL, 0xFEDCBA9876543210UL, 0xF096A5B4C3B2E187UL };
+			accu=new[] { 0x0123456789ABCDEFUL, 0xFEDCBA9876543210UL, 0xF096A5B4C3B2E187UL };
 
 			if(x==null) x=new ulong[8];
 			else Array.Resize(ref x,8);
 			Array.Clear(x,0,8);
 		}
 
-		private void Round(ref ulong x,ref ulong y,uint zh,uint zl)
-		{	
-			x -=   t1[(byte)zl] ^ t2[(byte)(zl>>16)]
-                 ^ t3[(byte)zh] ^ t4[(byte)(zh>>16)];
-			y +=   t4[(byte)(zl>>8)] ^ t3[(byte)(zl>>24)]
-                 ^ t2[(byte)(zh>>8)] ^ t1[(byte)(zh>>24)];
-		}
-
-		private void KeySchedule(ref ulong x0, ref ulong x1, ref ulong x2, ref ulong x3,
-				ref ulong x4, ref ulong x5, ref ulong x6, ref ulong x7)
-		{
-			x0 -= x7 ^ 0xA5A5A5A5A5A5A5A5UL;
-			x1 ^= x0;
-			x2 += x1;
-			x3 -= x2 ^ ((~x1) << 19);
-			x4 ^= x3;
-			x5 += x4;
-			x6 -= x5 ^ ((ulong)(~x4) >> 23);
-			x7 ^= x6;
-			x0 += x7;
-			x1 -= x0 ^ ((~x7) << 19);
-			x2 ^= x1;
-			x3 += x2;
-			x4 -= x3 ^ ((ulong)(~x2) >> 23);
-			x5 ^= x4;
-			x6 += x5;
-			x7 -= x6 ^ 0x0123456789ABCDEFUL;
-		}
-
 		protected override void ProcessBlock(byte[] inputBuffer,int inputOffset,int iBlkCount)
-		{	ulong a=accu[0], b=accu[1], c=accu[2],
+		{	
+            ulong a=accu[0], b=accu[1], c=accu[2],
 			      x0, x1, x2, x3, x4, x5, x6, x7;
-			
-			int i,iSpaceNeeded=iBlkCount*8;
-			if(x.Length<iSpaceNeeded) Array.Resize(ref x,iSpaceNeeded);
-			BitTools.TypeBlindCopy(inputBuffer,inputOffset,x,0,iBlkCount*i_InputBlockSize);
+
+            int i;
 			
 			for(i=-1;iBlkCount>0;--iBlkCount,inputOffset+=i_InputBlockSize)
-			{	
-				x0=x[++i]; x1=x[++i]; x2=x[++i]; x3=x[++i];
-				x4=x[++i]; x5=x[++i]; x6=x[++i]; x7=x[++i];
+			{
+                x0 = BitConverter.ToUInt64(inputBuffer, ++i * 8);
+                x1 = BitConverter.ToUInt64(inputBuffer, ++i * 8);
+                x2 = BitConverter.ToUInt64(inputBuffer, ++i * 8);
+                x3 = BitConverter.ToUInt64(inputBuffer, ++i * 8);
+                x4 = BitConverter.ToUInt64(inputBuffer, ++i * 8);
+                x5 = BitConverter.ToUInt64(inputBuffer, ++i * 8);
+                x6 = BitConverter.ToUInt64(inputBuffer, ++i * 8);
+                x7 = BitConverter.ToUInt64(inputBuffer, ++i * 8);
 
 				// rounds and schedule
-				c^=x0; Round(ref a,ref b,(uint)(c>>32),(uint)c); b*=5;
-				a^=x1; Round(ref b,ref c,(uint)(a>>32),(uint)a); c*=5;
-				b^=x2; Round(ref c,ref a,(uint)(b>>32),(uint)b); a*=5;
-				c^=x3; Round(ref a,ref b,(uint)(c>>32),(uint)c); b*=5;
-				a^=x4; Round(ref b,ref c,(uint)(a>>32),(uint)a); c*=5;
-				b^=x5; Round(ref c,ref a,(uint)(b>>32),(uint)b); a*=5;
-				c^=x6; Round(ref a,ref b,(uint)(c>>32),(uint)c); b*=5;
-				a^=x7; Round(ref b,ref c,(uint)(a>>32),(uint)a); c*=5;
+				c^=x0;
+                var zh = (uint)(c >> 32);
+                var zl = (uint)c;
+                a -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                b += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                b*=5;
 
-				KeySchedule(ref x0, ref x1, ref x2, ref x3, ref x4, ref x5, ref x6, ref x7);
+				a^=x1;
+                zh = (uint)(a >> 32);
+                zl = (uint)a;
+                b -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                c += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                c*=5;
 
-				b^=x0; Round(ref c,ref a,(uint)(b>>32),(uint)b); a*=7;
-				c^=x1; Round(ref a,ref b,(uint)(c>>32),(uint)c); b*=7;
-				a^=x2; Round(ref b,ref c,(uint)(a>>32),(uint)a); c*=7;
-				b^=x3; Round(ref c,ref a,(uint)(b>>32),(uint)b); a*=7;
-				c^=x4; Round(ref a,ref b,(uint)(c>>32),(uint)c); b*=7;
-				a^=x5; Round(ref b,ref c,(uint)(a>>32),(uint)a); c*=7;
-				b^=x6; Round(ref c,ref a,(uint)(b>>32),(uint)b); a*=7;
-				c^=x7; Round(ref a,ref b,(uint)(c>>32),(uint)c); b*=7;
+				b^=x2;
+                zh = (uint)(b >> 32);
+                zl = (uint)b;
+                c -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                a += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                a*=5;
 
-				KeySchedule(ref x0,ref x1,ref x2,ref x3,ref x4,ref x5,ref x6,ref x7);
+				c^=x3;
+                zh = (uint)(c >> 32);
+                zl = (uint)c;
+                a -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                b += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                b*=5;
 
-				a^=x0; Round(ref b,ref c,(uint)(a>>32),(uint)a); c*=9;
-				b^=x1; Round(ref c,ref a,(uint)(b>>32),(uint)b); a*=9;
-				c^=x2; Round(ref a,ref b,(uint)(c>>32),(uint)c); b*=9;
-				a^=x3; Round(ref b,ref c,(uint)(a>>32),(uint)a); c*=9;
-				b^=x4; Round(ref c,ref a,(uint)(b>>32),(uint)b); a*=9;
-				c^=x5; Round(ref a,ref b,(uint)(c>>32),(uint)c); b*=9;
-				a^=x6; Round(ref b,ref c,(uint)(a>>32),(uint)a); c*=9;
-				b^=x7; Round(ref c,ref a,(uint)(b>>32),(uint)b); a*=9;
+				a^=x4;
+                zh = (uint)(a >> 32);
+                zl = (uint)a;
+                b -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                c += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                c*=5;
+
+				b^=x5;
+                zh = (uint)(b >> 32);
+                zl = (uint)b;
+                c -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                a += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                a*=5;
+
+				c^=x6;
+                zh = (uint)(c >> 32);
+                zl = (uint)c;
+                a -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                b += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                b*=5;
+
+				a^=x7;
+                zh = (uint)(a >> 32);
+                zl = (uint)a;
+                b -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                c += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                c*=5;
+
+                x0 -= x7 ^ 0xA5A5A5A5A5A5A5A5UL;
+                x1 ^= x0;
+                x2 += x1;
+                x3 -= x2 ^ ((~x1) << 19);
+                x4 ^= x3;
+                x5 += x4;
+                x6 -= x5 ^ (~x4 >> 23);
+                x7 ^= x6;
+                x0 += x7;
+                x1 -= x0 ^ ((~x7) << 19);
+                x2 ^= x1;
+                x3 += x2;
+                x4 -= x3 ^ (~x2 >> 23);
+                x5 ^= x4;
+                x6 += x5;
+                x7 -= x6 ^ 0x0123456789ABCDEFUL;
+
+
+				b^=x0;
+                zh = (uint)(b >> 32);
+                zl = (uint)b;
+                c -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                a += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                a*=7;
+
+				c^=x1;
+                zh = (uint)(c >> 32);
+                zl = (uint)c;
+                a -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                b += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                b*=7;
+
+				a^=x2;
+                zh = (uint)(a >> 32);
+                zl = (uint)a;
+                b -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                c += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                c*=7;
+
+				b^=x3;
+                zh = (uint)(b >> 32);
+                zl = (uint)b;
+                c -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                a += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                a*=7;
+
+				c^=x4;
+                zh = (uint)(c >> 32);
+                zl = (uint)c;
+                a -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                b += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                b*=7;
+
+				a^=x5;
+                zh = (uint)(a >> 32);
+                zl = (uint)a;
+                b -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                c += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                c*=7;
+
+				b^=x6;
+                zh = (uint)(b >> 32);
+                zl = (uint)b;
+                c -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                a += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                a*=7;
+
+				c^=x7;
+                zh = (uint)(c >> 32);
+                zl = (uint)c;
+                a -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                b += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                b*=7;
+
+                x0 -= x7 ^ 0xA5A5A5A5A5A5A5A5UL;
+                x1 ^= x0;
+                x2 += x1;
+                x3 -= x2 ^ ((~x1) << 19);
+                x4 ^= x3;
+                x5 += x4;
+                x6 -= x5 ^ (~x4 >> 23);
+                x7 ^= x6;
+                x0 += x7;
+                x1 -= x0 ^ ((~x7) << 19);
+                x2 ^= x1;
+                x3 += x2;
+                x4 -= x3 ^ (~x2 >> 23);
+                x5 ^= x4;
+                x6 += x5;
+                x7 -= x6 ^ 0x0123456789ABCDEFUL;
+
+				a^=x0;
+                zh = (uint)(a >> 32);
+                zl = (uint)a;
+                b -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                c += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                c*=9;
+
+				b^=x1;
+                zh = (uint)(b >> 32);
+                zl = (uint)b;
+                c -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                a += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                a*=9;
+
+				c^=x2;
+                zh = (uint)(c >> 32);
+                zl = (uint)c;
+                a -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                b += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                b*=9;
+
+				a^=x3;
+                zh = (uint)(a >> 32);
+                zl = (uint)a;
+                b -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                c += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                c*=9;
+
+				b^=x4;
+                zh = (uint)(b >> 32);
+                zl = (uint)b;
+                c -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                a += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                a*=9;
+
+				c^=x5;
+                zh = (uint)(c >> 32);
+                zl = (uint)c;
+                a -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                b += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                b*=9;
+
+				a^=x6;
+                zh = (uint)(a >> 32);
+                zl = (uint)a;
+                b -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                c += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                c*=9;
+
+				b^=x7;
+                zh = (uint)(b >> 32);
+                zl = (uint)b;
+                c -= t1[(byte)zl] ^ t2[(byte)(zl >> 16)] ^ t3[(byte)zh] ^ t4[(byte)(zh >> 16)];
+                a += t4[(byte)(zl >> 8)] ^ t3[(byte)(zl >> 24)] ^ t2[(byte)(zh >> 8)] ^ t1[(byte)(zh >> 24)];
+                a*=9;
 
 				// feed forward
 				a=accu[0]^=a; b-=accu[1]; accu[1]=b; c=accu[2]+=c;
@@ -322,7 +408,8 @@ namespace softwareunion
 
 
 			HashValue=new byte[HashSizeValue/8];
-			BitTools.TypeBlindCopy(accu,0,HashValue,0,3); return HashValue;
+            Buffer.BlockCopy(accu, 0, HashValue, 0, 3 * sizeof(ulong));
+            return HashValue;
 		}
 
 	}
