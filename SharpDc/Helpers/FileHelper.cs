@@ -178,7 +178,7 @@ namespace SharpDc.Helpers
 #else
             // 10 times faster than System.IO.File.Exists()
             var s = new STAT();
-            return _stat(path, ref s) == 0;
+            return _stat64(path, ref s) == 0;
 #endif
         }
 
@@ -193,11 +193,19 @@ namespace SharpDc.Helpers
             // 10 times faster than System.IO.File.Exists()
             var s = new STAT();
 
-            var result =_stat(path, ref s);
-            lastWriteTime = DateTime.FromFileTime(s.st_mtime);
+            var result = _stat64(path, ref s);
+            lastWriteTime = UnixTimeStampToDateTime(s.st_mtime);
             size = s.st_size;
             return result == 0;
 #endif
+        }
+
+        public static DateTime UnixTimeStampToDateTime(double unixTimeStamp)
+        {
+            // Unix timestamp is seconds past epoch
+            var dtDateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0);
+            dtDateTime = dtDateTime.AddSeconds(unixTimeStamp).ToLocalTime();
+            return dtDateTime;
         }
 
         /// <summary>
@@ -229,10 +237,10 @@ namespace SharpDc.Helpers
                                                       out long lpTotalNumberOfFreeBytes);
 
         [DllImport("msvcrt.dll", SetLastError = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int _stat(string file, ref STAT buf);
+        private static extern int _stat64(string file, ref STAT buf);
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct STAT
+        struct STAT
         {
             public uint st_dev;
             public ushort st_ino;
@@ -241,10 +249,10 @@ namespace SharpDc.Helpers
             public short st_uid;
             public short st_gid;
             public uint st_rdev;
-            public uint st_size;
-            public uint st_atime;
-            public uint st_mtime;
-            public uint st_ctime;
+            public long st_size;
+            public long st_atime;
+            public long st_mtime;
+            public long st_ctime;
         }
 
 #endif
