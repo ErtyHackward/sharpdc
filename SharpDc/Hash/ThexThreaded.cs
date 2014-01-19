@@ -47,7 +47,9 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.IO;
 using System.Threading.Tasks;
+using SharpDc.Helpers;
 using SharpDc.Logging;
+using ThreadPriority = System.Threading.ThreadPriority;
 
 namespace SharpDc.Hash
 {
@@ -201,10 +203,11 @@ namespace SharpDc.Hash
 
 		void ProcessLeafs(object threadId)
 		{
+            using (ThreadUtility.EnterBackgroundProcessingMode())
             using (var ThreadFilePtr = new FileStream(Filename, FileMode.Open, FileAccess.Read, FileShare.Read))
 		    {
 		        FileBlock ThreadFileBlock = FileParts[(int)threadId];
-		        T TG = new T();
+		        var TG = new T();
 		        byte[] DataBlock;
 		        byte[] Data = new byte[LeafSize + 1];
 		        int LeafIndex, BlockLeafs;

@@ -19,6 +19,9 @@ namespace SharpDc.Managers
         private string[] _systemPaths;
         private string _virtualPath;
         private DateTime _createDate;
+        private ulong _uploadedBytes;
+        private DateTime _fileLastWrite;
+        private DateTime _lastAccess;
 
         /// <summary>
         /// Gets or sets content file magnet
@@ -64,12 +67,36 @@ namespace SharpDc.Managers
             set { _createDate = value; }
         }
 
+        /// <summary>
+        /// Total uploaded bytes of this item
+        /// </summary>
+        public ulong UploadedBytes
+        {
+            get { return _uploadedBytes; }
+            set { _uploadedBytes = value; }
+        }
+
+        public DateTime FileLastWrite
+        {
+            get { return _fileLastWrite; }
+            set { _fileLastWrite = value; }
+        }
+
+        public DateTime LastAccess
+        {
+            get { return _lastAccess; }
+            set { _lastAccess = value; }
+        }
+
         public ContentItem(DownloadItem item)
         {
             _magnet = item.Magnet;
             _systemPaths = item.SaveTargets.ToArray();
             _virtualPath = "Downloads\\" + _magnet.FileName;
             _createDate = DateTime.Now;
+            _uploadedBytes = 0;
+            _fileLastWrite = DateTime.MinValue;
+            _lastAccess = new DateTime();
         }
 
         public void AddSystemPath(string path)

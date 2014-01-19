@@ -83,7 +83,7 @@ namespace SharpDc.Messages
         }
     }
 
-    public enum SearchType
+    public enum SearchType : byte
     {
         Any = 1,
         Audio = 2,

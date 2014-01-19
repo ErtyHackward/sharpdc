@@ -182,6 +182,24 @@ namespace SharpDc.Helpers
 #endif
         }
 
+        public static bool FileExists(string path, out long size,  out DateTime lastWriteTime)
+        {
+#if MONO
+            var fi = new FileInfo(path);
+            lastWriteTime = fi.LastWriteTime;
+            size = fi.Length;
+            return fi.Exists
+#else
+            // 10 times faster than System.IO.File.Exists()
+            var s = new STAT();
+
+            var result =_stat(path, ref s);
+            lastWriteTime = DateTime.FromFileTime(s.st_mtime);
+            size = s.st_size;
+            return result == 0;
+#endif
+        }
+
         /// <summary>
         /// Try to delete file
         /// </summary>

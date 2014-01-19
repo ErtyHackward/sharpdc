@@ -140,6 +140,39 @@ namespace SharpDc.Managers
             }
         }
 
+        /// <summary>
+        /// Not supported
+        /// </summary>
+        /// <param name="path"></param>
+        public void AddIgnoreDirectory(string path)
+        {
+            throw new NotSupportedException();
+        }
+
+        /// <summary>
+        /// Not supported
+        /// </summary>
+        public void RemoveIgnoreDirectory(string path)
+        {
+            throw new NotSupportedException();
+        }
+
+        /// <summary>
+        /// Not supported
+        /// </summary>
+        public void AddDirectory(string systemPath, string virtualPath = null)
+        {
+            throw new NotSupportedException();
+        }
+
+        /// <summary>
+        /// Not supported
+        /// </summary>
+        public void RemoveDirectory(string systemPath)
+        {
+            throw new NotSupportedException();
+        }
+
         public List<ContentItem> SearchByTth(string tth)
         {
             return Search(new SearchQuery { Query = tth, SearchType = SearchType.TTH });
