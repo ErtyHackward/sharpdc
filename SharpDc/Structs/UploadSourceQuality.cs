@@ -24,7 +24,13 @@ namespace SharpDc.Structs
         /// </summary>
         public double ErrorsPercent
         {
-            get { return Errors.GetSpeed() / Requests.GetSpeed(); }
+            get
+            {
+                var reqs = Requests.GetSpeed();
+                if (reqs == 0)
+                    return 0;
+                return Errors.GetSpeed() / reqs;
+            }
         }
 
         public UploadSourceQuality(string id, TimeSpan period, TimeSpan window)

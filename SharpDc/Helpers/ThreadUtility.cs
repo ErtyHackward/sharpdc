@@ -7,6 +7,14 @@ namespace SharpDc.Helpers
 {
     public static class ThreadUtility
     {
+        private static bool _isLinux;
+
+        static ThreadUtility()
+        {
+            var p = (int)Environment.OSVersion.Platform;
+            _isLinux = (p == 4) || (p == 6) || (p == 128);
+        }
+
         /// <summary>
         /// Runs the action in the background processing mode (low io and cpu priority)
         /// </summary>
@@ -29,6 +37,9 @@ namespace SharpDc.Helpers
         [SecurityPermission(SecurityAction.Demand, Flags = SecurityPermissionFlag.ControlThread)]
         public static Scope EnterBackgroundProcessingMode()
         {
+            if (_isLinux)
+                return Scope.Empty;
+
             Thread.BeginThreadAffinity();
             IntPtr hThread = NativeMethods.GetCurrentThread();
             if (IsWindowsVista() && NativeMethods.SetThreadPriority(hThread,
@@ -66,6 +77,9 @@ namespace SharpDc.Helpers
 
         public static bool BeginBackgroundProcessing()
         {
+            if (_isLinux)
+                return false;
+
             Thread.BeginThreadAffinity();
             IntPtr hThread = NativeMethods.GetCurrentThread();
             return IsWindowsVista() && NativeMethods.SetThreadPriority(hThread, ThreadPriority.THREAD_MODE_BACKGROUND_BEGIN);
