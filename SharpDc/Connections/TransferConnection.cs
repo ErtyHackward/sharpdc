@@ -545,6 +545,12 @@ namespace SharpDc.Connections
                 _readBuffer = new byte[1024 * 64];
             }
 
+            if (adcgetMessage.Start >= UploadItem.Content.Magnet.Size)
+            {
+                SendMessage(new ErrorMessage { Error = "File Not Available" }.Raw);
+                return;
+            }
+
             if (adcgetMessage.Start + adcgetMessage.Length > UploadItem.Content.Magnet.Size)
             {
                 Logger.Warn("Trim ADCGET length to file actual length {0}/{1}",
