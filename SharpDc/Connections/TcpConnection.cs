@@ -23,12 +23,10 @@ namespace SharpDc.Connections
     /// </summary>
     public abstract class TcpConnection : IDisposable
     {
-        private const int SendTimeout = 4000;
-
         private static readonly ILogger Logger = LogManager.GetLogger();
 
         internal static int DefaultConnectionBufferSize = 1024 * 64;
-
+        
         protected struct SendTask
         {
             public byte[] Buffer;
@@ -44,6 +42,9 @@ namespace SharpDc.Connections
         private DateTime _lastUpdate = DateTime.Now;
         protected bool _closingSocket;
         private byte[] _connectionBuffer;
+        private volatile bool _sendThreadActive;
+        private int _receiveTimeout;
+        private int _sendTimeout = 4000;
 
         private readonly object _sendLock = new object();
         private readonly object _threadLock = new object();
@@ -54,6 +55,19 @@ namespace SharpDc.Connections
         public Socket Socket
         {
             get { return _socket; }
+        }
+
+
+        public int ReceiveTimeout
+        {
+            get { return _receiveTimeout; }
+            set { _receiveTimeout = value; }
+        }
+
+        public int SendTimeout
+        {
+            get { return _sendTimeout; }
+            set { _sendTimeout = value; }
         }
 
         /// <summary>
@@ -120,6 +134,8 @@ namespace SharpDc.Connections
         /// </summary>
         public int ConnectionBufferSize { get; set; }
 
+
+
         #region Events
 
         /// <summary>
@@ -131,6 +147,18 @@ namespace SharpDc.Connections
         {
             var handler = ConnectionStatusChanged;
             if (handler != null) handler(this, e);
+        }
+
+        /// <summary>
+        /// Occurs only if ReceiveTimeout is not zero
+        /// Allows to interrupt the connection
+        /// </summary>
+        public event EventHandler ReceiveTimeoutHit;
+
+        protected virtual void OnReadTimeout()
+        {
+            var handler = ReceiveTimeoutHit;
+            if (handler != null) handler(this, EventArgs.Empty);
         }
 
         #endregion
@@ -171,6 +199,7 @@ namespace SharpDc.Connections
 
             _socket = socket;
             _socket.SendTimeout = SendTimeout;
+            _socket.ReceiveTimeout = ReceiveTimeout;
             LocalAddress = (IPEndPoint)_socket.LocalEndPoint;
             _connectionStatus = _socket.Connected ? ConnectionStatus.Connected : ConnectionStatus.Disconnected;
             try
@@ -235,6 +264,7 @@ namespace SharpDc.Connections
                     {
                         _socket = new Socket(RemoteEndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
                         _socket.SendTimeout = SendTimeout;
+                        _socket.ReceiveTimeout = ReceiveTimeout;
                     }
                     _closingSocket = false;
                 }
@@ -271,25 +301,31 @@ namespace SharpDc.Connections
                     LocalAddress = (IPEndPoint)_socket.LocalEndPoint;
 
                     SetConnectionStatus(ConnectionStatus.Connected);
+
+                    SendFirstMessages();
                 }
-
-                SendFirstMessages();
-
+                
                 if (_connectionBuffer == null || _connectionBuffer.Length != ConnectionBufferSize)
                     _connectionBuffer = new byte[ConnectionBufferSize];
 
-                int bytesReceived;
-
-                while (_connectionStatus == ConnectionStatus.Connected &&
-                       (bytesReceived = _socket.Receive(_connectionBuffer)) != 0)
+                while (_connectionStatus == ConnectionStatus.Connected)
                 {
-                    if (_connectionBuffer != null)
+                    if (ReceiveTimeout > 0)
                     {
-                        _downloadSpeed.Update(bytesReceived);
-                        _lastUpdate = DateTime.Now;
-                        ParseRaw(_connectionBuffer, bytesReceived);
-                        DownloadSpeedLimit.Update(bytesReceived);
-                        DownloadSpeedLimitGlobal.Update(bytesReceived);
+                        if (_socket.Poll(1000 * ReceiveTimeout, SelectMode.SelectRead))
+                        {
+                            if (!ReceiveInternal())
+                                break;
+                        }
+                        else
+                        {
+                            OnReadTimeout();
+                        }
+                    }
+                    else
+                    {
+                        if (!ReceiveInternal())
+                            break;
                     }
                 }
 
@@ -299,6 +335,25 @@ namespace SharpDc.Connections
             {
                 SetConnectionStatus(ConnectionStatus.Disconnected, x);
             }
+        }
+
+        private bool ReceiveInternal()
+        {
+            var bytesReceived = _socket.Receive(_connectionBuffer);
+
+            if (bytesReceived == 0)
+                return false;
+
+            if (_connectionBuffer != null)
+            {
+                _downloadSpeed.Update(bytesReceived);
+                _lastUpdate = DateTime.Now;
+                ParseRaw(_connectionBuffer, bytesReceived);
+                DownloadSpeedLimit.Update(bytesReceived);
+                DownloadSpeedLimitGlobal.Update(bytesReceived);
+            }
+
+            return true;
         }
 
         protected abstract void ParseRaw(byte[] buffer, int length);
@@ -419,9 +474,7 @@ namespace SharpDc.Connections
                 }
             }
         }
-
-        private volatile bool _sendThreadActive;
-
+        
         private void SendDelayed()
         {
             while (true)

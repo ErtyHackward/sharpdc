@@ -116,10 +116,6 @@ namespace SharpDc.Structs
             lock (_syncRoot)
             {
                 RemoveOldValues();
-
-                if (_buffer.Count == 0)
-                    return 0;
-
                 return (_buffer.Sum(pair => pair.Value) + _accumulated) / _period.TotalSeconds;
             }
         }

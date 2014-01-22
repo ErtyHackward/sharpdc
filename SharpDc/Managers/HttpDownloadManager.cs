@@ -32,6 +32,8 @@ namespace SharpDc.Managers
         /// Maximum connections allowed per-server 
         /// </summary>
         public int ConnectionsPerServer { get; set; }
+        
+        public int ReceiveTimeout { get; set; }
 
         /// <summary>
         /// Gets maximum queue size per pool
@@ -96,7 +98,7 @@ namespace SharpDc.Managers
 
             task.Event.Wait();
 
-            if (CacheSize > 0)
+            if (CacheSize > 0 && task.Completed)
             {
                 segment.Url = url;
                 segment.Position = filePos;
@@ -129,7 +131,8 @@ namespace SharpDc.Managers
                             {
                                 Server = server,
                                 ConnectionsLimit = ConnectionsPerServer,
-                                QueueLimit = QueueLimit
+                                QueueLimit = QueueLimit,
+                                ReceiveTimeout = ReceiveTimeout
                             };
 
                 _pools.Add(p);

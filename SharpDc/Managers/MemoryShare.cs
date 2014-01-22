@@ -259,16 +259,21 @@ namespace SharpDc.Managers
 
         public void ExportAsXml(string filePath)
         {
-            var xml = new XmlSerializer(GetType());
-
             if (File.Exists(filePath))
                 File.Delete(filePath);
 
             using (var fs = File.OpenWrite(filePath))
             {
-                xml.Serialize(fs, this);
+                ExportAsXml(fs);
             }
         }
+
+        public void ExportAsXml(Stream stream)
+        {
+            var xml = new XmlSerializer(GetType());
+            xml.Serialize(stream, this);
+        }
+
 
         public void ImportFromXml(string filePath)
         {
@@ -279,12 +284,16 @@ namespace SharpDc.Managers
 
         public static MemoryShare CreateFromXml(string filePath)
         {
-            var xml = new XmlSerializer(typeof(MemoryShare));
-            
             using (var fs = File.OpenRead(filePath))
             {
-                return (MemoryShare)xml.Deserialize(fs);
+                return CreateFromXml(fs);
             }
+        }
+
+        public static MemoryShare CreateFromXml(Stream stream)
+        {
+            var xml = new XmlSerializer(typeof(MemoryShare));
+            return (MemoryShare)xml.Deserialize(stream);
         }
     }
 }

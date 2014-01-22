@@ -21,6 +21,11 @@ namespace SharpDc.Structs
         public ManualResetEventSlim Event;
         public HttpConnection Connection;
 
+        public double ExecutionTime
+        {
+            get { return (double)(Stopwatch.GetTimestamp() - CreatedTimestamp) / Stopwatch.Frequency; }
+        }
+
         private int _pos;
 
         public HttpTask()
