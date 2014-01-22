@@ -40,7 +40,7 @@ namespace SharpDc.Managers
 
         /// <summary>
         /// Maximum idle time of download connections before disconnect, in seconds
-        /// Default: 5
+        /// Default: 60
         /// </summary>
         public int DownloadInactivityTimeout { get; set; }
 
@@ -140,7 +140,7 @@ namespace SharpDc.Managers
         public TransferManager(DcEngine engine)
         {
             ConnectionWaitTimeout = 30;
-            DownloadInactivityTimeout = 5;
+            DownloadInactivityTimeout = 60;
             UploadInactivityTimeout = 30;
 
             _engine = engine;
@@ -279,7 +279,7 @@ namespace SharpDc.Managers
             {
                 if (e.UploadItem.Content.SystemPaths != null && e.UploadItem.Content.SystemPaths.Length > 1)
                 {
-                    e.UploadItem.SystemPath = _engine.FileSourceManager.GetBestSource(e.UploadItem.Content.SystemPaths);
+                    e.UploadItem.SystemPath = _engine.FileSourceManager.GetBestSource(e.UploadItem);
                 }
 
                 e.UploadItem.EnableRequestEventFire = _engine.Settings.UploadSourceQualityEnabled;

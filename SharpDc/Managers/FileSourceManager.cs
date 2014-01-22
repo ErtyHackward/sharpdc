@@ -6,7 +6,9 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using SharpDc.Hash;
 using SharpDc.Structs;
 
 namespace SharpDc.Managers
@@ -24,6 +26,16 @@ namespace SharpDc.Managers
 
         private readonly Random _random = new Random();
 
+        /// <summary>
+        /// Gets or sets best source selection algorithm
+        /// </summary>
+        public SourceSelectionMode SelectionMode { get; set; }
+
+        /// <summary>
+        /// Gets or sets error percent difference between sources in hash based source picking
+        /// </summary>
+        public float ErrorThresold { get; set; }
+
         public TimeSpan Period { get; set; }
 
         public TimeSpan Window { get; set; }
@@ -32,6 +44,7 @@ namespace SharpDc.Managers
         {
             Period = TimeSpan.FromMinutes(5);
             Window = TimeSpan.FromSeconds(10);
+            ErrorThresold = 0.02f; // 2% difference is acceptable
         }
 
         public void RegisterSource(string fileSource)
@@ -71,7 +84,41 @@ namespace SharpDc.Managers
             }
         }
 
-        public string GetBestSource(string[] fileSources)
+        public string GetBestSource(UploadItem item)
+        {
+            switch (SelectionMode)
+            {
+                case SourceSelectionMode.RandomWithAbsoluteErrorCount:
+                    return RandomWithAbsoluteErrorCountSelection(item.Content.SystemPaths);
+                case SourceSelectionMode.HashBasedWithErrorThresold:
+                    return HashBasedWithErrorThresoldSelection(item.Content.Magnet.TTH, item.Content.SystemPaths);
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+        }
+
+        public string HashBasedWithErrorThresoldSelection(string fileToken, string[] fileSources)
+        {
+            var fileHash = Md5Hash.Calculate(fileToken);
+
+            var sourcesByHash = fileSources.OrderBy(s => Md5Hash.Calculate(s) ^ fileHash).Select(s => s).ToList();
+
+            for (int i = 0; i < sourcesByHash.Count - 1; i++)
+            {
+                if (GetErrorsPercent(sourcesByHash[i]) - ErrorThresold <= GetErrorsPercent(sourcesByHash[i + 1]))
+                    return sourcesByHash[i];
+            }
+
+            return sourcesByHash[sourcesByHash.Count - 1];
+        }
+
+        private double GetErrorsPercent(string source)
+        {
+            var ind = _fileSources.FindIndex(p => source.StartsWith(p.Id));
+            return ind == -1 ? 0d : _fileSources[ind].ErrorsPercent;
+        }
+
+        private string RandomWithAbsoluteErrorCountSelection(string[] fileSources)
         {
             if (fileSources.Length == 1)
                 return fileSources[0];
@@ -79,11 +126,11 @@ namespace SharpDc.Managers
             lock (_syncRoot)
             {
                 var list = fileSources.Select(s =>
-                                                  {
-                                                      var ind = _fileSources.FindIndex(p => s.StartsWith(p.Id));
-                                                      var q = ind == -1 ? 1d : _fileSources[ind].Errors.GetSpeed();
-                                                      return new KeyValuePair<string, double>(s, q);
-                                                  }).ToList();
+                {
+                    var ind = _fileSources.FindIndex(p => s.StartsWith(p.Id));
+                    var q = ind == -1 ? 1d : _fileSources[ind].Errors.GetSpeed();
+                    return new KeyValuePair<string, double>(s, q);
+                }).ToList();
 
                 list.Sort((s1, s2) => s1.Value.CompareTo(s2.Value));
 
@@ -118,5 +165,17 @@ namespace SharpDc.Managers
                 }
             }
         }
+    }
+
+    public enum SourceSelectionMode
+    {
+        /// <summary>
+        /// Choose random source when equal errors count, otherwise choose the source with less errors
+        /// </summary>
+        RandomWithAbsoluteErrorCount,
+        /// <summary>
+        /// Choose hash-difference based source, taking into accout error percent level
+        /// </summary>
+        HashBasedWithErrorThresold
     }
 }

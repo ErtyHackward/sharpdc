@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Net;
 using SharpDc.Connections;
 using SharpDc.Logging;
 
@@ -26,6 +27,8 @@ namespace SharpDc.Structs
 
         public int QueueLimit { get; set; }
 
+        public int ReceiveTimeout { get; set; }
+
         private List<HttpConnection> _freeList;
 
         public HttpPool()
@@ -38,16 +41,19 @@ namespace SharpDc.Structs
 
         private void DeleteOldTasks()
         {
+            if (ReceiveTimeout == 0)
+                return;
+
             lock (SyncRoot)
             {
                 foreach (
                     var httpTask in
-                        Tasks.Where(t => (Stopwatch.GetTimestamp() - t.CreatedTimestamp) / Stopwatch.Frequency > 4))
+                        Tasks.Where(t => t.ExecutionTime > ReceiveTimeout / 1000))
                 {
                     httpTask.Event.Set();
                 }
 
-                Tasks.RemoveAll(t => (Stopwatch.GetTimestamp() - t.CreatedTimestamp) / Stopwatch.Frequency > 4);
+                Tasks.RemoveAll(t => t.ExecutionTime > ReceiveTimeout / 1000);
             }
         }
 
@@ -68,8 +74,10 @@ namespace SharpDc.Structs
                 if (conn == null && Connections.Count < ConnectionsLimit)
                 {
                     conn = new HttpConnection();
+                    conn.ReceiveTimeout = ReceiveTimeout;
                     conn.ConnectionStatusChanged += HttpConConnectionStatusChanged;
                     conn.RequestComplete += HttpConRequestComplete;
+                    conn.ReceiveTimeoutHit += conn_ReceiveTimeoutHit;
                     Connections.Add(conn);
                 }
 
@@ -86,6 +94,20 @@ namespace SharpDc.Structs
 
             if (conn != null)
                 task.SetConnection(conn);
+        }
+
+        private void conn_ReceiveTimeoutHit(object sender, EventArgs e)
+        {
+            var httpCon = (HttpConnection)sender;
+
+            HttpTask task;
+            lock (SyncRoot)
+            {
+                task = Tasks.FirstOrDefault(t => t.Connection == httpCon && t.ExecutionTime > ReceiveTimeout / 1000);
+            }
+
+            if (task != null)
+                httpCon.DisconnectAsync();
         }
 
         private void HttpConRequestComplete(object sender, EventArgs e)
@@ -118,6 +140,7 @@ namespace SharpDc.Structs
 
                 httpCon.ConnectionStatusChanged -= HttpConConnectionStatusChanged;
                 httpCon.RequestComplete -= HttpConRequestComplete;
+                httpCon.ReceiveTimeoutHit -= conn_ReceiveTimeoutHit;
 
                 lock (SyncRoot)
                 {

@@ -37,28 +37,27 @@ namespace SharpDc.Structs
 
             if (_position + _buffer.Length > Content.Magnet.Size)
                 length = (int)(Content.Magnet.Size - _position);
-
-            try
+            
+            using (new PerfLimit(string.Format("Slow http request {0} {1} bytes", SystemPath, length), 4000))
             {
-                using (new PerfLimit(string.Format("Http request {0} {1} bytes", SystemPath, length), 4000))
+                return Manager.DownloadChunk(SystemPath, _buffer, _position, length);
+            }
+        }
+
+        protected override int InternalRead(byte[] array, long start, int count)
+        {
+            try
+            {            
+                if (!ValidateBuffer(start, count))
                 {
-                    //HttpHelper.DownloadChunk(Content.SystemPath, _buffer, _position, length);
-                    return Manager.DownloadChunk(SystemPath, _buffer, _position, length);
+                    OnError(new UploadItemEventArgs());
+                    return 0;
                 }
             }
             catch (Exception x)
             {
                 OnError(new UploadItemEventArgs { Exception = x });
                 Logger.Error("Http read error: " + x.Message);
-                return false;
-            }
-        }
-
-        protected override int InternalRead(byte[] array, long start, int count)
-        {
-            if (!ValidateBuffer(start, count))
-            {
-                OnError(new UploadItemEventArgs());
                 return 0;
             }
 
