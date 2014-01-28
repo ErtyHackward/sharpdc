@@ -5,6 +5,7 @@
 // -------------------------------------------------------------
 
 using System;
+using System.ComponentModel;
 using SharpDc.Structs;
 
 namespace SharpDc.Managers
@@ -61,6 +62,7 @@ namespace SharpDc.Managers
         /// <summary>
         /// Gets time when this item was created
         /// </summary>
+        [DefaultValue(typeof(DateTime), "0001-01-01T00:00:00")]
         public DateTime CreateDate
         {
             get { return _createDate; }
@@ -70,18 +72,21 @@ namespace SharpDc.Managers
         /// <summary>
         /// Total uploaded bytes of this item
         /// </summary>
+        [DefaultValue(typeof(ulong), "0")]
         public ulong UploadedBytes
         {
             get { return _uploadedBytes; }
             set { _uploadedBytes = value; }
         }
 
+        [DefaultValue(typeof(DateTime), "0001-01-01T00:00:00")]
         public DateTime FileLastWrite
         {
             get { return _fileLastWrite; }
             set { _fileLastWrite = value; }
         }
 
+        [DefaultValue(typeof(DateTime), "0001-01-01T00:00:00")]
         public DateTime LastAccess
         {
             get { return _lastAccess; }

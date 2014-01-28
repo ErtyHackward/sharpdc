@@ -120,6 +120,15 @@ namespace SharpDc.Structs
             }
         }
 
+        public long GetSum()
+        {
+            lock (_syncRoot)
+            {
+                RemoveOldValues();
+                return _buffer.Sum(pair => pair.Value) + _accumulated;
+            }
+        }
+
         private void RemoveOldValues()
         {
             while (_buffer.Count > 0)

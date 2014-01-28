@@ -54,7 +54,7 @@ namespace SharpDc.Managers
                 if (_fileSources.FindIndex(p => p.Id.StartsWith(fileSource)) != -1)
                     throw new InvalidOperationException("Alredy have this source or similar");
 
-                _fileSources.Add(new UploadSourceQuality(fileSource,Period, Window));
+                _fileSources.Add(new UploadSourceQuality(fileSource, Period, Window));
             }
         }
 
