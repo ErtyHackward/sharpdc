@@ -1,4 +1,6 @@
-﻿using System;
+﻿#if SQLITE
+
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
@@ -633,3 +635,5 @@ namespace SharpDc.Managers
         public string VirtualPath;
     }
 }
+
+#endif
