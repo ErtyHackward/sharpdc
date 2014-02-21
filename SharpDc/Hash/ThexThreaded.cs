@@ -43,6 +43,7 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Threading;
 using System.IO;
@@ -55,7 +56,9 @@ namespace SharpDc.Hash
 {
     public interface IThexThreaded
     {
-        byte[][][] GetTTHTree(string Filename);
+        byte[][][] GetTTHTree(string filename);
+
+        HashAlgorithm Hasher { get; }
     }
 
     public class ThexThreaded<T> : IThexThreaded where T : HashAlgorithm, new()
@@ -63,7 +66,6 @@ namespace SharpDc.Hash
         private static readonly ILogger Logger = LogManager.GetLogger();
 
 		const byte LeafHash = 0x00;
-		const byte InternalHash = 0x01;
 		const int  LeafSize = 1024;
 		const int  DataBlockSize = LeafSize * 1024; // 1 MB
 		const int  ThreadCount = 4;
@@ -71,28 +73,33 @@ namespace SharpDc.Hash
 
 		public byte[][][] TTH;
 		public int LevelCount;
-		string Filename;
-		int LeafCount;
-		FileStream FilePtr;
+		string _filename;
+		int _leafCount;
+		FileStream _filePtr;
 
-		FileBlock[] FileParts = new FileBlock[ThreadCount];
-		Thread[] ThreadsList = new Thread[ThreadCount];
+		FileBlock[] _fileParts = new FileBlock[ThreadCount];
+		Thread[] _threadsList = new Thread[ThreadCount];
 
-		public byte[] GetTTHRoot(string Filename)
+        public HashAlgorithm Hasher
+        {
+            get { return new T(); }
+        }
+
+        public byte[] GetTTHRoot(string filename)
 		{
-			GetTTH(Filename);
+			GetTTH(filename);
 			return TTH[LevelCount-1][0];
 		}
 
-		public byte[][][] GetTTHTree(string Filename)
+		public byte[][][] GetTTHTree(string filename)
 		{
-			GetTTH(Filename);
+			GetTTH(filename);
 			return TTH;			
 		}
 
-		private void GetTTH(string Filename)
+		private void GetTTH(string filename)
 		{
-			this.Filename = Filename;
+			_filename = filename;
 
 			try
 			{
@@ -111,38 +118,38 @@ namespace SharpDc.Hash
 				StopThreads();
 			}
 
-			if (FilePtr != null) 
-                FilePtr.Close();
+			if (_filePtr != null) 
+                _filePtr.Close();
 		}
 		
 		void Dispose()
 		{
 			TTH = null;
-			ThreadsList = null;
-			FileParts = null;
+			_threadsList = null;
+			_fileParts = null;
 			GC.Collect();
 		}
 
 		void OpenFile()
 		{
-			if (!File.Exists(Filename))
+			if (!File.Exists(_filename))
 				throw new Exception("file doesn't exists!");
 
-			FilePtr = new FileStream(Filename,FileMode.Open,FileAccess.Read,FileShare.Read); //,DataBlockSize);
+		    _filePtr = new FileStream(_filename, FileMode.Open, FileAccess.Read, FileShare.Read);
 		}
 
 		bool Initialize()
 		{
-            if (FilePtr.Length == ZERO_BYTE_FILE)
+            if (_filePtr.Length == ZERO_BYTE_FILE)
             {
-                T TG = new T();
+                var tg = new T();
 
                 LevelCount = 1;
 
                 TTH = new byte[1][][];
                 TTH[0] = new byte[1][];
 
-                TTH[0][0] = TG.ComputeHash(new byte[] { 0 });
+                TTH[0][0] = tg.ComputeHash(new byte[] { 0 });
 
                 return false;
             }
@@ -151,13 +158,13 @@ namespace SharpDc.Hash
                 int i = 1;
                 LevelCount = 1;
 
-                LeafCount = (int)(FilePtr.Length / LeafSize);
-                if ((FilePtr.Length % LeafSize) > 0) LeafCount++;
+                _leafCount = (int)(_filePtr.Length / LeafSize);
+                if ((_filePtr.Length % LeafSize) > 0) _leafCount++;
 
-                while (i < LeafCount) { i *= 2; LevelCount++; }
+                while (i < _leafCount) { i *= 2; LevelCount++; }
 
                 TTH = new byte[LevelCount][][];
-                TTH[0] = new byte[LeafCount][];
+                TTH[0] = new byte[_leafCount][];
             }
 
             return true;
@@ -165,31 +172,31 @@ namespace SharpDc.Hash
 
 		void SplitFile()
 		{
-			long LeafsInPart = LeafCount / ThreadCount;
+			long leafsInPart = _leafCount / ThreadCount;
 
 			// check if file is bigger then 1 MB or don't use threads
-			if (FilePtr.Length > 1024 * 1024) 
+			if (_filePtr.Length > 1024 * 1024) 
 				for (int i = 0; i < ThreadCount; i++)
-					FileParts[i] = new FileBlock(LeafsInPart * LeafSize * i,
-												 LeafsInPart * LeafSize * (i + 1));
+					_fileParts[i] = new FileBlock(leafsInPart * LeafSize * i,
+												 leafsInPart * LeafSize * (i + 1));
 
-			FileParts[ThreadCount - 1].End = FilePtr.Length;
+			_fileParts[ThreadCount - 1].End = _filePtr.Length;
 		}
 
 		void StartThreads()
 		{
 			for (int i = 0; i < ThreadCount; i++)
 			{
-				ThreadsList[i] = new Thread(ProcessLeafs);
-				ThreadsList[i].IsBackground = true;
-                ThreadsList[i].Priority = (ThreadPriority)ProcessPriorityClass.Idle;
-				ThreadsList[i].Start(i);
+				_threadsList[i] = new Thread(ProcessLeafs);
+				_threadsList[i].IsBackground = true;
+                _threadsList[i].Priority = (ThreadPriority)ProcessPriorityClass.Idle;
+				_threadsList[i].Start(i);
 			}
 
 			while (true)
             {
 				Thread.Sleep(0);
-			    if (ThreadsList.All(t => !t.IsAlive))
+			    if (_threadsList.All(t => !t.IsAlive))
 			        break;
 			}
 		}
@@ -197,119 +204,225 @@ namespace SharpDc.Hash
 		void StopThreads()
 		{
 			for (int i = 0; i < ThreadCount; i++)
-				if (ThreadsList[i] != null && ThreadsList[i].IsAlive) 
-					ThreadsList[i].Abort();
+				if (_threadsList[i] != null && _threadsList[i].IsAlive) 
+					_threadsList[i].Abort();
 		}
 
 		void ProcessLeafs(object threadId)
 		{
             using (ThreadUtility.EnterBackgroundProcessingMode())
-            using (var ThreadFilePtr = new FileStream(Filename, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var threadFilePtr = new FileStream(_filename, FileMode.Open, FileAccess.Read, FileShare.Read))
 		    {
-		        FileBlock ThreadFileBlock = FileParts[(int)threadId];
-		        var TG = new T();
-		        byte[] DataBlock;
-		        byte[] Data = new byte[LeafSize + 1];
-		        int LeafIndex, BlockLeafs;
-		        int i;
+		        var threadFileBlock = _fileParts[(int)threadId];
+		        var tg = new T();
+		        var data = new byte[LeafSize + 1];
 
-		        ThreadFilePtr.Position = ThreadFileBlock.Start;
+		        threadFilePtr.Position = threadFileBlock.Start;
 
-		        while (ThreadFilePtr.Position < ThreadFileBlock.End)
+		        while (threadFilePtr.Position < threadFileBlock.End)
 		        {
-		            LeafIndex = (int)(ThreadFilePtr.Position / 1024);
+		            var leafIndex = (int)(threadFilePtr.Position / 1024);
 
-		            if (ThreadFileBlock.End - ThreadFilePtr.Position < DataBlockSize)
-		                DataBlock = new byte[ThreadFileBlock.End - ThreadFilePtr.Position];
-		            else
-		                DataBlock = new byte[DataBlockSize];
+		            var dataBlock = new byte[Math.Min(threadFileBlock.Length, DataBlockSize)];
 
-		            ThreadFilePtr.Read(DataBlock, 0, DataBlock.Length); //read block
+		            threadFilePtr.Read(dataBlock, 0, dataBlock.Length); //read block
 
-		            BlockLeafs = DataBlock.Length / 1024;
+		            var blockLeafs = dataBlock.Length / 1024;
 
-		            for (i = 0; i < BlockLeafs; i++)
+		            int i;
+		            for (i = 0; i < blockLeafs; i++)
 		            {
-		                Buffer.BlockCopy(DataBlock, i * LeafSize, Data, 1, LeafSize);
+		                Buffer.BlockCopy(dataBlock, i * LeafSize, data, 1, LeafSize);
 
-		                TG.Initialize();
-		                TTH[0][LeafIndex++] = TG.ComputeHash(Data);
+		                tg.Initialize();
+		                TTH[0][leafIndex++] = tg.ComputeHash(data);
 		            }
 
-		            if (i * LeafSize < DataBlock.Length)
+		            if (i * LeafSize < dataBlock.Length)
 		            {
-		                Data = new byte[DataBlock.Length - BlockLeafs * LeafSize + 1];
-		                Data[0] = LeafHash;
+		                data = new byte[dataBlock.Length - blockLeafs * LeafSize + 1];
+		                data[0] = LeafHash;
 
-		                Buffer.BlockCopy(DataBlock, BlockLeafs * LeafSize, Data, 1, ( Data.Length - 1 ));
+		                Buffer.BlockCopy(dataBlock, blockLeafs * LeafSize, data, 1, (data.Length - 1));
 
-		                TG.Initialize();
-		                TTH[0][LeafIndex++] = TG.ComputeHash(Data);
+		                tg.Initialize();
+		                TTH[0][leafIndex] = tg.ComputeHash(data);
 
-		                Data = new byte[LeafSize + 1];
-		                Data[0] = LeafHash;
+		                data = new byte[LeafSize + 1];
+		                data[0] = LeafHash;
 		            }
 		        }
-
-		        DataBlock = null;
-		        Data = null;
 		    }
 		}
-
+        
 		void CompressTree()
 		{
-			int InternalLeafCount;
-			int Level = 0,i,LeafIndex;
+		    int level = 0;
 
-			while (Level + 1 < LevelCount)
+		    while (level + 1 < LevelCount)
 			{
-				LeafIndex = 0;
-				InternalLeafCount = (LeafCount / 2) + (LeafCount % 2);
-				TTH[Level + 1] = new byte[InternalLeafCount][];
+				int leafIndex = 0;
+				var internalLeafCount = (_leafCount / 2) + (_leafCount % 2);
+				TTH[level + 1] = new byte[internalLeafCount][];
 
-			    if (LeafCount > 128)
+			    if (_leafCount > 128)
 			    {
-			        Parallel.For(0, LeafCount / 2,
-			                     ind => ProcessInternalLeaf(Level + 1, ind, TTH[Level][ind*2], TTH[Level][ind*2+1]));
-			        LeafIndex = LeafCount / 2;
+			        Parallel.For(0, _leafCount / 2,
+			                     ind => ProcessInternalLeaf(level + 1, ind, TTH[level][ind*2], TTH[level][ind*2+1]));
+			        leafIndex = _leafCount / 2;
 			    }
 			    else
 			    {
-			        for (i = 1; i < LeafCount; i += 2)
-			            ProcessInternalLeaf(Level + 1, LeafIndex++, TTH[Level][i - 1], TTH[Level][i]);
+			        for (var i = 1; i < _leafCount; i += 2)
+			            ProcessInternalLeaf(level + 1, leafIndex++, TTH[level][i - 1], TTH[level][i]);
 			    }
 
-			    if (LeafIndex < InternalLeafCount) 
-					TTH[Level + 1][LeafIndex] = TTH[Level][LeafCount - 1];
+			    if (leafIndex < internalLeafCount) 
+					TTH[level + 1][leafIndex] = TTH[level][_leafCount - 1];
 
-				Level++;
-				LeafCount = InternalLeafCount;
+				level++;
+				_leafCount = internalLeafCount;
 			}
 		}
 
-		void ProcessInternalLeaf(int Level,int Index,byte[] LeafA,byte[] LeafB)
-		{
-			T TG = new T();
-			byte[] Data = new byte[LeafA.Length + LeafB.Length + 1];
-
-			Data[0] = InternalHash;
-
-			Buffer.BlockCopy(LeafA,0,Data,1,LeafA.Length);
-			Buffer.BlockCopy(LeafB,0,Data,LeafA.Length + 1,LeafA.Length);
-
-			TG.Initialize();
-			TTH[Level][Index] = TG.ComputeHash(Data);
-		}
+        private void ProcessInternalLeaf(int level, int index, byte[] leafA, byte[] leafB)
+        {
+            var tg = new T();
+            TTH[level][index] = ThexHelper.InternalHash(tg, leafA, leafB);
+        }
 	}
 
-	struct FileBlock
-	{
-		public long Start,End;
+    public static class ThexHelper
+    {
+        const byte InternalHashMark = 0x01;
+        const byte LeafHash = 0x00;
 
-		public FileBlock(long Start,long End)
+        public static byte[] InternalHash(HashAlgorithm hash, byte[] leafA, byte[] leafB)
+        {
+            var data = new byte[leafA.Length + leafB.Length + 1];
+
+            data[0] = InternalHashMark;
+            
+            leafA.CopyTo(data, 1);
+            leafB.CopyTo(data, leafA.Length + 1);
+            
+            return hash.ComputeHash(data);
+        }
+
+        public static bool HashesEquals(byte[] hash1, byte[] hash2)
+        {
+            for (var i = 0; i < hash1.Length; i++)
+            {
+                if (hash1[i] != hash2[i])
+                    return false;
+            }
+            return true;
+        }
+
+        public static byte[] CompressHashBlock(HashAlgorithm hasher, byte[][] hashBlock)
+        {
+            var hashCount = hashBlock.GetUpperBound(1);
+
+            while (hashCount > 1) //until there's only 1 hash.
+            {
+                var tempBlockSize = hashCount / 2;
+                if (hashCount % 2 > 0) tempBlockSize++;
+
+                var tempBlock = new byte[tempBlockSize][];
+
+                var hashIndex = 0;
+                for (int i = 0; i < hashCount / 2; i++) //makes hash from pairs.
+                {
+                    tempBlock[i] = InternalHash(hasher, hashBlock[hashIndex], hashBlock[hashIndex + 1]);
+                    hashIndex += 2;
+                }
+
+                //this one doesn't have a pair :(
+                if (hashCount % 2 > 0)
+                    tempBlock[tempBlockSize - 1] = hashBlock[hashCount - 1];
+
+                hashBlock = tempBlock;
+                hashCount = tempBlockSize;
+            }
+            return hashBlock[0];
+        }
+
+        private static byte[][] ReadLeafs(HashAlgorithm tg, string filePath, long start, long end)
+        {
+            using (ThreadUtility.EnterBackgroundProcessingMode())
+            using (var threadFilePtr = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                var threadFileBlock = new FileBlock(start, end);
+                var LeafSize = 1024;
+                var DataBlockSize = LeafSize * 1024;
+                var data = new byte[LeafSize + 1];
+
+                var totalLeafs = threadFileBlock.Length / LeafSize + threadFileBlock.Length % LeafSize > 0 ? 1 : 0;
+
+                var result = new byte[totalLeafs][];
+
+                threadFilePtr.Position = threadFileBlock.Start;
+
+                while (threadFilePtr.Position < threadFileBlock.End)
+                {
+                    var leafIndex = (int)((threadFilePtr.Position - start) / 1024);
+
+                    var dataBlock = new byte[Math.Min(threadFileBlock.Length, DataBlockSize)];
+
+                    threadFilePtr.Read(dataBlock, 0, dataBlock.Length); //read block
+
+                    var blockLeafs = dataBlock.Length / LeafSize;
+
+                    int i;
+                    for (i = 0; i < blockLeafs; i++)
+                    {
+                        Buffer.BlockCopy(dataBlock, i * LeafSize, data, 1, LeafSize);
+
+                        tg.Initialize();
+                        result[leafIndex++] = tg.ComputeHash(data);
+                    }
+
+                    if (i * LeafSize < dataBlock.Length)
+                    {
+                        data = new byte[dataBlock.Length - blockLeafs * LeafSize + 1];
+                        data[0] = LeafHash;
+
+                        Buffer.BlockCopy(dataBlock, blockLeafs * LeafSize, data, 1, (data.Length - 1));
+
+                        tg.Initialize();
+                        result[leafIndex] = tg.ComputeHash(data);
+
+                        data = new byte[LeafSize + 1];
+                        data[0] = LeafHash;
+                    }
+                }
+                return result;
+            }
+        }
+
+        public static bool VerifySegment(HashAlgorithm tg, byte[] correctHash, string filePath, long start, int length)
+        {
+            if (correctHash == null) return false;
+            if (correctHash.Length != 24) return false;
+
+            return HashesEquals(CompressHashBlock(tg, ReadLeafs(tg, filePath, start, start + length)), correctHash);
+        }
+    }
+
+    struct FileBlock
+	{
+	    public long Start;
+        public long End;
+
+	    public int Length
+	    {
+	        get { return (int)(End - Start); }
+	    }
+
+	    public FileBlock(long start,long end)
 		{
-			this.Start = Start;
-			this.End = End;
+			Start = start;
+			End = end;
 		}
 	}
 }

@@ -58,7 +58,7 @@ namespace SharpDc.Storage
                     return 0;
             }
 
-            var startOffset = segmentOffset % DownloadItem.SegmentSize;
+            var startOffset = segmentOffset % _downloadItem.SegmentLength;
             Buffer.BlockCopy(memorySegment, startOffset, buffer, bufferOffset, count);
 
             return count;
@@ -95,7 +95,7 @@ namespace SharpDc.Storage
                     if (_memoryBuffer.Count >= _maxSegments)
                         return false;
 
-                    memorySegment = new byte[DownloadItem.SegmentSize];
+                    memorySegment = new byte[_downloadItem.SegmentLength];
                     _memoryBuffer.Add(segment.Index, memorySegment);
                 }
             }

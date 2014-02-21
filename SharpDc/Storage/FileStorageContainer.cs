@@ -22,6 +22,7 @@ namespace SharpDc.Storage
     [Serializable]
     public class FileStorageContainer : IStorageContainer
     {
+        private readonly DownloadItem _downloadItem;
         private static readonly ILogger Logger = LogManager.GetLogger();
 
         private readonly Dictionary<int, FileStream> _aliveStreams = new Dictionary<int, FileStream>();
@@ -65,9 +66,9 @@ namespace SharpDc.Storage
             }
         }
 
-        public FileStorageContainer()
+        public FileStorageContainer(DownloadItem item)
         {
-
+            _downloadItem = item;
         }
 
         /// <summary>
@@ -179,7 +180,7 @@ namespace SharpDc.Storage
                 Interlocked.Increment(ref _readThreads);
                 using (var fs = new FileStream(TempFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, count))
                 {
-                    fs.Position = (long)DownloadItem.SegmentSize * segmentIndex + segmentOffset;
+                    fs.Position = (long)_downloadItem.SegmentLength * segmentIndex + segmentOffset;
                     return fs.Read(buffer, bufferOffset, count);
                 }
             }
