@@ -525,7 +525,7 @@ namespace SharpDc.Managers
             var sortedSources = _engine.SourceManager.SortByQualityDesc(sources);
 
             var freeSegments = di.TotalSegmentsCount == 0
-                                   ? (int)(di.Magnet.Size / DownloadItem.SegmentSize + 1)
+                                   ? (int)(di.Magnet.Size / di.SegmentLength + 1)
                                    : di.TotalSegmentsCount - di.DoneSegmentsCount - di.ActiveSegmentsCount;
 
             reqLimit = Math.Min(reqLimit, freeSegments);

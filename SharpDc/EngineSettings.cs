@@ -470,8 +470,8 @@ namespace SharpDc
             {
                 return new EngineSettings
                            {
-                               _pathDownload = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Downloads"),
-                               _pathFileLists = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "FileLists"),
+                               _pathDownload = string.IsNullOrEmpty(AppDomain.CurrentDomain.BaseDirectory) ? "Downloads" : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Downloads"),
+                               _pathFileLists = string.IsNullOrEmpty(AppDomain.CurrentDomain.BaseDirectory) ? "FileLists" : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "FileLists"),
                                _tcpPort = 10853,
                                _udpPort = 6308,
                                _maxDownloadThreads = 20,

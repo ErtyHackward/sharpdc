@@ -24,6 +24,7 @@ namespace SharpDc.Connections
         private HubSettings _settings;
         private MyINFOMessage _prevMessage;
         private string _lastChatMessage;
+        private Encoding _encoding = Encoding.Default;
 
         /// <summary>
         /// Contains public information of this client
@@ -68,6 +69,12 @@ namespace SharpDc.Connections
         public string RemoteAddressString { get; private set; }
 
         public ConcurrentDictionary<string, UserInfo> Users { get; private set; }
+
+        public Encoding Encoding
+        {
+            get { return _encoding; }
+            set { _encoding = value; }
+        }
 
         #region Events
 
@@ -158,6 +165,17 @@ namespace SharpDc.Connections
             if (handler != null) handler(this, EventArgs.Empty);
         }
 
+        /// <summary>
+        /// Occurs when new chat message is arrived
+        /// </summary>
+        public event EventHandler<ChatMessageEventArgs> ChatMessage;
+
+        protected virtual void OnChatMessage(ChatMessageEventArgs e)
+        {
+            var handler = ChatMessage;
+            if (handler != null) handler(this, e);
+        }
+
         #endregion
 
         public HubConnection(HubSettings settings) : base(settings.HubAddress)
@@ -188,7 +206,7 @@ namespace SharpDc.Connections
 
         protected override void ParseRaw(byte[] buffer, int length)
         {
-            var received = Encoding.Default.GetString(buffer, 0, length);
+            var received = _encoding.GetString(buffer, 0, length);
 
             if (!string.IsNullOrEmpty(_dataBuffer))
             {
@@ -315,6 +333,8 @@ namespace SharpDc.Connections
                 {
                     // chat message
                     _lastChatMessage = cmd;
+
+                    OnChatMessage(new ChatMessageEventArgs { RawMessage = cmd });
                 }
             }
         }
@@ -449,5 +469,10 @@ namespace SharpDc.Connections
 
             _prevMessage = myInfo;
         }
+    }
+
+    public class ChatMessageEventArgs : EventArgs
+    {
+        public string RawMessage { get; set; }
     }
 }

@@ -8,10 +8,11 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Threading;
+using System.Linq;
 using System.Xml.Serialization;
 using SharpDc.Collections;
 using SharpDc.Events;
+using SharpDc.Hash;
 using SharpDc.Interfaces;
 using SharpDc.Logging;
 
@@ -27,28 +28,51 @@ namespace SharpDc.Structs
         Highest = 5
     }
 
+    /// <summary>
+    /// Provides multisegment download of a single file
+    /// </summary>
     [Serializable]
     public class DownloadItem
     {
         private static readonly ILogger Logger = LogManager.GetLogger();
-
-        public static int SegmentSize = 1024 * 1024;
-
-        public static int GetSegmentIndex(long filePosition)
+        
+        public static int GetSegmentIndex(long filePosition, int segmentSize)
         {
-            return (int)(filePosition / SegmentSize);
+            return (int)(filePosition / segmentSize);
         }
 
+        private int _segmentLength = 1024 * 1024;
         private BitArray _activeSegments;
         private BitArray _downloadedSegments;
+        private BitArray _verifiedSegments;
         private int _doneSegmentsCount;
         private int _activeSegmentsCount;
         private int _totalSegmentsCount;
+        private int _verifiedSegmentsCount;
         private SourceList _sources;
         private readonly List<int> _highPrioritySegments = new List<int>();
         private readonly object _syncRoot = new object();
+        private readonly Magnet _magnet;
 
-        private Magnet _magnet;
+        private byte[][] _leavesHashes;
+
+        private Source[] _segmentSources;
+
+        public bool HasLeaves
+        {
+            get { return _leavesHashes != null; }
+        }
+
+        /// <summary>
+        /// Depending on available leaves verify segment can be bigger than download segment
+        /// </summary>
+        public int VerifySegmentLength { get; private set; }
+
+        [XmlIgnore]
+        public BitArray VerifiedSegments 
+        {
+            get { return _verifiedSegments; }
+        }
 
         [XmlIgnore]
         public List<int> HighPrioritySegments
@@ -68,10 +92,20 @@ namespace SharpDc.Structs
             get { return _syncRoot; }
         }
 
+        /// <summary>
+        /// Gets a magnet describing the file
+        /// </summary>
         public Magnet Magnet
         {
             get { return _magnet; }
-            set { _magnet = value; }
+        }
+        
+        /// <summary>
+        /// Gets length of the segment in bytes
+        /// </summary>
+        public int SegmentLength
+        {
+            get { return _segmentLength; }
         }
 
         public int DoneSegmentsCount
@@ -96,13 +130,15 @@ namespace SharpDc.Structs
                         if (_totalSegmentsCount != 0)
                             return _totalSegmentsCount;
 
-                        var ttl = (int)(_magnet.Size / SegmentSize);
-                        if (_magnet.Size % SegmentSize != 0) ttl++;
+                        var ttl = (int)(_magnet.Size / _segmentLength);
+                        if (_magnet.Size % _segmentLength != 0) 
+                            ttl++;
                         _doneSegmentsCount = 0;
                         _activeSegmentsCount = 0;
 
                         _activeSegments = new BitArray(ttl);
                         _downloadedSegments = new BitArray(ttl);
+                        _segmentSources = new Source[_totalSegmentsCount];
                         _totalSegmentsCount = ttl;
                     }
                 }
@@ -184,6 +220,27 @@ namespace SharpDc.Structs
             }
         }
 
+        [XmlArray("VerifiedSegments")]
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public int[] SerializeVerifiedSegments
+        {
+            get
+            {
+                return Utils.BitArraySerialize(_verifiedSegments);
+            }
+            set
+            {
+                _verifiedSegments = new BitArray(value);
+                _verifiedSegmentsCount = 0;
+                
+                foreach (bool bit in _verifiedSegments)
+                {
+                    if (bit)
+                        _verifiedSegmentsCount++;
+                }
+            }
+        }
+
         #region Events
 
         public event EventHandler<SegmentEventArgs> SegmentTaken;
@@ -229,10 +286,33 @@ namespace SharpDc.Structs
             Logger.Info("{0} download finished", Magnet.FileName);
         }
 
+        /// <summary>
+        /// Occurs when we have a segment that can be verified using hash leaves
+        /// </summary>
+        public event EventHandler<SegmentVerificationEventArgs> VerificationNeeded;
+
+        protected virtual void OnVerificationNeeded(SegmentVerificationEventArgs e)
+        {
+            var handler = VerificationNeeded;
+            if (handler != null) handler(this, e);
+        }
+
+        /// <summary>
+        /// Occurs when the verification of the segment is finished
+        /// </summary>
+        public event EventHandler<SegmentVerificationEventArgs> VerificationComplete;
+
+        protected virtual void OnVerificationComplete(SegmentVerificationEventArgs e)
+        {
+            var handler = VerificationComplete;
+            if (handler != null) handler(this, e);
+        }
+
         #endregion
 
-        public DownloadItem()
+        public DownloadItem(Magnet magnet)
         {
+            _magnet = magnet;
             Priority = DownloadPriority.Normal;
             _sources = new SourceList { DownloadItem = this };
             ActiveSources = new List<Source>();
@@ -253,7 +333,7 @@ namespace SharpDc.Structs
 
             if (StorageContainer == null)
             {
-                Logger.Error("Unable to take the segment, no storage container set");
+                Logger.Error("Unable to take the segment, no storage container is set");
                 return false;
             }
 
@@ -309,13 +389,14 @@ namespace SharpDc.Structs
 
                 if (segment.Index != -1)
                 {
-                    segment.StartPosition = (long)segment.Index * SegmentSize;
+                    segment.StartPosition = (long)segment.Index * _segmentLength;
                     segment.Length = segment.Index == _totalSegmentsCount - 1
-                                         ? (int)(_magnet.Size % SegmentSize)
-                                         : SegmentSize;
+                                         ? (int)(_magnet.Size % _segmentLength)
+                                         : _segmentLength;
 
                     _activeSegmentsCount++;
                     _activeSegments[segment.Index] = true;
+                    _segmentSources[segment.Index] = src;
 
                     ActiveSources.Add(src);
                     result = true;
@@ -388,6 +469,82 @@ namespace SharpDc.Structs
         }
 
         /// <summary>
+        /// Marks verify segment as correct
+        /// </summary>
+        /// <param name="verifySegmentIndex"></param>
+        public void SetCorrect(int verifySegmentIndex)
+        {
+            var ea = new SegmentVerificationEventArgs 
+                { 
+                    IsCorrect = true, 
+                    Index = verifySegmentIndex 
+                };
+            
+            FillVerificationRange(ea);
+
+            lock (_syncRoot)
+            {
+                _verifiedSegmentsCount++;
+                _verifiedSegments.Set(verifySegmentIndex, true);
+                ea.Sources = SegmentsVerifyToDownload(verifySegmentIndex).Select(i => _segmentSources[i]).ToList();
+            }
+            
+            OnVerificationComplete(ea);
+
+            if (LogSegmentEvents)
+                Logger.Info("SEG VERIFIED ID:{0}", verifySegmentIndex);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="verifySegmentIndex"></param>
+        public void SetIncorrect(int verifySegmentIndex)
+        {
+            var ea = new SegmentVerificationEventArgs
+            {
+                IsCorrect = false,
+                Index = verifySegmentIndex
+            };
+
+            FillVerificationRange(ea);
+
+            lock (_syncRoot)
+            {
+                foreach (var i in SegmentsVerifyToDownload(verifySegmentIndex))
+                {
+                    _downloadedSegments.Set(i, false);
+                    _doneSegmentsCount--;
+                }
+
+                ea.Sources = SegmentsVerifyToDownload(verifySegmentIndex).Select(i => _segmentSources[i]).ToList();
+            }
+
+            OnVerificationComplete(ea);
+
+            if (LogSegmentEvents)
+                Logger.Info("SEG VERIFICATION FAILED ID:{0}", verifySegmentIndex);
+        }
+
+        private void FillVerificationRange(SegmentVerificationEventArgs ea)
+        {
+            long start;
+            int length;
+            VerifySegmentToFileRange(ea.Index, out start, out length);
+            ea.Start = start;
+            ea.Length = length;
+        }
+
+        private void VerifySegmentToFileRange(int verifySegment, out long start, out int length)
+        {
+            start = VerifySegmentLength * verifySegment;
+            length = VerifySegmentLength;
+
+            if (verifySegment == _verifiedSegments.Count - 1)
+                length = (int)(Magnet.Size % VerifySegmentLength);
+        }
+
+        /// <summary>
         /// Determines was all the segments from range been downloaded
         /// </summary>
         /// <param name="startPos">File position from wich bytes should be read</param>
@@ -399,8 +556,8 @@ namespace SharpDc.Structs
             if (!StorageContainer.Available)
                 return false;
             
-            var startIndex = GetSegmentIndex(startPos);
-            var endIndex   = GetSegmentIndex(startPos + count - 1);
+            var startIndex = GetSegmentIndex(startPos, SegmentLength);
+            var endIndex   = GetSegmentIndex(startPos + count - 1, SegmentLength);
 
             lock (SyncRoot)
             {
@@ -428,8 +585,8 @@ namespace SharpDc.Structs
             if (!CanRead(filePosition, count))
                 return false;
 
-            var startIndex = GetSegmentIndex(filePosition);
-            var endIndex   = GetSegmentIndex(filePosition + count - 1);
+            var startIndex = GetSegmentIndex(filePosition, SegmentLength);
+            var endIndex   = GetSegmentIndex(filePosition + count - 1, SegmentLength);
 
             try
             {
@@ -437,7 +594,7 @@ namespace SharpDc.Structs
                 {
                     if (startIndex == endIndex)
                     {
-                        var startOffset = (int)(filePosition % SegmentSize);
+                        var startOffset = (int)(filePosition % _segmentLength);
                         return StorageContainer.Read(startIndex, startOffset, buffer, 0, count) == count;
                     }
 
@@ -446,24 +603,24 @@ namespace SharpDc.Structs
                     {
                         if (i == startIndex)
                         {
-                            var startOffset = (int)(filePosition % SegmentSize);
-                            var length = SegmentSize - startOffset;
+                            var startOffset = (int)(filePosition % _segmentLength);
+                            var length = _segmentLength - startOffset;
                             if (StorageContainer.Read(i, startOffset, buffer, 0, length) != length)
                                 return false;
                             position += length;
                         }
                         else if (i == endIndex)
                         {
-                            var length = (int)((filePosition + count) % SegmentSize);
+                            var length = (int)((filePosition + count) % _segmentLength);
                             if (StorageContainer.Read(i, 0, buffer, position, length) != length)
                                 return false;
                         }
                         else
                         {
                             // copy whole segment
-                            if (StorageContainer.Read(i, 0, buffer, position, SegmentSize) != SegmentSize)
+                            if (StorageContainer.Read(i, 0, buffer, position, _segmentLength) != _segmentLength)
                                 return false;
-                            position += SegmentSize;
+                            position += _segmentLength;
                         }
                     }
                 }
@@ -476,5 +633,138 @@ namespace SharpDc.Structs
 
             return true;
         }
+
+        /// <summary>
+        /// Changes segment length for the download
+        /// Could only be set before download starts
+        /// </summary>
+        /// <param name="length"></param>
+        public void SetSegmentLength(int length)
+        {
+            lock (_syncRoot)
+            {
+                if (_doneSegmentsCount > 0 || _activeSegmentsCount > 0)
+                    throw new InvalidOperationException("You can only change the length before the download begins");
+
+                _totalSegmentsCount = 0;
+            }
+
+            if (length < 64 * 1024)
+                throw new ArgumentOutOfRangeException("length", "Length could not be less than 64Kbyte, specified " + length);
+
+            _segmentLength = length;
+        }
+
+        /// <summary>
+        /// Tries to load leaves hashes
+        /// </summary>
+        /// <param name="leavesData"></param>
+        public bool LoadLeaves(byte[] leavesData)
+        {
+            if (leavesData == null) 
+                throw new ArgumentNullException("leavesData");
+
+            lock (_syncRoot)
+            {
+                if (HasLeaves) 
+                    return true; // we already have leaves, but we should continue download
+
+                if (leavesData.Length % 24 != 0)
+                {
+                    Logger.Error("Invalid leaves data, array length should be multiple to 24");
+                    return false;
+                }
+
+                var leavesCount = leavesData.Length / 24;
+
+                // restoring data structures
+                var hashes = new byte[leavesCount][];
+                for (int i = 0; i < leavesCount; i++)
+                {
+                    hashes[i] = new byte[24];
+                    Array.Copy(leavesData, i * 24, hashes[i], 0, 24);
+                }
+
+                if (HashHelper.VerifyLeaves(Base32Encoding.ToBytes(Magnet.TTH), hashes))
+                {
+                    _leavesHashes = hashes;
+                    _verifiedSegmentsCount = 0;
+                    _verifiedSegments = new BitArray(leavesCount);
+                    VerifySegmentLength = (int)HashHelper.GetBytePerHash(leavesCount, Magnet.Size);
+                    return true;
+                }
+
+                return false;
+
+            }
+        }
+
+        /// <summary>
+        /// Converts verify to download segment indices 
+        /// </summary>
+        /// <param name="i">Verify segment index</param>
+        /// <returns></returns>
+        internal IEnumerable<int> SegmentsVerifyToDownload(int i)
+        {
+            if (_downloadedSegments.Count == _verifiedSegments.Count)
+            {
+                yield return i;
+            }
+            else
+            {
+                var multiply = Math.Max(SegmentLength, VerifySegmentLength) / Math.Min(SegmentLength, VerifySegmentLength);
+                if (_verifiedSegments.Count > _downloadedSegments.Count)
+                {
+                    yield return i / multiply;
+                }
+                else
+                {
+                    for (var j = i * multiply; j < i * multiply + multiply; j++)
+                    {
+                        if (j < _downloadedSegments.Count)
+                            yield return j;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Converts download to verify segments indices
+        /// </summary>
+        /// <param name="i">download segment index</param>
+        /// <returns></returns>
+        internal IEnumerable<int> SegmentsDownloadToVerify(int i)
+        {
+            if (_downloadedSegments.Count == _verifiedSegments.Count)
+            {
+                yield return i;
+            }
+            else
+            {
+                var multiply = Math.Max(SegmentLength, VerifySegmentLength) /
+                               Math.Min(SegmentLength, VerifySegmentLength);
+                if (_downloadedSegments.Count < _verifiedSegments.Count)
+                {
+                    for (int j = i * multiply; j < i * multiply + multiply; j++)
+                    {
+                        if (j < _verifiedSegments.Count)
+                            yield return j;
+                    }
+                }
+                else
+                {
+                    yield return i / multiply;
+                }
+            }
+        }
+    }
+
+    public class SegmentVerificationEventArgs : EventArgs
+    {
+        public int Index { get; set; }
+        public long Start { get; set; }
+        public long Length { get; set; }
+        public bool IsCorrect { get; set; }
+        public List<Source> Sources { get; set; }
     }
 }

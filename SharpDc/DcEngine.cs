@@ -935,11 +935,12 @@ namespace SharpDc
                     throw new InvalidFileNameException("Name of the file is invalid") { FileName = magnet.FileName };
             }
 
-            var di = new DownloadItem
+            var di = new DownloadItem(magnet)
                          {
-                             Magnet = magnet,
                              SaveTargets = new List<string> { fullSystemPath }
                          };
+
+            
 
             if (sources != null)
             {

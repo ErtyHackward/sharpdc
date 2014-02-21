@@ -684,10 +684,10 @@ namespace SharpDc.Managers
             // remember that the last segment may be smaller in size than others, so note that
             var lastSegmentGap = 0L;
 
-            if (currentDownload.DoneSegments[currentDownload.TotalSegmentsCount - 1] && currentDownload.Magnet.Size % DownloadItem.SegmentSize > 0)
-                lastSegmentGap = DownloadItem.SegmentSize - currentDownload.Magnet.Size % DownloadItem.SegmentSize;
+            if (currentDownload.DoneSegments[currentDownload.TotalSegmentsCount - 1] && currentDownload.Magnet.Size % currentDownload.SegmentLength > 0)
+                lastSegmentGap = currentDownload.SegmentLength - currentDownload.Magnet.Size % currentDownload.SegmentLength;
 
-            return (long)DownloadItem.SegmentSize * currentDownload.DoneSegmentsCount + _engine.TransferManager.Transfers().Where(t => t.DownloadItem == currentDownload).Select(t => t.SegmentInfo.Position).Sum() - lastSegmentGap;
+            return (long)currentDownload.SegmentLength * currentDownload.DoneSegmentsCount + _engine.TransferManager.Transfers().Where(t => t.DownloadItem == currentDownload).Select(t => t.SegmentInfo.Position).Sum() - lastSegmentGap;
         }
 
         public void Save(string fileName)
