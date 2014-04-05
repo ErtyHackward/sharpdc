@@ -5,6 +5,7 @@
 // -------------------------------------------------------------
 
 using System;
+using System.Xml.Serialization;
 using SharpDc.Structs;
 
 namespace SharpDc.Interfaces
@@ -14,6 +15,9 @@ namespace SharpDc.Interfaces
     /// </summary>
     public abstract class IStorageContainer : IDisposable
     {
+        [XmlIgnore]
+        public DownloadItem DownloadItem { get; set; }
+
         /// <summary>
         ///  Writes data to the storage 
         ///  </summary><param name="segment">segment information</param><param name="offset">segment space offset</param><param name="buffer">data buffer to write</param><param name="length">amount of bytes to write</param><returns></returns>
