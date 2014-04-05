@@ -57,6 +57,7 @@ namespace SharpDc.Structs
         private byte[][] _leavesHashes;
 
         private Source[] _segmentSources;
+        private IStorageContainer _storageContainer;
 
         public bool HasLeaves
         {
@@ -138,7 +139,7 @@ namespace SharpDc.Structs
 
                         _activeSegments = new BitArray(ttl);
                         _downloadedSegments = new BitArray(ttl);
-                        _segmentSources = new Source[_totalSegmentsCount];
+                        _segmentSources = new Source[ttl];
                         _totalSegmentsCount = ttl;
                     }
                 }
@@ -153,7 +154,14 @@ namespace SharpDc.Structs
         [XmlIgnore]
         public DownloadItemsGroup FolderUnit { get; set; }
 
-        public IStorageContainer StorageContainer { get; set; }
+        public IStorageContainer StorageContainer
+        {
+            get { return _storageContainer; }
+            set { 
+                _storageContainer = value;
+                _storageContainer.DownloadItem = this;
+            }
+        }
 
         /// <summary>
         /// Gets a list of absolute paths where the file should be copied to when download is complete, can be null

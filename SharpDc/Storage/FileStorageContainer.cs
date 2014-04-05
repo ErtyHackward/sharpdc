@@ -22,7 +22,6 @@ namespace SharpDc.Storage
     [Serializable]
     public class FileStorageContainer : IStorageContainer
     {
-        private readonly DownloadItem _downloadItem;
         private static readonly ILogger Logger = LogManager.GetLogger();
 
         private readonly Dictionary<int, FileStream> _aliveStreams = new Dictionary<int, FileStream>();
@@ -66,9 +65,13 @@ namespace SharpDc.Storage
             }
         }
 
-        public FileStorageContainer(DownloadItem item)
+        public override int FreeSegments
         {
-            _downloadItem = item;
+            get { return int.MaxValue; }
+        }
+
+        public FileStorageContainer()
+        {
         }
 
         /// <summary>
@@ -180,7 +183,7 @@ namespace SharpDc.Storage
                 Interlocked.Increment(ref _readThreads);
                 using (var fs = new FileStream(TempFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, count))
                 {
-                    fs.Position = (long)_downloadItem.SegmentLength * segmentIndex + segmentOffset;
+                    fs.Position = (long)DownloadItem.SegmentLength * segmentIndex + segmentOffset;
                     return fs.Read(buffer, bufferOffset, count);
                 }
             }
@@ -194,11 +197,6 @@ namespace SharpDc.Storage
             }
             
             return 0;
-        }
-
-        public override int FreeSegments
-        {
-            get { return int.MaxValue; }
         }
 
         public override bool CanReadSegment(int index)
