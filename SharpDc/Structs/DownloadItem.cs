@@ -52,7 +52,7 @@ namespace SharpDc.Structs
         private SourceList _sources;
         private readonly List<int> _highPrioritySegments = new List<int>();
         private readonly object _syncRoot = new object();
-        private readonly Magnet _magnet;
+        private Magnet _magnet;
 
         private byte[][] _leavesHashes;
 
@@ -67,6 +67,7 @@ namespace SharpDc.Structs
         /// <summary>
         /// Depending on available leaves verify segment can be bigger than download segment
         /// </summary>
+        [XmlIgnore]
         public int VerifySegmentLength { get; private set; }
 
         [XmlIgnore]
@@ -99,6 +100,7 @@ namespace SharpDc.Structs
         public Magnet Magnet
         {
             get { return _magnet; }
+            set { _magnet = value; }
         }
         
         /// <summary>
@@ -318,12 +320,16 @@ namespace SharpDc.Structs
 
         #endregion
 
-        public DownloadItem(Magnet magnet)
+        public DownloadItem()
         {
-            _magnet = magnet;
             Priority = DownloadPriority.Normal;
             _sources = new SourceList { DownloadItem = this };
             ActiveSources = new List<Source>();
+        }
+
+        public DownloadItem(Magnet magnet) : this()
+        {
+            _magnet = magnet;
         }
 
         public bool TakeFreeSegment(Source src, out SegmentInfo segment)
@@ -588,7 +594,7 @@ namespace SharpDc.Structs
             }
         }
 
-        public bool Read(byte[] buffer, long filePosition, int count)
+        public bool Read(byte[] buffer, long filePosition, int offset, int count)
         {
             if (!CanRead(filePosition, count))
                 return false;
@@ -603,17 +609,17 @@ namespace SharpDc.Structs
                     if (startIndex == endIndex)
                     {
                         var startOffset = (int)(filePosition % _segmentLength);
-                        return StorageContainer.Read(startIndex, startOffset, buffer, 0, count) == count;
+                        return StorageContainer.Read(startIndex, startOffset, buffer, offset, count) == count;
                     }
 
-                    var position = 0;
+                    var position = offset;
                     for (var i = startIndex; i <= endIndex; i++)
                     {
                         if (i == startIndex)
                         {
                             var startOffset = (int)(filePosition % _segmentLength);
                             var length = _segmentLength - startOffset;
-                            if (StorageContainer.Read(i, startOffset, buffer, 0, length) != length)
+                            if (StorageContainer.Read(i, startOffset, buffer, position, length) != length)
                                 return false;
                             position += length;
                         }
