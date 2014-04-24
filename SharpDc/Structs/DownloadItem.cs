@@ -41,6 +41,21 @@ namespace SharpDc.Structs
             return (int)(filePosition / segmentSize);
         }
 
+        /// <summary>
+        /// Returns how much segments are in the file of specified size
+        /// </summary>
+        /// <param name="size"></param>
+        /// <param name="segmentSize"></param>
+        /// <returns></returns>
+        public static int SegmentsCount(long size, int segmentSize)
+        {
+            var segs = (int)(size / segmentSize);
+            if (size % segmentSize != 0)
+                segs++;
+
+            return segs;
+        }
+
         private int _segmentLength = 1024 * 1024;
         private BitArray _activeSegments;
         private BitArray _downloadedSegments;
@@ -133,9 +148,7 @@ namespace SharpDc.Structs
                         if (_totalSegmentsCount != 0)
                             return _totalSegmentsCount;
 
-                        var ttl = (int)(_magnet.Size / _segmentLength);
-                        if (_magnet.Size % _segmentLength != 0) 
-                            ttl++;
+                        var ttl = SegmentsCount(_magnet.Size, _segmentLength);
                         _doneSegmentsCount = 0;
                         _activeSegmentsCount = 0;
 

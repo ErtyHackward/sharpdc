@@ -1,4 +1,10 @@
-﻿using System.IO;
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2014
+// licensed under the LGPL
+// -------------------------------------------------------------
+
+using System.IO;
 using SharpDc.Messages;
 
 namespace SharpDc.Helpers

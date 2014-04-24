@@ -117,6 +117,10 @@ namespace SharpDc
 
         public FileSourceManager FileSourceManager { get; set; }
 
+        public StatisticsManager StatisticsManager { get; set; }
+
+        public UploadCacheManager UploadCacheManager { get; set; }
+
         /// <summary>
         /// Gets amount of bytes uploaded by the transfers since the program start
         /// </summary>
@@ -262,6 +266,10 @@ namespace SharpDc
             SourceManager = new SourceManager();
             FileSourceManager = new FileSourceManager();
 
+            StatisticsManager = new StatisticsManager(this);
+
+            UploadCacheManager = new UploadCacheManager(this);
+
             if (Settings.AutoSelectPort)
             {
                 var tcpPort = Settings.TcpPort;
@@ -314,7 +322,7 @@ namespace SharpDc
             else
                 LocalAddress = Settings.LocalAddress;
         }
-
+        
         #endregion
 
         /// <summary>

@@ -50,7 +50,7 @@ namespace SharpDc.Managers
         }
 
         public int MemoryUsed { get; private set; }
-
+        
         public HttpDownloadManager()
         {
             _pools = new List<HttpPool>();
