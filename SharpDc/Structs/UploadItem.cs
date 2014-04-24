@@ -40,6 +40,7 @@ namespace SharpDc.Structs
         private readonly object _syncRoot = new object();
         private FileStream _fileStream;
         private string _systemPath;
+        protected long _uploadedBytes;
 
         /// <summary>
         /// Gets or sets system path to use
@@ -53,6 +54,11 @@ namespace SharpDc.Structs
         public ContentItem Content { get; set; }
 
         public int FileStreamReadBufferSize { get; private set; }
+
+        public long UploadedBytes
+        {
+            get { return _uploadedBytes; }
+        }
 
         public event EventHandler<UploadItemEventArgs> Error;
 
@@ -115,7 +121,13 @@ namespace SharpDc.Structs
                 using (new PerfLimit("Slow read " + Content.SystemPath, 4000))
                 {
                     _fileStream.Position = start;
-                    return _fileStream.Read(array, 0, count);
+
+                    var read = _fileStream.Read(array, 0, count);
+
+                    if (read == count)
+                        _uploadedBytes += count;
+
+                    return read;
                 }
             }
         }

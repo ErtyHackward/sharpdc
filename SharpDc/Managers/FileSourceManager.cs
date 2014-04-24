@@ -134,7 +134,7 @@ namespace SharpDc.Managers
 
                 list.Sort((s1, s2) => s1.Value.CompareTo(s2.Value));
 
-                // find equal soruces if any
+                // find equal sources if any
                 int i;
                 var quality = list[0].Value;
 

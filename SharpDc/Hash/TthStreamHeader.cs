@@ -1,4 +1,10 @@
-﻿using System.Runtime.InteropServices;
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2014
+// licensed under the LGPL
+// -------------------------------------------------------------
+
+using System.Runtime.InteropServices;
 using System.IO;
 
 namespace SharpDc.Hash

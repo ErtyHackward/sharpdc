@@ -39,6 +39,7 @@ namespace SharpDc.Connections
         private byte[] _readBuffer;
 
         private TransferDirection _direction;
+        private UploadItem _uploadItem;
 
         internal bool UseBackgroundSeedMode { get; set; }
 
@@ -54,7 +55,23 @@ namespace SharpDc.Connections
 
         public DownloadItem DownloadItem { get; set; }
 
-        public UploadItem UploadItem { get; set; }
+        public UploadItem UploadItem
+        {
+            get { return _uploadItem; }
+            set { 
+                if (_uploadItem == value)
+                    return;
+
+                var ea = new UploadItemChangedEventArgs
+                {
+                    UploadItem = value,
+                    PreviousItem = _uploadItem
+                };
+
+                _uploadItem = value;
+                OnUploadItemChanged(ea);
+            }
+        }
 
         public string[] FirstMessages { get; set; }
 
@@ -83,6 +100,14 @@ namespace SharpDc.Connections
         public bool AllowedToConnect { get; set; }
 
         #region Events
+
+        public event EventHandler<UploadItemChangedEventArgs> UploadItemChanged;
+
+        protected virtual void OnUploadItemChanged(UploadItemChangedEventArgs e)
+        {
+            var handler = UploadItemChanged;
+            if (handler != null) handler(this, e);
+        }
 
         public event EventHandler<TransferSegmentCompletedEventArgs> SegmentCompleted;
 
@@ -763,6 +788,13 @@ namespace SharpDc.Connections
             DisconnectAsync();
             _disposed = true;
         }
+    }
+
+    public class UploadItemChangedEventArgs : UploadItemEventArgs
+    {
+        public UploadItem Item { get; set; }
+
+        public UploadItem PreviousItem { get; set; }
     }
 
     public enum TransferDirection

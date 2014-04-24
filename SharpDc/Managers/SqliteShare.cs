@@ -1,4 +1,10 @@
-﻿#if SQLITE
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2014
+// licensed under the LGPL
+// -------------------------------------------------------------
+
+#if SQLITE
 
 using System;
 using System.Collections.Generic;

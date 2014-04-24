@@ -105,6 +105,7 @@
     <Compile Include="Hash\TigerNative.cs" />
     <Compile Include="Hash\tigersbox.cs" />
     <Compile Include="Hash\TthStreamHeader.cs" />
+    <Compile Include="Helpers\Extensions.cs" />
     <Compile Include="Helpers\FileHelper.cs" />
     <Compile Include="Helpers\HttpHelper.cs" />
     <Compile Include="Helpers\Scope.cs" />
@@ -126,7 +127,9 @@
     <Compile Include="Managers\SearchQuery.cs" />
     <Compile Include="Managers\SourceManager.cs" />
     <Compile Include="Managers\SqliteShare.cs" />
+    <Compile Include="Managers\StatisticsManager.cs" />
     <Compile Include="Managers\TransferManager.cs" />
+    <Compile Include="Managers\UploadCacheManager.cs" />
     <Compile Include="Messages\ADCGETMessage.cs" />
     <Compile Include="Messages\ADCSNDMessage.cs" />
     <Compile Include="Messages\DirectionMessage.cs" />
@@ -155,6 +158,7 @@
     <Compile Include="Storage\FileStorageContainer.cs" />
     <Compile Include="Storage\MemoryStorageConatiner.cs" />
     <Compile Include="Storage\NullStorageContainer.cs" />
+    <Compile Include="Structs\CachedItem.cs" />
     <Compile Include="Structs\DcStream.cs" />
     <Compile Include="Structs\DownloadItem.cs" />
     <Compile Include="Structs\DownloadItemsGroup.cs" />

@@ -1,4 +1,10 @@
-﻿using System;
+﻿// -------------------------------------------------------------
+// SharpDc project 
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2014
+// licensed under the LGPL
+// -------------------------------------------------------------
+
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
