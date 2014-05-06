@@ -159,6 +159,7 @@ namespace SharpDc.Connections
         {
             var handler = ReceiveTimeoutHit;
             if (handler != null) handler(this, EventArgs.Empty);
+            Logger.Error("TcpConnection read timeout reached {0} ({1}ms)", RemoteEndPoint, ReceiveTimeout);
         }
 
         #endregion
@@ -531,6 +532,9 @@ namespace SharpDc.Connections
             _connectionStatus = status;
 
             OnConnectionStatusChanged(ea);
+
+            if (x != null)
+                Logger.Error("TcpConnection disconnected by error {0} {1}", RemoteAddress, x.Message);
 
             if (_connectionStatus == ConnectionStatus.Disconnected)
                 Dispose();

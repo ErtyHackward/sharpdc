@@ -6,6 +6,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Security;
 using SharpDc.Connections;
 using SharpDc.Structs;
 
@@ -54,6 +55,13 @@ namespace SharpDc.Managers
             {
                 return _items.TryGetValue(tth, out item);
             }
+        }
+
+        public StatItem GetItem(string tth)
+        {
+            StatItem result;
+            TryGetValue(tth, out result);
+            return result;
         }
 
         public void Clear()
