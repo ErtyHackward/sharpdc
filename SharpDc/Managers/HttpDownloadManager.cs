@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using SharpDc.Connections;
+using SharpDc.Logging;
 using SharpDc.Structs;
 
 namespace SharpDc.Managers
@@ -17,11 +18,15 @@ namespace SharpDc.Managers
     /// </summary>
     public class HttpDownloadManager : IDisposable
     {
+        private static readonly ILogger Logger = LogManager.GetLogger();
+
         private List<HttpPool> _pools;
 
         private readonly Queue<HttpCacheSegment> _cache = new Queue<HttpCacheSegment>();
         private readonly object _syncRoot = new object();
-        private int _cacheSize;
+        private long _cacheSize;
+        private int _connectionsPerServer;
+        private int _queueLimit;
 
         public List<HttpPool> Pools
         {
@@ -31,16 +36,52 @@ namespace SharpDc.Managers
         /// <summary>
         /// Maximum connections allowed per-server 
         /// </summary>
-        public int ConnectionsPerServer { get; set; }
-        
+        public int ConnectionsPerServer
+        {
+            get { return _connectionsPerServer; }
+            set { 
+                if (_connectionsPerServer == value)
+                    return;
+
+                _connectionsPerServer = value;
+
+                lock (_pools)
+                {
+                    foreach (var pool in _pools)
+                    {
+                        pool.ConnectionsLimit = _connectionsPerServer;
+                    }
+                }
+            }
+        }
+
         public int ReceiveTimeout { get; set; }
 
         /// <summary>
         /// Gets maximum queue size per pool
         /// </summary>
-        public int QueueLimit { get; set; }
+        public int QueueLimit
+        {
+            get { return _queueLimit; }
+            set { 
+                if (_queueLimit == value)
+                    return;
+                _queueLimit = value;
 
-        public int CacheSize
+                lock (_pools)
+                {
+                    foreach (var pool in _pools)
+                    {
+                        pool.QueueLimit = _queueLimit;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets maximum cache size for http segments (in bytes)
+        /// </summary>
+        public long CacheSize
         {
             get { return _cacheSize; }
             set { 
@@ -49,8 +90,21 @@ namespace SharpDc.Managers
             }
         }
 
-        public int MemoryUsed { get; private set; }
-        
+        /// <summary>
+        /// Gets bytes used for cache
+        /// </summary>
+        public long MemoryUsed { get; private set; }
+
+        /// <summary>
+        /// Gets total bytes downloaded using this manager
+        /// </summary>
+        public long TotalDownloaded { get; private set; }
+
+        /// <summary>
+        /// Gets total bytes were taken from the cache in this manager
+        /// </summary>
+        public long TotalFromCache { get; private set; }
+
         public HttpDownloadManager()
         {
             _pools = new List<HttpPool>();
@@ -78,7 +132,11 @@ namespace SharpDc.Managers
 
             if (segment.Buffer != null)
             {
-                Buffer.BlockCopy(segment.Buffer, 0, buffer, 0, length);
+                Buffer.BlockCopy(segment.Buffer, (int)(filePos - segment.Position), buffer, 0, length);
+                lock (_syncRoot)
+                {
+                    TotalFromCache += length;
+                }
                 return true;
             }
             
@@ -114,6 +172,15 @@ namespace SharpDc.Managers
                 }
             }
 
+            lock (_syncRoot)
+            {
+                TotalDownloaded += length;    
+            }
+            
+
+            if (!task.Completed)
+                Logger.Error("Unable to complete the task");
+
             return task.Completed;
         }
 
@@ -148,6 +215,7 @@ namespace SharpDc.Managers
                 {
                     pool.Dispose();
                 }
+                _pools.Clear();
             }
         }
     }

@@ -88,12 +88,12 @@ namespace SharpDc.Connections
                     var socket = _listenSocket.Accept();
                     var ea = new IncomingConnectionEventArgs { Socket = socket };
 
-                    using (var pl = new PerfLimit("Tcp connection listener connection handle"))
+                    using (new PerfLimit("Tcp connection listener connection handle"))
                         OnIncomingConnection(ea);
 
                     if (!ea.Handled)
                     {
-                        using (var pl = new PerfLimit("Tcp connection listener close"))
+                        using (new PerfLimit("Tcp connection listener close"))
                             socket.Close();
                     }
                 }

@@ -321,6 +321,13 @@ namespace SharpDc
             }
             else
                 LocalAddress = Settings.LocalAddress;
+
+            if (Settings.HttpMemoryCacheSize != 0)
+                HttpUploadItem.Manager.CacheSize = Settings.HttpMemoryCacheSize;
+            if (Settings.HttpQueueLimit != 0)
+                HttpUploadItem.Manager.QueueLimit = Settings.HttpQueueLimit;
+            if (Settings.HttpConnectionsPerServer != 0)
+                HttpUploadItem.Manager.ConnectionsPerServer = Settings.HttpConnectionsPerServer;
         }
         
         #endregion
@@ -688,6 +695,15 @@ namespace SharpDc
                     break;
                 case EngineSettingType.TcpReceiveBufferSize:
                     TcpConnection.DefaultConnectionBufferSize = Settings.TcpReceiveBufferSize;
+                    break;
+                case EngineSettingType.HttpMemoryCacheSize:
+                    HttpUploadItem.Manager.CacheSize = Settings.HttpMemoryCacheSize;
+                    break;
+                case EngineSettingType.HttpQueueLimit:
+                    HttpUploadItem.Manager.QueueLimit = Settings.HttpQueueLimit;               
+                    break;
+                case EngineSettingType.HttpConnectionsPerServer:
+                    HttpUploadItem.Manager.ConnectionsPerServer = Settings.HttpConnectionsPerServer;
                     break;
             }
         }

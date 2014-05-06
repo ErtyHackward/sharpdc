@@ -606,11 +606,13 @@ namespace SharpDc.Connections
                     if (adcgetMessage.Start + adcgetMessage.Length < position + length)
                         length = (int)(adcgetMessage.Start + adcgetMessage.Length - position);
 
+                    var sw = Stopwatch.StartNew();
                     var read = UploadItem.Read(_readBuffer, position, length);
+                    sw.Stop();
 
                     if (read != length)
                     {
-                        Logger.Error("Upload read error ({0}/{1}): {2}", read, length, UploadItem.Content.SystemPath);
+                        Logger.Error("Upload read error ({0}/{1}/{3}): {2}", read, length, UploadItem.Content.SystemPath, sw.ElapsedMilliseconds);
                         Dispose();
                         return;
                     }

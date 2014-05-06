@@ -87,6 +87,7 @@ namespace SharpDc.Structs
                         Tasks.Add(task);
                     else
                     {
+                        Logger.Error("Dropping task because of full queue");
                         task.Event.Set();
                     }
                 }

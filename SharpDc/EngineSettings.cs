@@ -47,6 +47,9 @@ namespace SharpDc
 
         private int _searchAlternativesInterval;
         private bool _backgroundSeedMode;
+        private long _httpMemoryCacheSize;
+        private int _httpQueueLimit;
+        private int _httpConnectionsPerServer;
 
         protected void OnChanged(EngineSettingType st)
         {
@@ -459,7 +462,57 @@ namespace SharpDc
             }
         }
 
-        
+        /// <summary>
+        /// Gets or sets the maximum size (in bytes) of memory cache for http upload items (server usage only)
+        /// Default 0 means no cache
+        /// </summary>
+        public long HttpMemoryCacheSize
+        {
+            get { return _httpMemoryCacheSize; }
+            set
+            {
+                if (_httpMemoryCacheSize != value)
+                {
+                    _httpMemoryCacheSize = value;
+                    OnChanged(EngineSettingType.HttpMemoryCacheSize);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the maximum number of segments could be in the waiting queue for http upload items (server usage only)
+        /// Default 0
+        /// </summary>
+        public int HttpQueueLimit
+        {
+            get { return _httpQueueLimit; }
+            set
+            {
+                if (_httpQueueLimit != value)
+                {
+                    _httpQueueLimit = value;
+                    OnChanged(EngineSettingType.HttpQueueLimit);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the maximum number of simultaneous connectons to each server for http upload items (server usage only)
+        /// Default 0
+        /// </summary>
+        public int HttpConnectionsPerServer
+        {
+            get { return _httpConnectionsPerServer; }
+            set
+            {
+                if (_httpConnectionsPerServer != value)
+                {
+                    _httpConnectionsPerServer = value;
+                    OnChanged(EngineSettingType.HttpConnectionsPerServer);
+                }
+            }
+        }
+
 
         /// <summary>
         /// Gets default settings
@@ -489,7 +542,9 @@ namespace SharpDc
                                _netInterface = null,
                                _useSparse = false,
                                _backgroundSeedMode = true,
-                               _measureUploadSourceQuality = false
+                               _measureUploadSourceQuality = false,
+                               _httpQueueLimit = 0,
+                               _httpConnectionsPerServer = 0
                            };
             }
         }

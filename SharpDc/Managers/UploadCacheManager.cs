@@ -34,6 +34,17 @@ namespace SharpDc.Managers
             get { return _uploadedFromCache; }
         }
 
+        public IEnumerable<CachedItem> CachedItems()
+        {
+            lock (_syncRoot)
+            {
+                foreach (var value in _items.Values)
+                {
+                    yield return value;    
+                }
+            }
+        }
+
         public UploadCacheManager(DcEngine engine)
         {
             _engine = engine;

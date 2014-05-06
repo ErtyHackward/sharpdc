@@ -139,6 +139,35 @@ namespace SharpDc
         }
 
         /// <summary>
+        /// Allows to parse size in formats like "10K" "15M" "1G"
+        /// </summary>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public static long ParseSize(string value)
+        {
+            value = value.ToLower().Trim();
+            long modifier = 1;
+            if (Char.IsLetter(value.Last()))
+            {
+                if (value.EndsWith("k"))
+                    modifier = 1024;
+                if (value.EndsWith("m"))
+                    modifier = 1024 * 1024;
+                if (value.EndsWith("g"))
+                    modifier = 1024 * 1024 * 1024;
+
+                value = value.Remove(value.Length - 1);
+            }
+            long result;
+            if (long.TryParse(value, out result))
+            {
+                result *= modifier;
+            }
+
+            return result;
+        }
+
+        /// <summary>
         /// Parses string into a IPEndPoint
         /// http://stackoverflow.com/questions/2727609/best-way-to-create-ipendpoint-from-string
         /// </summary>
