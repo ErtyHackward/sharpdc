@@ -102,9 +102,6 @@ namespace SharpDc.Managers
                 if (!_engine.StatisticsManager.TryGetValue(e.Magnet.TTH, out statItem))
                     return;
                 
-                if (statItem.Rate < 2)
-                    return;
-
                 var list = new List<KeyValuePair<CachedItem, StatItem>>();
                 
                 lock (_syncRoot)

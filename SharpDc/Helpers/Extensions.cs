@@ -5,6 +5,8 @@
 // -------------------------------------------------------------
 
 using System.Collections;
+using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace SharpDc.Helpers
 {
@@ -34,6 +36,16 @@ namespace SharpDc.Helpers
                     return i;
             }
             return -1;
+        }
+
+        public static int TrueCount(this BitArray array)
+        {
+            return array.Cast<bool>().Count(v => v);
+        }
+
+        public static int FalseCount(this BitArray array)
+        {
+            return array.Count - array.TrueCount();
         }
     }
 }
