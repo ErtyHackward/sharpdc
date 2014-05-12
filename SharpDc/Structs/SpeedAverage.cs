@@ -125,6 +125,7 @@ namespace SharpDc.Structs
         {
             lock (_syncRoot)
             {
+                Update(0);
                 RemoveOldValues();
                 return _buffer.Sum(pair => pair.Value) + _accumulated;
             }

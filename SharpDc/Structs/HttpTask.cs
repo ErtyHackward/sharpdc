@@ -4,29 +4,47 @@
 // licensed under the LGPL
 // -------------------------------------------------------------
 
+using System;
 using System.Diagnostics;
 using System.Threading;
 using SharpDc.Connections;
+using SharpDc.Logging;
 
 namespace SharpDc.Structs
 {
     public class HttpTask
     {
+        private static readonly ILogger Logger = LogManager.GetLogger();
+
+        private int _pos;
+
         public byte[] Buffer;
         public long FilePosition;
         public int Length;
         public long CreatedTimestamp;
+        public long AssignedTimestamp;
         public bool Completed;
         public string Url;
         public ManualResetEventSlim Event;
         public HttpConnection Connection;
-
-        public double ExecutionTime
+        
+        /// <summary>
+        /// Gets total wait time
+        /// </summary>
+        public TimeSpan ExecutionTime
         {
-            get { return (double)(Stopwatch.GetTimestamp() - CreatedTimestamp) / Stopwatch.Frequency; }
+            get { return TimeSpan.FromSeconds((double)(Stopwatch.GetTimestamp() - CreatedTimestamp) / Stopwatch.Frequency); }
         }
 
-        private int _pos;
+        /// <summary>
+        /// Gets time spent in the queue
+        /// </summary>
+        public TimeSpan QueueTime {
+            get
+            {
+                return AssignedTimestamp == 0 ? TimeSpan.Zero : TimeSpan.FromSeconds((double)(AssignedTimestamp - CreatedTimestamp) / Stopwatch.Frequency);
+            }
+        }
 
         public HttpTask()
         {
@@ -36,6 +54,7 @@ namespace SharpDc.Structs
 
         public void SetConnection(HttpConnection connection)
         {
+            AssignedTimestamp = Stopwatch.GetTimestamp();
             Connection = connection;
             connection.DataRecieved += ConnectionDataRecieved;
             connection.ConnectionStatusChanged += ConnectionConnectionStatusChanged;
@@ -48,6 +67,7 @@ namespace SharpDc.Structs
         {
             if (e.Status == Events.ConnectionStatus.Disconnected)
             {
+                Logger.Error("Dropping task because of disconnect");
                 Event.Set();
                 Cleanup();
             }
