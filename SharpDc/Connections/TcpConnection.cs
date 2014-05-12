@@ -484,7 +484,10 @@ namespace SharpDc.Connections
                 {
                     if (_delayedMessages.Count == 0)
                     {
-                        _sendThreadActive = false;
+                        lock (_threadLock)
+                        {
+                            _sendThreadActive = false;
+                        }
                         return;
                     }
                 }
@@ -505,6 +508,10 @@ namespace SharpDc.Connections
                                 t.Sync.Set();
                         }
                         _delayedMessages.Clear();
+                        lock (_threadLock)
+                        {
+                            _sendThreadActive = false;
+                        }
                     }
                     break;
                 }

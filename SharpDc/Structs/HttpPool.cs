@@ -43,17 +43,21 @@ namespace SharpDc.Structs
         {
             if (ReceiveTimeout == 0)
                 return;
-
+            using (new PerfLimit("Delete old tasks"))
             lock (SyncRoot)
             {
-                foreach (
-                    var httpTask in
-                        Tasks.Where(t => t.ExecutionTime > ReceiveTimeout / 1000))
+                using (new PerfLimit("Delete old tasks int"))
                 {
-                    httpTask.Event.Set();
-                }
+                    foreach (
+                        var httpTask in
+                            Tasks.Where(t => t.ExecutionTime.TotalMilliseconds > ReceiveTimeout))
+                    {
+                        Logger.Error("Dropping task because of time out {0}. QueueWait {1}", ReceiveTimeout, httpTask.QueueTime.TotalMilliseconds);
+                        httpTask.Event.Set();
+                    }
 
-                Tasks.RemoveAll(t => t.ExecutionTime > ReceiveTimeout / 1000);
+                    Tasks.RemoveAll(t => t.ExecutionTime.TotalMilliseconds > ReceiveTimeout);
+                }
             }
         }
 
@@ -63,6 +67,7 @@ namespace SharpDc.Structs
 
             HttpConnection conn = null;
 
+            using (new PerfLimit("Start task"))
             lock (SyncRoot)
             {
                 if (_freeList.Count > 0)
@@ -104,7 +109,7 @@ namespace SharpDc.Structs
             HttpTask task;
             lock (SyncRoot)
             {
-                task = Tasks.FirstOrDefault(t => t.Connection == httpCon && t.ExecutionTime > ReceiveTimeout / 1000);
+                task = Tasks.FirstOrDefault(t => t.Connection == httpCon && t.ExecutionTime.TotalMilliseconds > ReceiveTimeout);
             }
 
             if (task != null)
@@ -117,20 +122,23 @@ namespace SharpDc.Structs
 
             DeleteOldTasks();
 
+            HttpTask task = null;
             lock (SyncRoot)
             {
                 if (Tasks.Count > 0)
                 {
-                    var task = Tasks[0];
+                    task = Tasks[0];
                     Tasks.RemoveAt(0);
-
-                    task.SetConnection(httpCon);
                 }
                 else
                 {
                     _freeList.Add(httpCon);
                 }
             }
+
+            if (task != null)
+                task.SetConnection(httpCon);
+            
         }
 
         private void HttpConConnectionStatusChanged(object sender, Events.ConnectionStatusEventArgs e)
