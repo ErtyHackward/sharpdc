@@ -11,12 +11,15 @@ using System.Net.Mime;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Threading;
+using SharpDc.Logging;
 using SharpDc.Structs;
 
 namespace SharpDc.Helpers
 {
     public static class HttpHelper
     {
+        private static readonly ILogger Logger = LogManager.GetLogger();
+
         private static MethodInfo httpWebRequestAddRangeHelper = typeof (WebHeaderCollection).GetMethod
             ("AddWithoutValidate", BindingFlags.Instance | BindingFlags.NonPublic);
 
@@ -79,8 +82,9 @@ namespace SharpDc.Helpers
             req.BeginGetResponse(delegate(IAsyncResult ar) {
                 try
                 {
-                    var response = req.EndGetResponse(ar);
-                    callback(response.GetResponseStream(), null);
+                    using (var response = req.EndGetResponse(ar))
+                    using (var stream = response.GetResponseStream())
+                        callback(stream, null);
                 }
                 catch (Exception x)
                 {

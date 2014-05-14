@@ -9,6 +9,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using SharpDc.Events;
@@ -588,25 +589,32 @@ namespace SharpDc.Connections
                     Length = adcgetMessage.Length
                 }.Raw);
 
+            _counter = new PerfCounter("SEG");
             _adcLength = adcgetMessage.Length;
-
             UploadItem.RequestChunkAsync(adcgetMessage.Start, (int)adcgetMessage.Length, ChunkRequested);
         }
+
+        private PerfCounter _counter;
 
         private void ChunkRequested(Stream stream, Exception exception)
         {
             if (stream != null)
             {
+                _counter.Stage("Resp received");
+                var bufferLength = 256 * 1024;
 
-                byte[] readBuffer = new byte[ushort.MaxValue];
-                int read;
-
-                for (int pos = 0; pos < _adcLength; pos += readBuffer.Length)
+                for (int pos = 0; pos < _adcLength; pos += bufferLength)
                 {
-                    read = stream.Read(readBuffer, 0, readBuffer.Length);
+                    var readBuffer = new byte[bufferLength];
+                    var len = (int)Math.Min(readBuffer.Length, _adcLength - pos);
+
+                    var read = stream.Read(readBuffer, 0, len);
                     Send(readBuffer, 0, read);
                 }
+                _adcLength = -1;
+                _counter.LastStage("send");
 
+                
             }
             else
             {
