@@ -210,8 +210,8 @@ namespace SharpDc.Managers
 
             if (!_listening)
             {
-                HttpUploadItem.HttpSegmentDownloaded += HttpUploadItem_HttpSegmentDownloaded;
-                HttpUploadItem.HttpSegmentNeeded += HttpUploadItem_HttpSegmentNeeded;
+                //HttpUploadItem.HttpSegmentDownloaded += HttpUploadItem_HttpSegmentDownloaded;
+                //HttpUploadItem.HttpSegmentNeeded += HttpUploadItem_HttpSegmentNeeded;
                 _listening = true;
             }
         }

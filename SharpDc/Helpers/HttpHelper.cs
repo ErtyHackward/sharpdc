@@ -5,8 +5,10 @@
 // -------------------------------------------------------------
 
 using System;
+using System.IO;
 using System.Net;
 using System.Net.Mime;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Threading;
 using SharpDc.Structs;
@@ -62,6 +64,29 @@ namespace SharpDc.Helpers
                     read += stream.Read(buffer, read, Math.Min(readLength - read, 64 * 1024));
                 }
             }
+        }
+
+        public static void DownloadChunkAsync(string uri, long filePosition, int readLength, Action<Stream,Exception> callback)
+        {
+            var req = (HttpWebRequest)WebRequest.Create(uri);
+            req.ReadWriteTimeout = 4000;
+            req.AddRangeTrick(filePosition, filePosition + readLength - 1);
+            req.Proxy = null;
+            req.KeepAlive = true;
+            req.Timeout = 4000;
+            req.ServicePoint.ConnectionLimit = HttpUploadItem.Manager.ConnectionsPerServer;
+
+            req.BeginGetResponse(delegate(IAsyncResult ar) {
+                try
+                {
+                    var response = req.EndGetResponse(ar);
+                    callback(response.GetResponseStream(), null);
+                }
+                catch (Exception x)
+                {
+                    callback(null, x);                             
+                }
+            }, null);
         }
 
         public static long GetFileSize(string uri)
