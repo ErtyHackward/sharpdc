@@ -6,6 +6,7 @@
 
 using System;
 using SharpDc.Connections;
+using SharpDc.Helpers;
 using SharpDc.Logging;
 using SharpDc.Managers;
 
@@ -59,7 +60,16 @@ namespace SharpDc.Structs
 
             using (new PerfLimit(string.Format("Slow http request {0} {1} bytes", SystemPath, length), 4000))
             {
-                done = Manager.DownloadChunk(SystemPath, _buffer, _position, length);
+                //done = Manager.DownloadChunk(SystemPath, _buffer, _position, length);
+                try
+                {
+                    HttpHelper.DownloadChunk(SystemPath, _buffer, _position, length);
+                    done = true;
+                }
+                catch (Exception x)
+                {
+                    done = false;
+                }
             }
 
             if (HttpSegmentDownloaded != null)

@@ -8,6 +8,8 @@ using System;
 using System.Net;
 using System.Net.Mime;
 using System.Reflection;
+using System.Threading;
+using SharpDc.Structs;
 
 namespace SharpDc.Helpers
 {
@@ -46,6 +48,8 @@ namespace SharpDc.Helpers
             req.Proxy = null;
             req.KeepAlive = true;
             req.Timeout = 4000;
+            req.ServicePoint.ConnectionLimit = HttpUploadItem.Manager.ConnectionsPerServer;
+            
 
             using (var response = req.GetResponse())
             using (var stream = response.GetResponseStream())

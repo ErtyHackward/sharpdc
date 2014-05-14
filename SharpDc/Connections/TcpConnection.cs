@@ -252,7 +252,7 @@ namespace SharpDc.Connections
         public void ListenAsync()
         {
             _closingSocket = false;
-            DcEngine.ThreadPool.QueueWorkItem(SocketReadThread);
+            BeginRead();
         }
 
         public void ConnectAsync()
@@ -276,7 +276,7 @@ namespace SharpDc.Connections
                 }
 
                 // take a thread pool thread and run socket in it
-                DcEngine.ThreadPool.QueueWorkItem(SocketReadThread);
+                BeginRead();
             }
             catch (Exception x)
             {
@@ -288,7 +288,7 @@ namespace SharpDc.Connections
         {
         }
 
-        private void SocketReadThread()
+        private void BeginRead()
         {
             try
             {
@@ -297,40 +297,15 @@ namespace SharpDc.Connections
                     SetConnectionStatus(ConnectionStatus.Connecting);
 
                     _lastUpdate = DateTime.Now;
-                    _socket.Connect(RemoteEndPoint);
-
-                    LocalAddress = (IPEndPoint)_socket.LocalEndPoint;
-
-                    SetConnectionStatus(ConnectionStatus.Connected);
-
-                    SendFirstMessages();
+                    _socket.BeginConnect(RemoteEndPoint, ConnectCallback, null);
+                    return;
                 }
                 
                 if (_connectionBuffer == null || _connectionBuffer.Length != ConnectionBufferSize)
                     _connectionBuffer = new byte[ConnectionBufferSize];
 
-                while (_connectionStatus == ConnectionStatus.Connected)
-                {
-                    if (ReceiveTimeout > 0)
-                    {
-                        if (_socket.Poll(1000 * ReceiveTimeout, SelectMode.SelectRead))
-                        {
-                            if (!ReceiveInternal())
-                                break;
-                        }
-                        else
-                        {
-                            OnReadTimeout();
-                        }
-                    }
-                    else
-                    {
-                        if (!ReceiveInternal())
-                            break;
-                    }
-                }
+                _socket.BeginReceive(_connectionBuffer, 0, _connectionBuffer.Length, SocketFlags.None, ReceiveCallback, null);
 
-                SetConnectionStatus(ConnectionStatus.Disconnected);
             }
             catch (Exception x)
             {
@@ -338,23 +313,48 @@ namespace SharpDc.Connections
             }
         }
 
-        private bool ReceiveInternal()
+        private void ReceiveCallback(IAsyncResult ar)
         {
-            var bytesReceived = _socket.Receive(_connectionBuffer);
-
-            if (bytesReceived == 0)
-                return false;
-
-            if (_connectionBuffer != null)
+            try
             {
-                _downloadSpeed.Update(bytesReceived);
-                _lastUpdate = DateTime.Now;
-                ParseRaw(_connectionBuffer, bytesReceived);
-                DownloadSpeedLimit.Update(bytesReceived);
-                DownloadSpeedLimitGlobal.Update(bytesReceived);
-            }
+                var bytesReceived = _socket.EndReceive(ar);
 
-            return true;
+                if (bytesReceived == 0)
+                {
+                    SetConnectionStatus(ConnectionStatus.Disconnected);
+                    return;
+                }
+                
+                if (_connectionBuffer != null)
+                {
+                    _downloadSpeed.Update(bytesReceived);
+                    _lastUpdate = DateTime.Now;
+                    ParseRaw(_connectionBuffer, bytesReceived);
+                    DownloadSpeedLimit.Update(bytesReceived);
+                    DownloadSpeedLimitGlobal.Update(bytesReceived);
+                    _socket.BeginReceive(_connectionBuffer, 0, _connectionBuffer.Length, SocketFlags.None, ReceiveCallback, null);
+                }
+            }
+            catch (Exception x)
+            {
+                SetConnectionStatus(ConnectionStatus.Disconnected, x);
+            }
+        }
+
+        private void ConnectCallback(IAsyncResult ar)
+        {
+            try
+            {
+                _socket.EndConnect(ar);
+                LocalAddress = (IPEndPoint)_socket.LocalEndPoint;
+                SetConnectionStatus(ConnectionStatus.Connected);
+                SendFirstMessages();
+                BeginRead();
+            }
+            catch (Exception x)
+            {
+                SetConnectionStatus(ConnectionStatus.Disconnected, x);
+            }
         }
 
         protected abstract void ParseRaw(byte[] buffer, int length);
