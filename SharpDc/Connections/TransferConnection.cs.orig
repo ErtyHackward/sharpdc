@@ -7,7 +7,9 @@
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using SharpDc.Events;
@@ -40,6 +42,7 @@ namespace SharpDc.Connections
 
         private TransferDirection _direction;
         private UploadItem _uploadItem;
+        private long _adcLength = -1;
 
         internal bool UseBackgroundSeedMode { get; set; }
 
@@ -565,11 +568,6 @@ namespace SharpDc.Connections
                 }
             }
 
-            if (_readBuffer == null)
-            {
-                _readBuffer = new byte[1024 * 64];
-            }
-
             if (adcgetMessage.Start >= UploadItem.Content.Magnet.Size)
             {
                 SendMessage(new ErrorMessage { Error = "File Not Available" }.Raw);
@@ -583,44 +581,59 @@ namespace SharpDc.Connections
                 adcgetMessage.Length = UploadItem.Content.Magnet.Size - adcgetMessage.Start;
             }
 
-            using (UseBackgroundSeedMode ? Thread.CurrentThread.EnterBackgroundProcessingMode() : Scope.Empty)
-            {
-                for (var position = adcgetMessage.Start;
-                     !_disposed && position < adcgetMessage.Start + adcgetMessage.Length;
-                     position += _readBuffer.Length)
+            SendMessage(
+                new ADCSNDMessage
                 {
-                    if (position == adcgetMessage.Start)
-                    {
-                        SendMessage(
-                            new ADCSNDMessage
-                                {
-                                    Type = ADCGETType.File,
-                                    Request = adcgetMessage.Request,
-                                    Start = adcgetMessage.Start,
-                                    Length = adcgetMessage.Length
-                                }.Raw);
-                    }
+                    Type = ADCGETType.File,
+                    Request = adcgetMessage.Request,
+                    Start = adcgetMessage.Start,
+                    Length = adcgetMessage.Length
+                }.Raw);
 
 
+            _segmentService = new PerfLimit("Segment service", 4000);
+            _streamWait = new PerfLimit("Stream wait", 500);
 
-                    var length = _readBuffer.Length;
+            _adcLength = adcgetMessage.Length;
+            UploadItem.RequestChunkAsync(adcgetMessage.Start, (int)adcgetMessage.Length, ChunkRequested);
 
-                    if (adcgetMessage.Start + adcgetMessage.Length < position + length)
-                        length = (int)(adcgetMessage.Start + adcgetMessage.Length - position);
+            //using (new PerfLimit("Segment service", 4000))
+            //{
+            //    var buffer = new byte[1024 * 1024];
+            //    using (new PerfLimit("Chunk download", 500))
+            //        HttpHelper.DownloadChunk(UploadItem.SystemPath, buffer, adcgetMessage.Start, (int)adcgetMessage.Length);
+            //    using (new PerfLimit("User sending",3500))
+            //        Send(buffer, 0, buffer.Length);
+            //}
+        }
 
-                    var sw = Stopwatch.StartNew();
-                    var read = UploadItem.Read(_readBuffer, position, length);
-                    sw.Stop();
+        private PerfLimit _segmentService;
+        private PerfLimit _streamWait;
 
-                    if (read != length)
-                    {
-                        Logger.Error("Upload read error ({0}/{1}/{3}): {2}", read, length, UploadItem.Content.SystemPath, sw.ElapsedMilliseconds);
-                        Dispose();
-                        return;
-                    }
+        private void ChunkRequested(Stream stream, Exception exception)
+        {
+            _streamWait.Dispose();
+            if (stream != null)
+            {
+                var bufferLength = 1024 * 1024;
+                var readBuffer = new byte[bufferLength];
+                int read = 0;
+                for (int pos = 0; pos < _adcLength; )
+                {
+                    var len = (int)Math.Min(readBuffer.Length, _adcLength - pos);
                     
-                    Send(_readBuffer, 0, read);
+                    read += stream.Read(readBuffer, read, len);
+                    
+                    Send(readBuffer, 0, read);
+                    pos += read;
                 }
+                _segmentService.Dispose();
+                _adcLength = -1;
+            }
+            else
+            {
+                Logger.Error("No stream is obtained {0}", exception);
+                Dispose();
             }
         }
 
@@ -769,7 +782,6 @@ namespace SharpDc.Connections
             if (_disposed)
                 return;
 
-            _readBuffer = null;
             ReleaseSegment();
             DownloadItem = null;
             if (UploadItem != null)
