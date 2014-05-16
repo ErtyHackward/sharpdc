@@ -77,7 +77,8 @@ namespace SharpDc.Structs
             var handler = Request;
             if (handler != null) handler(this, e);
         }
-        
+
+
         public event EventHandler Disposed;
 
         private void OnDisposed()
@@ -86,10 +87,78 @@ namespace SharpDc.Structs
             if (handler != null) handler(this, EventArgs.Empty);
         }
 
-        public UploadItem(ContentItem item, int bufferSize = 1024 * 4)
+        public UploadItem(ContentItem item, int bufferSize = 1024 * 100)
         {
             Content = item;
             FileStreamReadBufferSize = bufferSize;
+        }
+
+        protected virtual int InternalRead(byte[] array, long start, int count)
+        {
+            if (_fileStream == null)
+            {
+                FileStream fs;
+                using (new PerfLimit("Slow open " + Content.SystemPath, 4000))
+                {
+                    fs = new FileStream(SystemPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
+                                        FileStreamReadBufferSize, false);
+                }
+
+                lock (_syncRoot)
+                {
+                    if (_isDisposed)
+                    {
+                        fs.Dispose();
+                        return 0;
+                    }
+                    Interlocked.Increment(ref _fileStreamsCount);
+                    _fileStream = fs;
+                }
+            }
+
+            lock (_syncRoot)
+            {
+                using (new PerfLimit("Slow read " + Content.SystemPath, 4000))
+                {
+                    _fileStream.Position = start;
+
+                    var read = _fileStream.Read(array, 0, count);
+
+                    if (read == count)
+                        _uploadedBytes += count;
+
+                    return read;
+                }
+            }
+        }
+
+        public int Read(byte[] array, long start, int count)
+        {
+            try
+            {
+                if (EnableRequestEventFire)
+                    OnRequest(new UploadItemEventArgs());
+                return InternalRead(array, start, count);
+            }
+            catch (Exception x)
+            {
+                OnError(new UploadItemEventArgs { Exception = x });
+                Logger.Error("Unable to read the data for upload: " + x.Message);
+                return 0;
+            }
+        }
+
+        public bool IsLocked
+        {
+            get
+            {
+                if (Monitor.TryEnter(_syncRoot, 100))
+                {
+                    Monitor.Exit(_syncRoot);
+                    return false;
+                }
+                return true;
+            }
         }
 
         public virtual void Dispose()
@@ -100,80 +169,11 @@ namespace SharpDc.Structs
                 {
                     _fileStream.Dispose();
                     _fileStream = null;
-                    _fileStreamsCount--;
+                    Interlocked.Decrement(ref _fileStreamsCount);
                 }
                 _isDisposed = true;
             }
             OnDisposed();
-        }
-
-        /// <summary>
-        /// Returns a stream for reading a chunk
-        /// </summary>
-        /// <param name="start"></param>
-        /// <param name="length"></param>
-        /// <param name="callback"></param>
-        /// <returns></returns>
-        public virtual void RequestChunkAsync(long start, int length, Action<Stream,Exception> callback)
-        {
-            if (EnableRequestEventFire)
-            {
-                OnRequest(new UploadItemEventArgs
-                {
-                    Content = Content,
-                    UploadItem = this
-                });
-            }
-
-            new ThreadStart(() =>
-            {
-                Exception ex = null;
-                if (_fileStream == null)
-                {
-                    FileStream fs = null;
-                    
-                    try
-                    {
-                        using (new PerfLimit("Slow open " + Content.SystemPath, 4000))
-                        {
-                            fs = new FileStream(SystemPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
-                                FileStreamReadBufferSize, true);
-                        }
-                    }
-                    catch (Exception x)
-                    {
-                        OnError(new UploadItemEventArgs
-                        {
-                            Content = Content,
-                            UploadItem = this,
-                            Exception = x
-                        });
-                        ex = x;
-                    }
-
-                    lock (_syncRoot)
-                    {
-                        if (fs == null)
-                        {
-                            callback(null, ex);
-                            return;
-                        }
-
-                        if (_isDisposed)
-                        {
-                            fs.Dispose();
-                            return;
-                        }
-                        _fileStreamsCount++;
-                        _fileStream = fs;
-                    }
-                }
-
-                _fileStream.Position = start;
-
-                callback(_fileStream, null);
-
-            }).BeginInvoke(null, null);
         }
     }
 }

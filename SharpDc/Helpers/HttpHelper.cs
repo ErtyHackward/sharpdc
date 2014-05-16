@@ -5,6 +5,7 @@
 // -------------------------------------------------------------
 
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Mime;
@@ -20,8 +21,15 @@ namespace SharpDc.Helpers
     {
         private static readonly ILogger Logger = LogManager.GetLogger();
 
+        private static readonly MovingAverage SegmentDownloadTime = new MovingAverage(TimeSpan.FromSeconds(30));
+        
         private static MethodInfo httpWebRequestAddRangeHelper = typeof (WebHeaderCollection).GetMethod
             ("AddWithoutValidate", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        public static int HttpSegmentAverageLoadTime
+        {
+            get { return (int)SegmentDownloadTime.GetAverage(); }
+        }
 
         /// <summary>Adds a byte range header to the request for a specified range.</summary>
         /// <param name="request">The <see cref="HttpWebRequest"/> to add the range specifier to.</param>
@@ -47,6 +55,8 @@ namespace SharpDc.Helpers
             if (readLength > buffer.Length)
                 throw new ArgumentException("Requested to read more than buffer size");
 
+            var sw = Stopwatch.StartNew();
+
             var req = (HttpWebRequest)WebRequest.Create(uri);
             req.ReadWriteTimeout = 4000;
             req.AddRangeTrick(filePosition, filePosition + readLength - 1);
@@ -67,6 +77,9 @@ namespace SharpDc.Helpers
                     read += stream.Read(buffer, read, Math.Min(readLength - read, 64 * 1024));
                 }
             }
+
+            sw.Stop();
+            SegmentDownloadTime.Update((int)sw.ElapsedMilliseconds);
         }
 
         public static void DownloadChunkAsync(string uri, long filePosition, int readLength, Action<Stream,Exception> callback)
@@ -78,7 +91,7 @@ namespace SharpDc.Helpers
             req.KeepAlive = true;
             req.Timeout = 4000;
             req.ServicePoint.ConnectionLimit = HttpUploadItem.Manager.ConnectionsPerServer;
-
+            
             req.BeginGetResponse(delegate(IAsyncResult ar) {
                 try
                 {
