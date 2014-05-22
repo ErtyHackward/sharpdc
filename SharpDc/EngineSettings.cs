@@ -50,6 +50,7 @@ namespace SharpDc
         private long _httpMemoryCacheSize;
         private int _httpQueueLimit;
         private int _httpConnectionsPerServer;
+        private bool _asyncTransfers;
 
         protected void OnChanged(EngineSettingType st)
         {
@@ -513,6 +514,21 @@ namespace SharpDc
             }
         }
 
+        /// <summary>
+        /// Indicates if the transfers use async operations or create a thread for each connection
+        /// </summary>
+        public bool AsyncTransfers
+        {
+            get { return _asyncTransfers; }
+            set {
+                if (_asyncTransfers != value)
+                {
+                    _asyncTransfers = value;
+                    OnChanged(EngineSettingType.AsyncTransfers);
+                }
+            }
+        }
+
 
         /// <summary>
         /// Gets default settings
@@ -544,7 +560,8 @@ namespace SharpDc
                                _backgroundSeedMode = true,
                                _measureUploadSourceQuality = false,
                                _httpQueueLimit = 0,
-                               _httpConnectionsPerServer = 0
+                               _httpConnectionsPerServer = 0,
+                               _asyncTransfers = true
                            };
             }
         }

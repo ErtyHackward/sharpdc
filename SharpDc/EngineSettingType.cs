@@ -35,6 +35,7 @@ namespace SharpDc
         UploadSourceQuality,
         HttpMemoryCacheSize,
         HttpQueueLimit,
-        HttpConnectionsPerServer
+        HttpConnectionsPerServer,
+        AsyncTransfers
     }
 }

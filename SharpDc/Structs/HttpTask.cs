@@ -25,7 +25,7 @@ namespace SharpDc.Structs
         public long AssignedTimestamp;
         public bool Completed;
         public string Url;
-        public ManualResetEventSlim Event;
+        public ManualResetEvent Event;
         public HttpConnection Connection;
         
         /// <summary>
@@ -49,7 +49,7 @@ namespace SharpDc.Structs
         public HttpTask()
         {
             CreatedTimestamp = Stopwatch.GetTimestamp();
-            Event = new ManualResetEventSlim();
+            Event = new ManualResetEvent(false);
         }
 
         public void SetConnection(HttpConnection connection)
@@ -60,7 +60,7 @@ namespace SharpDc.Structs
             connection.ConnectionStatusChanged += ConnectionConnectionStatusChanged;
 
             connection.SetRange(FilePosition, FilePosition + Length - 1);
-            connection.RequestAsync(Url);
+            connection.Request(Url);
         }
 
         private void ConnectionConnectionStatusChanged(object sender, Events.ConnectionStatusEventArgs e)
