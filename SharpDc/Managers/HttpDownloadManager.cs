@@ -105,11 +105,14 @@ namespace SharpDc.Managers
         /// </summary>
         public long TotalFromCache { get; private set; }
 
+        public MovingAverage SegmentDelay { get; set; }
+
         public HttpDownloadManager()
         {
             _pools = new List<HttpPool>();
             ConnectionsPerServer = 3;
             QueueLimit = 10;
+            SegmentDelay = new MovingAverage(TimeSpan.FromSeconds(30));
         }
 
         private void FreeMemory(int length)
@@ -154,7 +157,9 @@ namespace SharpDc.Managers
 
             pool.StartTask(task);
 
-            task.Event.Wait();
+            task.Event.WaitOne();
+
+            SegmentDelay.Update((int)task.ExecutionTime.TotalMilliseconds);
 
             if (CacheSize > 0 && task.Completed)
             {

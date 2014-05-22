@@ -47,6 +47,8 @@ namespace SharpDc.Connections
         {
             Headers = new Dictionary<string, string>();
             _buffer = new byte[64 * 1024];
+            DontUseAsync = true;
+            HighPriorityReadThread = true;
         }
 
         public void SetRange(long start, long end)
@@ -61,7 +63,7 @@ namespace SharpDc.Connections
 
         protected override void SendFirstMessages()
         {
-            Send(_request, 0, _request.Length);
+            SendNow(_request, 0, _request.Length);
         }
 
         protected override void ParseRaw(byte[] buffer, int length)
@@ -137,7 +139,7 @@ namespace SharpDc.Connections
             }
         }
 
-        public void RequestAsync(string uri)
+        public void Request(string uri)
         {
             _reqPos = 0;
             _headerEnd = 0;

@@ -23,12 +23,18 @@ namespace SharpDc.Helpers
 
         private static readonly MovingAverage SegmentDownloadTime = new MovingAverage(TimeSpan.FromSeconds(30));
         
+        private static readonly SpeedAverage DownloadSpeed = new SpeedAverage(TimeSpan.FromSeconds(10));
+
         private static MethodInfo httpWebRequestAddRangeHelper = typeof (WebHeaderCollection).GetMethod
             ("AddWithoutValidate", BindingFlags.Instance | BindingFlags.NonPublic);
 
         public static int HttpSegmentAverageLoadTime
         {
             get { return (int)SegmentDownloadTime.GetAverage(); }
+        }
+
+        public static long HttpDownloadSpeed {
+            get { return (long)DownloadSpeed.GetSpeed(); }
         }
 
         /// <summary>Adds a byte range header to the request for a specified range.</summary>
@@ -64,7 +70,6 @@ namespace SharpDc.Helpers
             req.KeepAlive = true;
             req.Timeout = 4000;
             req.ServicePoint.ConnectionLimit = HttpUploadItem.Manager.ConnectionsPerServer;
-            
 
             using (var response = req.GetResponse())
             using (var stream = response.GetResponseStream())
@@ -80,6 +85,7 @@ namespace SharpDc.Helpers
 
             sw.Stop();
             SegmentDownloadTime.Update((int)sw.ElapsedMilliseconds);
+            DownloadSpeed.Update(readLength);
         }
 
         public static void DownloadChunkAsync(string uri, long filePosition, int readLength, Action<Stream,Exception> callback)

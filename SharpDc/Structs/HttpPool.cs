@@ -105,21 +105,13 @@ namespace SharpDc.Structs
         private void conn_ReceiveTimeoutHit(object sender, EventArgs e)
         {
             var httpCon = (HttpConnection)sender;
-
-            HttpTask task;
-            lock (SyncRoot)
-            {
-                task = Tasks.FirstOrDefault(t => t.Connection == httpCon && t.ExecutionTime.TotalMilliseconds > ReceiveTimeout);
-            }
-
-            if (task != null)
-                httpCon.DisconnectAsync();
+            httpCon.DisconnectAsync();
         }
 
         private void HttpConRequestComplete(object sender, EventArgs e)
         {
             var httpCon = (HttpConnection)sender;
-
+            
             DeleteOldTasks();
 
             HttpTask task = null;
