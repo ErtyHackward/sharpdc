@@ -102,6 +102,9 @@ namespace SharpDc.Managers
                 if (!_engine.StatisticsManager.TryGetValue(e.Magnet.TTH, out statItem))
                     return;
                 
+                if (statItem.Rate < 1)
+                    return;
+
                 var list = new List<KeyValuePair<CachedItem, StatItem>>();
                 
                 lock (_syncRoot)
@@ -160,7 +163,7 @@ namespace SharpDc.Managers
                     }
                 }
 
-                item = new CachedItem(e.Magnet, 1024 * 1024)
+                item = new CachedItem(e.Magnet, e.Length)
                 {
                     CachePath = Path.Combine(point.SystemPath, e.Magnet.TTH)
                 };

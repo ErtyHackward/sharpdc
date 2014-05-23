@@ -42,7 +42,9 @@ namespace SharpDc.Structs
         public TimeSpan QueueTime {
             get
             {
-                return AssignedTimestamp == 0 ? TimeSpan.Zero : TimeSpan.FromSeconds((double)(AssignedTimestamp - CreatedTimestamp) / Stopwatch.Frequency);
+                return AssignedTimestamp == 0 ? 
+                    TimeSpan.FromSeconds((double)(Stopwatch.GetTimestamp() - CreatedTimestamp) / Stopwatch.Frequency) : 
+                    TimeSpan.FromSeconds((double)(AssignedTimestamp - CreatedTimestamp) / Stopwatch.Frequency);
             }
         }
 
@@ -60,7 +62,8 @@ namespace SharpDc.Structs
             connection.ConnectionStatusChanged += ConnectionConnectionStatusChanged;
 
             connection.SetRange(FilePosition, FilePosition + Length - 1);
-            connection.Request(Url);
+            using (new PerfLimit("Http segment request", 50))
+                connection.Request(Url);
         }
 
         private void ConnectionConnectionStatusChanged(object sender, Events.ConnectionStatusEventArgs e)
@@ -80,9 +83,9 @@ namespace SharpDc.Structs
 
             if (_pos == Length)
             {
+                Cleanup();
                 Completed = true;
                 Event.Set();
-                Cleanup();
             }
         }
 
