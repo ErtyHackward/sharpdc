@@ -7,31 +7,56 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using SharpDc.Helpers;
+using SharpDc.Logging;
 
 namespace SharpDc.Structs
 {
     public class CachedItem
     {
+        private static readonly ILogger logger = LogManager.GetLogger();
+
         public Magnet Magnet { get; private set; }
         
         public int SegmentLength { get; private set; }
+        
         /// <summary>
         /// Indicates if the file is completely cached
         /// </summary>
         public bool Complete { get; set; }
 
         public BitArray CachedSegments { get; private set; }
-
+        
+        /// <summary>
+        /// Gets or sets system path of the cache file
+        /// </summary>
         public string CachePath { get; set; }
 
-        public CachedItem(Magnet magnet, int segmentLength)
+        public Dictionary<long, long> SegmentMapping { get; set; }
+
+        public long CacheUse
+        {
+            get { return SegmentMapping == null ? Magnet.Size : SegmentMapping.Count * SegmentLength; }
+        }
+
+        public long _writePos;
+
+        /// <summary>
+        /// Creates new instance of cache item
+        /// </summary>
+        /// <param name="magnet"></param>
+        /// <param name="segmentLength"></param>
+        /// <param name="realOrder">Will we keep the segments in file in real order or use segment mapping. Second option allow to use disk space only for taken segments</param>
+        public CachedItem(Magnet magnet, int segmentLength, bool realOrder = false)
         {
             Magnet = magnet;
             SegmentLength = segmentLength;
             CachedSegments = new BitArray(DownloadItem.SegmentsCount(magnet.Size, segmentLength));
+            if (!realOrder)
+                SegmentMapping = new Dictionary<long, long>();
         }
 
         /// <summary>
@@ -60,6 +85,79 @@ namespace SharpDc.Structs
             var total = DownloadItem.SegmentsCount(length, SegmentLength);
 
             return CachedSegments.FirstFalse(ind, total) == -1;
+        }
+
+        public int Read(byte[] buffer, long position, int offset, int length)
+        {
+            if (length > SegmentLength)
+                return 0;
+
+            using (var fs = new FileStream(CachePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1024 * 128))
+            {
+                if (SegmentMapping == null)
+                {
+                    fs.Position = position;
+                    return fs.Read(buffer, offset, length);
+                }
+                else
+                {
+                    long filePos;
+                    if (!SegmentMapping.TryGetValue(position, out filePos))
+                        return 0;
+                    fs.Position = filePos;
+                    return fs.Read(buffer, offset, length);
+                }
+            }
+        }
+
+        public bool WriteSegment(byte[] buffer, long position, int length)
+        {
+            if (length != SegmentLength)
+                throw new ArgumentException("Length of the segment should be equal to the cache segment");
+
+            try
+            {
+                using (new PerfLimit("Cache write"))
+                using (var fs = new FileStream(CachePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite, 1024 * 64))
+                {
+                    if (SegmentMapping == null)
+                    {
+                        fs.Position = position;
+                        using (var ms = new MemoryStream(buffer, 0, length, false))
+                        {
+                            ms.CopyTo(fs);
+                        }
+                    }
+                    else
+                    {
+                        long curPos;
+
+                        lock (SegmentMapping)
+                        {
+                            if (SegmentMapping.ContainsKey(position))
+                                return false;
+
+                            curPos = _writePos;
+                            _writePos += SegmentLength;
+                            SegmentMapping.Add(position, curPos);
+                        }
+
+                        fs.Position = curPos;
+                        using (var ms = new MemoryStream(buffer, 0, length, false))
+                        {
+                            ms.CopyTo(fs);
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                logger.Error("Unable to write cache segment {0}", e.Message);
+                return false;
+            }
+
+
+            return true;
         }
     }
 

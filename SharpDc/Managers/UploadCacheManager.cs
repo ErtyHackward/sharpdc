@@ -67,17 +67,13 @@ namespace SharpDc.Managers
 
             try
             {
-                using (var fs = new FileStream(item.CachePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1024 * 128))
-                {
-                    fs.Position = e.Position;
-                    if (fs.Read(e.Buffer, 0, e.Length) != e.Length)
-                        return;
+                if (item.Read(e.Buffer, e.Position, 0, e.Length) != e.Length)
+                    return;
 
-                    e.FromCache = true;
-                    lock (_syncRoot)
-                    {
-                        _uploadedFromCache += e.Length;
-                    }
+                e.FromCache = true;
+                lock (_syncRoot)
+                {
+                    _uploadedFromCache += e.Length;
                 }
             }
             catch (Exception exception)
@@ -102,7 +98,7 @@ namespace SharpDc.Managers
                 if (!_engine.StatisticsManager.TryGetValue(e.Magnet.TTH, out statItem))
                     return;
                 
-                if (statItem.Rate < 1)
+                if (statItem.Rate < 0.5)
                     return;
 
                 var list = new List<KeyValuePair<CachedItem, StatItem>>();
@@ -118,8 +114,11 @@ namespace SharpDc.Managers
                 }
 
                 // check for free point
-                var point = _points.FirstOrDefault(p => p.FreeSpace > e.Magnet.Size);
-                
+                CachePoint point;
+
+                lock (_syncRoot)
+                    point = _points.FirstOrDefault(p => p.FreeSpace > e.Length);
+
                 if (point == null)
                 {
                     var removeList = new List<string>();
@@ -140,7 +139,7 @@ namespace SharpDc.Managers
 
                                     if (pInd != -1)
                                     {
-                                        _points[pInd].CachedSpace -= keyValuePair.Key.Magnet.Size;
+                                        _points[pInd].Items.Remove(keyValuePair.Key);
                                     }
                                 }
                                 removeList.Add(keyValuePair.Key.CachePath);
@@ -155,8 +154,9 @@ namespace SharpDc.Managers
                     list.RemoveAll(p => removeList.Contains(p.Key.CachePath));
 
                     // check for free point again
-                    point = _points.FirstOrDefault(p => p.FreeSpace > e.Magnet.Size);
-
+                    lock (_syncRoot)
+                        point = _points.FirstOrDefault(p => p.FreeSpace > e.Length);    
+                    
                     if (point == null)
                     {
                         return;
@@ -169,7 +169,7 @@ namespace SharpDc.Managers
                 };
                 lock (_syncRoot)
                 {
-                    point.CachedSpace += e.Magnet.Size;
+                    point.Items.Add(item);
                     _items.Add(e.Magnet.TTH, item);
                 }
             }
@@ -177,21 +177,14 @@ namespace SharpDc.Managers
             if (item.SegmentLength != e.Length)
                 return;
 
-            using (new PerfLimit("Cache flush"))
-            using (var fs = new FileStream(item.CachePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite, 1024 * 64))
+            if (item.WriteSegment(e.Buffer, e.Position, e.Length))
             {
-                fs.Position = e.Position;
-                using (var ms = new MemoryStream(e.Buffer, 0, e.Length, false))
+                lock (_syncRoot)
                 {
-                    ms.CopyTo(fs);
+                    item.CachedSegments.Set(DownloadItem.GetSegmentIndex(e.Position, item.SegmentLength), true);
+                    if (item.CachedSegments.FirstFalse() == -1)
+                        item.Complete = true;
                 }
-            }
-
-            lock (_syncRoot)
-            {
-                item.CachedSegments.Set(DownloadItem.GetSegmentIndex(e.Position, item.SegmentLength), true);
-                if (item.CachedSegments.FirstFalse() == -1)
-                    item.Complete = true;
             }
         }
 
@@ -223,12 +216,22 @@ namespace SharpDc.Managers
     internal class CachePoint
     {
         public string SystemPath { get; set; }
+
         public long TotalSpace { get; set; }
 
-        public long CachedSpace { get; set; }
+        public long CachedSpace {
+            get { return Items.Sum(i => i.CacheUse); }
+        }
+
+        public List<CachedItem> Items { get; set; }
 
         public long FreeSpace {
             get { return TotalSpace - CachedSpace; }
+        }
+
+        public CachePoint()
+        {
+            Items = new List<CachedItem>();
         }
     }
 }
