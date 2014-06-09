@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using SharpDc.Helpers;
 using SharpDc.Logging;
 using SharpDc.Structs;
@@ -28,6 +29,12 @@ namespace SharpDc.Managers
         private readonly Dictionary<string, CachedItem> _items = new Dictionary<string, CachedItem>();
         private long _uploadedFromCache;
         private bool _listening;
+        private Timer _updateTimer;
+
+        /// <summary>
+        /// Gets current cache read speed
+        /// </summary>
+        public SpeedAverage CacheUseSpeed { get; private set; }
 
         public long UploadedFromCache
         {
@@ -48,6 +55,7 @@ namespace SharpDc.Managers
         public UploadCacheManager(DcEngine engine)
         {
             _engine = engine;
+            CacheUseSpeed = new SpeedAverage();
         }
 
         void HttpUploadItem_HttpSegmentNeeded(object sender, HttpSegmentEventArgs e)
@@ -74,6 +82,9 @@ namespace SharpDc.Managers
                         return;
 
                     e.FromCache = true;
+
+                    CacheUseSpeed.Update(e.Length);
+
                     lock (_syncRoot)
                     {
                         _uploadedFromCache += e.Length;
@@ -99,11 +110,13 @@ namespace SharpDc.Managers
             if (item == null)
             {
                 StatItem statItem;
-                if (!_engine.StatisticsManager.TryGetValue(e.Magnet.TTH, out statItem))
-                    return;
+                if (!_engine.StatisticsManager.TryGetValue(e.Magnet.TTH, out statItem)) 
+                    return; // no statistics on the item, ignore
                 
                 if (statItem.Rate < 1)
-                    return;
+                    return; // the rate is too low, ignore
+
+                // find current cached items rate
 
                 var list = new List<KeyValuePair<CachedItem, StatItem>>();
                 
@@ -117,45 +130,45 @@ namespace SharpDc.Managers
                     }
                 }
 
+                // sort them by the rate ascending
+                list = list.OrderBy(i => i.Value.TotalUploaded).ToList();
+
                 // check for free point
                 var point = _points.FirstOrDefault(p => p.FreeSpace > e.Magnet.Size);
                 
                 if (point == null)
                 {
-                    var removeList = new List<string>();
+                    // check if the item has higher rate than one in the cache with gap 1
+                    var possibleFreeSize =
+                        list.Where(i => i.Value.TotalUploaded * 1.5 < statItem.TotalUploaded)
+                            .Select(i => i.Value.Magnet.Size)
+                            .DefaultIfEmpty(0)
+                            .Sum();
 
-                    // remove expired items
-                    foreach (var keyValuePair in list)
+                    if (possibleFreeSize < statItem.Magnet.Size)
+                        return; // not enough space could be freed for this item
+
+                    for (int i = 0; i < list.Count; i++)
                     {
-                        if (keyValuePair.Value.Expired)
-                        {
-                            try
-                            {
-                                File.Delete(keyValuePair.Key.CachePath);
-                                lock (_syncRoot)
-                                {
-                                    _items.Remove(keyValuePair.Key.Magnet.TTH);
-                                    _engine.StatisticsManager.RemoveItem(keyValuePair.Key.Magnet.TTH);
-                                    var pInd = _points.FindIndex(cp => keyValuePair.Key.CachePath.StartsWith(cp.SystemPath));
+                        if (list[i].Value.TotalUploaded * 1.5 >= statItem.TotalUploaded)
+                            return;
 
-                                    if (pInd != -1)
-                                    {
-                                        _points[pInd].CachedSpace -= keyValuePair.Key.Magnet.Size;
-                                    }
-                                }
-                                removeList.Add(keyValuePair.Key.CachePath);
-                            }
-                            catch (Exception exception)
-                            {
-                                Logger.Error("Failed to delete expired item {0}, {1}", keyValuePair.Key.CachePath, exception.Message);
-                            }
+                        Logger.Info("Remove less important item from cache {0}", list[i].Key.Magnet);
+                        try
+                        {
+                            RemoveItemFromCache(list[i].Key);
+                        }
+                        catch (Exception x)
+                        {
+                            Logger.Error("Can't delete cache file {0}", list[i].Key.Magnet);
+                        }
+
+                        point = _points.FirstOrDefault(p => p.FreeSpace > e.Magnet.Size);
+                        if (point != null)
+                        {
+                            break;
                         }
                     }
-
-                    list.RemoveAll(p => removeList.Contains(p.Key.CachePath));
-
-                    // check for free point again
-                    point = _points.FirstOrDefault(p => p.FreeSpace > e.Magnet.Size);
 
                     if (point == null)
                     {
@@ -195,6 +208,21 @@ namespace SharpDc.Managers
             }
         }
 
+        private void RemoveItemFromCache(CachedItem item)
+        {
+            File.Delete(item.CachePath);
+            lock (_syncRoot)
+            {
+                _items.Remove(item.Magnet.TTH);
+                var pInd = _points.FindIndex(cp => item.CachePath.StartsWith(cp.SystemPath));
+
+                if (pInd != -1)
+                {
+                    _points[pInd].CachedSpace -= item.Magnet.Size;
+                }
+            }
+        }
+
         public void RegisterCachePoint(string path, long totalFreeSpace)
         {
             foreach (var filePath in Directory.EnumerateFiles(path))
@@ -216,6 +244,23 @@ namespace SharpDc.Managers
                 HttpUploadItem.HttpSegmentDownloaded += HttpUploadItem_HttpSegmentDownloaded;
                 HttpUploadItem.HttpSegmentNeeded += HttpUploadItem_HttpSegmentNeeded;
                 _listening = true;
+                _updateTimer = new Timer(EachDayAction, null, TimeSpan.FromHours(12), TimeSpan.FromDays(1));
+            }
+        }
+
+        private void EachDayAction(object state)
+        {
+            var items = _engine.StatisticsManager.AllItems().ToList();
+
+            foreach (var statItem in items)
+            {
+                var item = statItem;
+                if (item.Rate > 1)
+                {
+                    item.TotalUploaded -= (long)(item.Magnet.Size * (item.Rate / 2));
+                }
+
+                _engine.StatisticsManager.SetItem(item);
             }
         }
     }

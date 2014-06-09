@@ -251,7 +251,7 @@ namespace SharpDc.Connections
 
         public void DisconnectAsync()
         {
-            if (_connectionStatus == Events.ConnectionStatus.Disconnected)
+            if (_connectionStatus == ConnectionStatus.Disconnected)
                 return;
 
             if (!_closingSocket)
@@ -514,7 +514,7 @@ namespace SharpDc.Connections
         }
 
         /// <summary>
-        /// Creates sent task and wait until it is finished
+        /// Creates send task and waits until it is finished
         /// </summary>
         /// <param name="buffer"></param>
         /// <param name="offset"></param>
@@ -540,7 +540,7 @@ namespace SharpDc.Connections
             sync.WaitOne(SendTimeout);
              
 
-            return ConnectionStatus == Events.ConnectionStatus.Connected ? length : 0;
+            return ConnectionStatus == ConnectionStatus.Connected ? length : 0;
         }
 
         protected int SendNow(byte[] buffer, int offset, int length)
@@ -690,10 +690,6 @@ namespace SharpDc.Connections
                 }
             }
         }
-
-        private PerfCounter _send;
-        private int _sends;
-        private int _sentBytes;
 
         private void SendDelayed()
         {
