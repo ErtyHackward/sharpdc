@@ -64,6 +64,19 @@ namespace SharpDc.Managers
             return result;
         }
 
+        public void SetItem(StatItem item)
+        {
+            lock (_synRoot)
+            {
+                if (_items.ContainsKey(item.Magnet.TTH))
+                    _items[item.Magnet.TTH] = item;
+                else
+                {
+                    _items.Add(item.Magnet.TTH, item);
+                }
+            }
+        }
+
         public void Clear()
         {
             lock (_synRoot)
@@ -88,12 +101,11 @@ namespace SharpDc.Managers
             lock (_synRoot)
             {
                 var magnet = item.Content.Magnet;
-                var rateChange = (double)item.UploadedBytes / item.Content.Magnet.Size;
 
                 StatItem statItem;
                 if (_items.TryGetValue(magnet.TTH, out statItem))
                 {
-                    statItem.Rate += rateChange;
+                    statItem.TotalUploaded += item.UploadedBytes;
                     statItem.LastUsage = DateTime.Now;
                     _items[magnet.TTH] = statItem;
                 }
@@ -102,7 +114,7 @@ namespace SharpDc.Managers
                     statItem = new StatItem();
                     statItem.Magnet = magnet;
                     statItem.LastUsage = DateTime.Now;
-                    statItem.Rate = rateChange;
+                    statItem.TotalUploaded = item.UploadedBytes;
                     _items.Add(magnet.TTH, statItem);
                 }
             }

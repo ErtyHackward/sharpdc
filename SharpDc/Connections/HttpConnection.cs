@@ -31,7 +31,7 @@ namespace SharpDc.Connections
 
         protected virtual void OnRequestComplete()
         {
-            EventHandler handler = RequestComplete;
+            var handler = RequestComplete;
             if (handler != null) handler(this, EventArgs.Empty);
         }
 

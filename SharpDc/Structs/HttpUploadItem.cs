@@ -58,7 +58,7 @@ namespace SharpDc.Structs
 
             bool done;
 
-            using (new PerfLimit(string.Format("Slow http request {0} {1} bytes", SystemPath, length), 4000))
+            using (new PerfLimit(string.Format("Slow http request {0} pos: {1} len: {2} filelen: {3}", SystemPath, pos, length, Content.Magnet.Size), 4000))
             {
                 done = Manager.DownloadChunk(SystemPath, _buffer, _position, length);
                 //try

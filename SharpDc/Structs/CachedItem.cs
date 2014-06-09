@@ -71,13 +71,15 @@ namespace SharpDc.Structs
         public DateTime LastUsage { get; set; }
 
         public Magnet Magnet { get; set; }
-        public bool Expired {
-            get { return (DateTime.Now - LastUsage).TotalHours > 3; }
-        }
 
         /// <summary>
         /// Gets how many times the file was uploaded completely
         /// </summary>
-        public double Rate;
+        public double Rate
+        {
+            get { return (double)TotalUploaded / Magnet.Size; }
+        }
+
+        public long TotalUploaded { get; set; }
     }
 }
