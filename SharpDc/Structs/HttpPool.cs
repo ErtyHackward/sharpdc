@@ -6,9 +6,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using System.Net;
+using System.Threading;
 using SharpDc.Connections;
 using SharpDc.Logging;
 
@@ -19,7 +18,10 @@ namespace SharpDc.Structs
         private static readonly ILogger Logger = LogManager.GetLogger();
 
         public List<HttpConnection> Connections;
-        public List<HttpTask> Tasks;
+        /// <summary>
+        /// Tasks waiting for free connection
+        /// </summary>
+        public List<HttpTask> TasksQueue;
         public object SyncRoot;
         public string Server;
 
@@ -29,44 +31,58 @@ namespace SharpDc.Structs
 
         public int ReceiveTimeout { get; set; }
 
-        private List<HttpConnection> _freeList;
+        /// <summary>
+        /// Connections without task assigned, can be used at any time
+        /// </summary>
+        private readonly List<HttpConnection> _freeList;
 
         public HttpPool()
         {
             SyncRoot = new object();
             Connections = new List<HttpConnection>();
-            Tasks = new List<HttpTask>();
+            TasksQueue = new List<HttpTask>();
             _freeList = new List<HttpConnection>();
         }
 
-        private void DeleteOldTasks()
+        private void DeleteOldTasksFromQueue()
         {
             if (ReceiveTimeout == 0)
                 return;
-            using (new PerfLimit("Delete old tasks"))
-            lock (SyncRoot)
-            {
-                using (new PerfLimit("Delete old tasks int"))
-                {
-                    foreach (
-                        var httpTask in
-                            Tasks.Where(t => t.ExecutionTime.TotalMilliseconds > ReceiveTimeout))
-                    {
-                        Logger.Error("Dropping task because of time out {0}. QueueWait {1}", ReceiveTimeout, httpTask.QueueTime.TotalMilliseconds);
-                        httpTask.Event.Set();
-                    }
 
-                    Tasks.RemoveAll(t => t.ExecutionTime.TotalMilliseconds > ReceiveTimeout);
+            // this operation is not reasonable to run multiple times in the short period
+            if (Monitor.TryEnter(SyncRoot))
+            {
+                try
+                {
+                    using (new PerfLimit("Delete old tasks int"))
+                    {
+                        var removeList = new List<HttpTask>();
+
+                        foreach (
+                            var httpTask in
+                                TasksQueue.Where(t => t.ExecutionTime.TotalMilliseconds > ReceiveTimeout))
+                        {
+                            Logger.Error("Dropping task because of time out {0}. QueueWait {1}", ReceiveTimeout, httpTask.QueueTime.TotalMilliseconds);
+                            httpTask.Event.Set();
+                            removeList.Add(httpTask);
+                        }
+
+                        TasksQueue.RemoveAll(removeList.Contains);
+                    }
+                }
+                finally 
+                {
+                    Monitor.Exit(SyncRoot);
                 }
             }
         }
 
         public void StartTask(HttpTask task)
         {
-            DeleteOldTasks();
+            DeleteOldTasksFromQueue();
 
             HttpConnection conn = null;
-
+            
             using (new PerfLimit("Start task"))
             lock (SyncRoot)
             {
@@ -88,8 +104,8 @@ namespace SharpDc.Structs
 
                 if (conn == null)
                 {
-                    if (Tasks.Count < QueueLimit)
-                        Tasks.Add(task);
+                    if (TasksQueue.Count < QueueLimit)
+                        TasksQueue.Add(task);
                     else
                     {
                         Logger.Error("Dropping task because of full queue");
@@ -105,30 +121,22 @@ namespace SharpDc.Structs
         private void conn_ReceiveTimeoutHit(object sender, EventArgs e)
         {
             var httpCon = (HttpConnection)sender;
-
-            HttpTask task;
-            lock (SyncRoot)
-            {
-                task = Tasks.FirstOrDefault(t => t.Connection == httpCon && t.ExecutionTime.TotalMilliseconds > ReceiveTimeout);
-            }
-
-            if (task != null)
-                httpCon.DisconnectAsync();
+            httpCon.DisconnectAsync();
         }
 
         private void HttpConRequestComplete(object sender, EventArgs e)
         {
             var httpCon = (HttpConnection)sender;
-
-            DeleteOldTasks();
+            
+            DeleteOldTasksFromQueue();
 
             HttpTask task = null;
             lock (SyncRoot)
             {
-                if (Tasks.Count > 0)
+                if (TasksQueue.Count > 0)
                 {
-                    task = Tasks[0];
-                    Tasks.RemoveAt(0);
+                    task = TasksQueue[0];
+                    TasksQueue.RemoveAt(0);
                 }
                 else
                 {

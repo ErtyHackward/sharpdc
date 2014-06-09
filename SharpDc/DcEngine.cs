@@ -624,6 +624,11 @@ namespace SharpDc
             {
                 e.Transfer.UseBackgroundSeedMode = true;
             }
+
+            if (!Settings.AsyncTransfers)
+            {
+                e.Transfer.DontUseAsync = true;
+            }
         }
 
         private void TransferManagerTransferUploadItemError(object sender, UploadItemEventArgs e)

@@ -18,9 +18,9 @@ namespace SharpDc.Managers
     /// </summary>
     public class HttpDownloadManager : IDisposable
     {
-        private static readonly ILogger Logger = LogManager.GetLogger();
+        private static readonly ILogger logger = LogManager.GetLogger();
 
-        private List<HttpPool> _pools;
+        private readonly List<HttpPool> _pools;
 
         private readonly Queue<HttpCacheSegment> _cache = new Queue<HttpCacheSegment>();
         private readonly object _syncRoot = new object();
@@ -105,11 +105,14 @@ namespace SharpDc.Managers
         /// </summary>
         public long TotalFromCache { get; private set; }
 
+        public MovingAverage SegmentDelay { get; set; }
+
         public HttpDownloadManager()
         {
             _pools = new List<HttpPool>();
             ConnectionsPerServer = 3;
             QueueLimit = 10;
+            SegmentDelay = new MovingAverage(TimeSpan.FromSeconds(30));
         }
 
         private void FreeMemory(int length)
@@ -154,7 +157,10 @@ namespace SharpDc.Managers
 
             pool.StartTask(task);
 
-            task.Event.Wait();
+            task.Event.WaitOne();
+
+            if (task.Completed)
+                SegmentDelay.Update((int)task.ExecutionTime.TotalMilliseconds);
 
             if (CacheSize > 0 && task.Completed)
             {
@@ -177,9 +183,8 @@ namespace SharpDc.Managers
                 TotalDownloaded += length;    
             }
             
-
             if (!task.Completed)
-                Logger.Error("Unable to complete the task");
+                logger.Error("Unable to complete the task");
 
             return task.Completed;
         }

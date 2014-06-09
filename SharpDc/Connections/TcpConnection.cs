@@ -32,7 +32,7 @@ namespace SharpDc.Connections
             public byte[] Buffer;
             public int Offset;
             public int Length;
-            public ManualResetEventSlim Sync;
+            public ManualResetEvent Sync;
         }
 
         private Socket _socket;
@@ -45,6 +45,7 @@ namespace SharpDc.Connections
         private volatile bool _sendThreadActive;
         private int _receiveTimeout;
         private int _sendTimeout = 4000;
+        private SendTask _currentTask;
 
         private readonly object _sendLock = new object();
         private readonly object _threadLock = new object();
@@ -52,12 +53,21 @@ namespace SharpDc.Connections
         private readonly SpeedAverage _uploadSpeed = new SpeedAverage();
         private readonly SpeedAverage _downloadSpeed = new SpeedAverage();
 
+        /// <summary>
+        /// If set the separate thread will be used for the read process
+        /// </summary>
+        public bool DontUseAsync { get; set; }
+
+        /// <summary>
+        /// If set the read thread will have high priority
+        /// </summary>
+        public bool HighPriorityReadThread { get; set; }
+
         public Socket Socket
         {
             get { return _socket; }
         }
-
-
+        
         public int ReceiveTimeout
         {
             get { return _receiveTimeout; }
@@ -168,6 +178,7 @@ namespace SharpDc.Connections
         {
             UploadSpeedLimitGlobal = new SpeedLimiter();
             DownloadSpeedLimitGlobal = new SpeedLimiter();
+
         }
 
         private void Initialize()
@@ -221,6 +232,7 @@ namespace SharpDc.Connections
         public virtual void Dispose()
         {
             _connectionBuffer = null;
+            _readThread = null;
             CloseSocket();
         }
 
@@ -239,7 +251,7 @@ namespace SharpDc.Connections
 
         public void DisconnectAsync()
         {
-            if (_connectionStatus == Events.ConnectionStatus.Disconnected)
+            if (_connectionStatus == ConnectionStatus.Disconnected)
                 return;
 
             if (!_closingSocket)
@@ -249,10 +261,38 @@ namespace SharpDc.Connections
             }
         }
 
+
+        private Thread _readThread;
+        private void StartRead()
+        {
+            if (DontUseAsync)
+            {
+                if (HighPriorityReadThread)
+                {
+                    if (_readThread != null)
+                    {
+                        _readThread.Abort();
+                    }
+
+                    _readThread = new Thread(SocketReadThread);
+                    _readThread.IsBackground = true;
+                    _readThread.Priority = ThreadPriority.Highest;
+                    _readThread.Start();
+                }
+                else
+                {
+                    // take a thread pool thread and run socket in it
+                    DcEngine.ThreadPool.QueueWorkItem(SocketReadThread);
+                }
+            }
+            else
+                BeginRead();
+        }
+
         public void ListenAsync()
         {
             _closingSocket = false;
-            BeginRead();
+            StartRead();
         }
 
         public void ConnectAsync()
@@ -275,13 +315,88 @@ namespace SharpDc.Connections
                     _socket.Bind(LocalAddress);
                 }
 
-                // take a thread pool thread and run socket in it
-                BeginRead();
+                StartRead();
             }
             catch (Exception x)
             {
                 SetConnectionStatus(ConnectionStatus.Disconnected, x);
             }
+        }
+
+        private void SocketReadThread()
+        {
+            try
+            {
+                if (!_socket.Connected)
+                {
+                    SetConnectionStatus(ConnectionStatus.Connecting);
+
+                    _lastUpdate = DateTime.Now;
+                    _socket.Connect(RemoteEndPoint);
+
+                    LocalAddress = (IPEndPoint)_socket.LocalEndPoint;
+
+                    SetConnectionStatus(ConnectionStatus.Connected);
+
+                    SendFirstMessages();
+                }
+
+                if (_connectionBuffer == null || _connectionBuffer.Length != ConnectionBufferSize)
+                    _connectionBuffer = new byte[ConnectionBufferSize];
+
+                while (_connectionStatus == ConnectionStatus.Connected)
+                {
+                    if (ReceiveTimeout > 0)
+                    {
+                        if (_socket.Poll(1000 * ReceiveTimeout, SelectMode.SelectRead))
+                        {
+                            if (!ReceiveInternal())
+                                break;
+                        }
+                        else
+                        {
+                            OnReadTimeout();
+                        }
+                    }
+                    else
+                    {
+                        if (!ReceiveInternal())
+                            break;
+                    }
+                }
+
+                SetConnectionStatus(ConnectionStatus.Disconnected);
+            }
+            catch (Exception x)
+            {
+                SetConnectionStatus(ConnectionStatus.Disconnected, x);
+            }
+        }
+
+        private bool ReceiveInternal()
+        {
+            var bytesReceived = _socket.Receive(_connectionBuffer);
+
+            if (bytesReceived == 0)
+                return false;
+
+            if (_connectionBuffer != null)
+            {
+                HandleReceived(bytesReceived);
+            }
+
+            return true;
+        }
+
+        private bool IsMono = Type.GetType("Mono.Runtime") != null;
+        
+        private void HandleReceived(int bytesReceived)
+        {
+            _downloadSpeed.Update(bytesReceived);
+            _lastUpdate = DateTime.Now;
+            ParseRaw(_connectionBuffer, bytesReceived);
+            DownloadSpeedLimit.Update(bytesReceived);
+            DownloadSpeedLimitGlobal.Update(bytesReceived);
         }
 
         protected virtual void SendFirstMessages()
@@ -327,12 +442,9 @@ namespace SharpDc.Connections
                 
                 if (_connectionBuffer != null)
                 {
-                    _downloadSpeed.Update(bytesReceived);
-                    _lastUpdate = DateTime.Now;
-                    ParseRaw(_connectionBuffer, bytesReceived);
-                    DownloadSpeedLimit.Update(bytesReceived);
-                    DownloadSpeedLimitGlobal.Update(bytesReceived);
-                    _socket.BeginReceive(_connectionBuffer, 0, _connectionBuffer.Length, SocketFlags.None, ReceiveCallback, null);
+                    HandleReceived(bytesReceived);
+                    _socket.BeginReceive(_connectionBuffer, 0, _connectionBuffer.Length, SocketFlags.None,
+                        ReceiveCallback, null);
                 }
             }
             catch (Exception x)
@@ -402,7 +514,7 @@ namespace SharpDc.Connections
         }
 
         /// <summary>
-        /// Creates sent task and wait until it is finished
+        /// Creates send task and waits until it is finished
         /// </summary>
         /// <param name="buffer"></param>
         /// <param name="offset"></param>
@@ -410,32 +522,36 @@ namespace SharpDc.Connections
         /// <returns></returns>
         public int Send(byte[] buffer, int offset, int length)
         {
-            using (var sync = new ManualResetEventSlim())
+            var sync = new ManualResetEvent(false);
+            
+            lock (_delayedMessages)
             {
-                lock (_delayedMessages)
-                {
-                    _delayedMessages.Enqueue(new SendTask
-                                                 {
-                                                     Buffer = buffer,
-                                                     Offset = offset,
-                                                     Length = length,
-                                                     Sync = sync
-                                                 });
-                }
-
-                lock (_threadLock)
-                {
-                    if (!_sendThreadActive)
-                    {
-                        _sendThreadActive = true;
-                        DcEngine.ThreadPool.QueueWorkItem(SendDelayed);
-                    }
-                }
-
-                sync.Wait(SendTimeout);
+                _delayedMessages.Enqueue(new SendTask
+                                                {
+                                                    Buffer = buffer,
+                                                    Offset = offset,
+                                                    Length = length,
+                                                    Sync = sync
+                                                });
             }
 
-            return ConnectionStatus == Events.ConnectionStatus.Connected ? length : 0;
+            BeginSend();
+
+            sync.WaitOne(SendTimeout);
+             
+
+            return ConnectionStatus == ConnectionStatus.Connected ? length : 0;
+        }
+
+        protected int SendNow(byte[] buffer, int offset, int length)
+        {
+            var task = new SendTask
+            {
+                Buffer = buffer,
+                Offset = offset,
+                Length = length
+            };
+            return Send(task) ? length : 0 ;
         }
 
         public void SendAsync(string msg)
@@ -445,14 +561,7 @@ namespace SharpDc.Connections
             lock (_delayedMessages)
                 _delayedMessages.Enqueue(new SendTask { Buffer = bytes, Length = bytes.Length });
 
-            lock (_threadLock)
-            {
-                if (!_sendThreadActive)
-                {
-                    _sendThreadActive = true;
-                    DcEngine.ThreadPool.QueueWorkItem(SendDelayed);
-                }
-            }
+            BeginSend();
         }
 
         public void SendAsync(params string[] msgs)
@@ -466,6 +575,26 @@ namespace SharpDc.Connections
                 }
             }
 
+            BeginSend();
+        }
+
+        public void SendAsync(byte[] buffer, int offset, int length)
+        {
+            lock (_delayedMessages)
+            {
+                _delayedMessages.Enqueue(new SendTask
+                {
+                    Buffer = buffer,
+                    Offset = offset,
+                    Length = length
+                });
+            }
+
+            BeginSend();
+        }
+
+        private void BeginSend()
+        {
             lock (_threadLock)
             {
                 if (!_sendThreadActive)
@@ -475,7 +604,93 @@ namespace SharpDc.Connections
                 }
             }
         }
-        
+
+        public void WaitSendQueue(int minCount = 0)
+        {
+            while (true)
+            {
+                lock (_delayedMessages)
+                {
+                    if (_delayedMessages.Count <= minCount)
+                        break;
+                }    
+                Thread.Sleep(0);
+            }
+        }
+
+        private bool SendNext()
+        {
+            lock (_delayedMessages)
+            {
+                if (_delayedMessages.Count == 0)
+                    return false;
+
+                _currentTask = _delayedMessages.Dequeue();
+            }
+
+            try
+            {
+                _socket.BeginSend(_currentTask.Buffer, 0, _currentTask.Length, SocketFlags.None, SendCallback, null);
+                return true;
+            }
+            catch (Exception x)
+            {
+                SetConnectionStatus(ConnectionStatus.Disconnected, x);
+                return false;
+            }
+        }
+
+        private void SendCallback(IAsyncResult ar)
+        {
+            try
+            {
+                _lastUpdate = DateTime.Now;
+
+                var sent = _socket.EndSend(ar);
+
+                if (sent != _currentTask.Length)
+                {
+                    Logger.Error("Sent less than asked!");
+                }
+
+                _uploadSpeed.Update(_currentTask.Length);
+                UploadSpeedLimit.Update(_currentTask.Length);
+                UploadSpeedLimitGlobal.Update(_currentTask.Length);
+
+                if (_currentTask.Sync != null)
+                    _currentTask.Sync.Set();
+                
+                if (!SendNext())
+                {
+                    lock (_threadLock)
+                    {
+                        _sendThreadActive = false;
+                    }
+                }
+            }
+            catch (Exception x)
+            {
+                if (_currentTask.Sync != null)
+                    _currentTask.Sync.Set();
+
+                SetConnectionStatus(ConnectionStatus.Disconnected, x);
+
+                lock (_delayedMessages)
+                {
+                    foreach (var t in _delayedMessages)
+                    {
+                        if (t.Sync != null)
+                            t.Sync.Set();
+                    }
+                    _delayedMessages.Clear();
+                    lock (_threadLock)
+                    {
+                        _sendThreadActive = false;
+                    }
+                }
+            }
+        }
+
         private void SendDelayed()
         {
             while (true)

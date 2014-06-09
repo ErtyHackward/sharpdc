@@ -25,7 +25,7 @@ namespace SharpDc.Structs
         public long AssignedTimestamp;
         public bool Completed;
         public string Url;
-        public ManualResetEventSlim Event;
+        public ManualResetEvent Event;
         public HttpConnection Connection;
         
         /// <summary>
@@ -42,14 +42,16 @@ namespace SharpDc.Structs
         public TimeSpan QueueTime {
             get
             {
-                return AssignedTimestamp == 0 ? TimeSpan.Zero : TimeSpan.FromSeconds((double)(AssignedTimestamp - CreatedTimestamp) / Stopwatch.Frequency);
+                return AssignedTimestamp == 0 ? 
+                    TimeSpan.FromSeconds((double)(Stopwatch.GetTimestamp() - CreatedTimestamp) / Stopwatch.Frequency) : 
+                    TimeSpan.FromSeconds((double)(AssignedTimestamp - CreatedTimestamp) / Stopwatch.Frequency);
             }
         }
 
         public HttpTask()
         {
             CreatedTimestamp = Stopwatch.GetTimestamp();
-            Event = new ManualResetEventSlim();
+            Event = new ManualResetEvent(false);
         }
 
         public void SetConnection(HttpConnection connection)
@@ -60,7 +62,8 @@ namespace SharpDc.Structs
             connection.ConnectionStatusChanged += ConnectionConnectionStatusChanged;
 
             connection.SetRange(FilePosition, FilePosition + Length - 1);
-            connection.RequestAsync(Url);
+            using (new PerfLimit("Http segment request", 50))
+                connection.Request(Url);
         }
 
         private void ConnectionConnectionStatusChanged(object sender, Events.ConnectionStatusEventArgs e)
@@ -80,9 +83,9 @@ namespace SharpDc.Structs
 
             if (_pos == Length)
             {
+                Cleanup();
                 Completed = true;
                 Event.Set();
-                Cleanup();
             }
         }
 
