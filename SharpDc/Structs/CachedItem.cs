@@ -27,11 +27,22 @@ namespace SharpDc.Structs
 
         public string CachePath { get; set; }
 
-        public CachedItem(Magnet magnet, int segmentLength)
+        public string BitFileldFilePath
+        {
+            get { return CachePath + ".bitfield"; }
+        }
+
+        public CachedItem(Magnet magnet, int segmentLength) : 
+            this(magnet, segmentLength, new BitArray(DownloadItem.SegmentsCount(magnet.Size, segmentLength)))
+        {
+
+        }
+
+        public CachedItem(Magnet magnet, int segmentLength, BitArray segments)
         {
             Magnet = magnet;
             SegmentLength = segmentLength;
-            CachedSegments = new BitArray(DownloadItem.SegmentsCount(magnet.Size, segmentLength));
+            CachedSegments = segments;
         }
 
         /// <summary>
