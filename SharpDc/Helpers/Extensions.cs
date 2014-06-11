@@ -50,5 +50,12 @@ namespace SharpDc.Helpers
         {
             return array.Count - array.TrueCount();
         }
+
+        public static byte[] ToBytes(this BitArray array)
+        {
+            var bytes = new byte[array.Length / 8 + (array.Length % 8 == 0 ? 0 : 1)];
+            array.CopyTo(bytes,0);
+            return bytes;
+        }
     }
 }

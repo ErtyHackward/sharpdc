@@ -5,8 +5,8 @@
 // -------------------------------------------------------------
 
 using System;
+using System.Diagnostics;
 using SharpDc.Connections;
-using SharpDc.Helpers;
 using SharpDc.Logging;
 using SharpDc.Managers;
 
@@ -18,7 +18,7 @@ namespace SharpDc.Structs
 
         public static HttpDownloadManager Manager = new HttpDownloadManager();
 
-        private byte[] _buffer;
+        private readonly byte[] _buffer;
         private long _position;
 
         public static event EventHandler<HttpSegmentEventArgs> HttpSegmentDownloaded;
@@ -51,13 +51,33 @@ namespace SharpDc.Structs
 
             _position = pos;
 
-            int length = _buffer.Length;
+            var length = _buffer.Length;
 
             if (_position + _buffer.Length > Content.Magnet.Size)
                 length = (int)(Content.Magnet.Size - _position);
 
             bool done;
+            var startTime = DateTime.Now;
+            
+            if (HttpSegmentNeeded != null)
+            {
+                var ea = new HttpSegmentEventArgs
+                {
+                    Buffer   = _buffer,
+                    Magnet   = Content.Magnet,
+                    Position = _position,
+                    Length   = length
+                };
 
+                OnHttpSegmentNeeded(ea);
+
+                if (ea.FromCache)
+                {
+                    return true;
+                }
+            }
+
+            var sw = Stopwatch.StartNew();
             using (new PerfLimit(string.Format("Slow http request {0} pos: {1} len: {2} filelen: {3}", SystemPath, pos, length, Content.Magnet.Size), 4000))
             {
                 done = Manager.DownloadChunk(SystemPath, _buffer, _position, length);
@@ -71,6 +91,7 @@ namespace SharpDc.Structs
                 //    done = false;
                 //}
             }
+            sw.Stop();
 
             if (HttpSegmentDownloaded != null)
             {
@@ -78,7 +99,9 @@ namespace SharpDc.Structs
                     Buffer = _buffer, 
                     Magnet = Content.Magnet,
                     Position = _position,
-                    Length = length
+                    Length = length,
+                    RequestedAt = startTime,
+                    DownloadingTime = sw.Elapsed
                 });
             }
 
@@ -87,23 +110,6 @@ namespace SharpDc.Structs
 
         protected override int InternalRead(byte[] array, long start, int count)
         {
-            if (HttpSegmentNeeded != null)
-            {
-                var ea = new HttpSegmentEventArgs { 
-                    Buffer = array, 
-                    Magnet = Content.Magnet, 
-                    Position = start, 
-                    Length = count
-                };
-                OnHttpSegmentNeeded(ea);
-
-                if (ea.FromCache)
-                {
-                    _uploadedBytes += count;
-                    return count;
-                }
-            }
-
             try
             {            
                 if (!ValidateBuffer(start, count))
@@ -134,5 +140,7 @@ namespace SharpDc.Structs
         public long Position { get; set; }
         public int Length { get; set; }
         public bool FromCache { get; set; }
+        public DateTime RequestedAt { get; set; }
+        public TimeSpan DownloadingTime { get; set; }
     }
 }

@@ -5,6 +5,7 @@
 // -------------------------------------------------------------
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -75,6 +76,7 @@ namespace SharpDc.Managers
 
             try
             {
+                using (new PerfLimit("Cache segment read", 300))
                 using (var fs = new FileStream(item.CachePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1024 * 128))
                 {
                     fs.Position = e.Position;
@@ -113,7 +115,7 @@ namespace SharpDc.Managers
                 if (!_engine.StatisticsManager.TryGetValue(e.Magnet.TTH, out statItem)) 
                     return; // no statistics on the item, ignore
                 
-                if (statItem.Rate < 1)
+                if (statItem.Rate < 0.5)
                     return; // the rate is too low, ignore
 
                 // find current cached items rate
@@ -206,11 +208,29 @@ namespace SharpDc.Managers
                 if (item.CachedSegments.FirstFalse() == -1)
                     item.Complete = true;
             }
+
+            using (new PerfLimit("Bitfield flush"))
+            using (var fs = new FileStream(item.BitFileldFilePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite, 1024 * 64))
+            using (var writer = new BinaryWriter(fs))
+            {
+                writer.Write(item.Magnet.TTH);
+                writer.Write(item.Magnet.FileName);
+                writer.Write(item.Magnet.Size);
+                writer.Write(item.SegmentLength);
+
+                var bytes = item.CachedSegments.ToBytes();
+                writer.Write(bytes.Length);
+                writer.Write(bytes);
+            }
         }
 
         private void RemoveItemFromCache(CachedItem item)
         {
             File.Delete(item.CachePath);
+
+            if (File.Exists(item.BitFileldFilePath))
+                File.Delete(item.BitFileldFilePath);
+
             lock (_syncRoot)
             {
                 _items.Remove(item.Magnet.TTH);
@@ -225,18 +245,59 @@ namespace SharpDc.Managers
 
         public void RegisterCachePoint(string path, long totalFreeSpace)
         {
-            foreach (var filePath in Directory.EnumerateFiles(path))
+            var point = new CachePoint
             {
-                File.Delete(filePath);
-            }
-
+                SystemPath = path,
+                TotalSpace = totalFreeSpace
+            };
             lock (_syncRoot)
             {
-                _points.Add(new CachePoint
+                _points.Add(point);
+            }
+
+            foreach (var filePath in Directory.EnumerateFiles(path, "*.bitfield"))
+            {
+                using (var fs = File.OpenRead(filePath))
+                using (var reader = new BinaryReader(fs))
                 {
-                    SystemPath = path,
-                    TotalSpace = totalFreeSpace
-                });
+                    var magnet = new Magnet
+                    {
+                        TTH = reader.ReadString(),
+                        FileName = reader.ReadString(),
+                        Size = reader.ReadInt64()
+                    };
+                    var segmentLength = reader.ReadInt32();
+                    var bytesLength = reader.ReadInt32();
+                    var bitarray = new BitArray(reader.ReadBytes(bytesLength));
+                    bitarray.Length = DownloadItem.SegmentsCount(magnet.Size, segmentLength);
+                    
+                    var item = new CachedItem(magnet, segmentLength, bitarray)
+                    {
+                        CachePath = Path.Combine(point.SystemPath, magnet.TTH),
+                    };
+                    
+                    lock (_syncRoot)
+                    {
+                        point.CachedSpace += magnet.Size;
+                        _items.Add(magnet.TTH, item);
+                    }
+                    
+                }
+            }
+
+            // delete files without bitfields
+            foreach (var filePath in Directory.EnumerateFiles(path))
+            {
+                if (Path.GetExtension(filePath) == ".bitfield")
+                    continue;
+
+                var file = Path.GetFileName(filePath);
+
+                if (!_items.ContainsKey(file))
+                {
+                    Logger.Info("Removing invalid cache file {0}", file);
+                    File.Delete(filePath);
+                }
             }
 
             if (!_listening)
@@ -244,12 +305,13 @@ namespace SharpDc.Managers
                 HttpUploadItem.HttpSegmentDownloaded += HttpUploadItem_HttpSegmentDownloaded;
                 HttpUploadItem.HttpSegmentNeeded += HttpUploadItem_HttpSegmentNeeded;
                 _listening = true;
-                _updateTimer = new Timer(EachDayAction, null, TimeSpan.FromHours(12), TimeSpan.FromDays(1));
+                _updateTimer = new Timer(PeriodicAction, null, TimeSpan.FromHours(1), TimeSpan.FromDays(1));
             }
         }
 
-        private void EachDayAction(object state)
+        private void PeriodicAction(object state)
         {
+            Logger.Info("Decreasing statistics rates...");
             var items = _engine.StatisticsManager.AllItems().ToList();
 
             foreach (var statItem in items)
@@ -258,10 +320,10 @@ namespace SharpDc.Managers
                 if (item.Rate > 1)
                 {
                     item.TotalUploaded -= (long)(item.Magnet.Size * (item.Rate / 2));
+                    _engine.StatisticsManager.SetItem(item);
                 }
-
-                _engine.StatisticsManager.SetItem(item);
             }
+            Logger.Info("Decreasing statistics rates done");
         }
     }
 
