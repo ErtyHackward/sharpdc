@@ -230,7 +230,7 @@ namespace SharpDc.Connections
 
             foreach (var message in FirstMessages)
             {
-                SendMessage(message);
+                SendMessageAsync(message);
             }
         }
 
@@ -289,7 +289,7 @@ namespace SharpDc.Connections
             }
             else
             {
-                SendMessage(new ErrorMessage { Error = "Sorry I can't write your data" }.Raw);
+                SendMessageAsync(new ErrorMessage { Error = "Sorry I can't write your data" }.Raw);
                 Dispose();
             }
         }
@@ -352,7 +352,7 @@ namespace SharpDc.Connections
                 throw new InvalidOperationException();
             }
 
-            SendMessage(new ADCGETMessage
+            SendMessageAsync(new ADCGETMessage
                             {
                                 Type = ADCGETType.File,
                                 Start = _segmentInfo.StartPosition,
@@ -373,7 +373,7 @@ namespace SharpDc.Connections
             }
         }
 
-        private void SendMessage(string msg)
+        private void SendMessageAsync(string msg)
         {
             if (OutgoingMessage != null)
             {
@@ -381,6 +381,16 @@ namespace SharpDc.Connections
                 OnOutgoingMessage(ea);
             }
             SendAsync(msg + "|");
+        }
+
+        private void SendMessage(string msg)
+        {
+            if (OutgoingMessage != null)
+            {
+                var ea = new MessageEventArgs { Message = msg };
+                OnOutgoingMessage(ea);
+            }
+            Send(msg + "|");
         }
 
         protected override void ParseRaw(byte[] buffer, int length)
@@ -511,7 +521,7 @@ namespace SharpDc.Connections
 
             if (adcgetMessage.Type == ADCGETType.Tthl)
             {
-                SendMessage(new ErrorMessage { Error = "File Not Available" }.Raw);
+                SendMessageAsync(new ErrorMessage { Error = "File Not Available" }.Raw);
                 return;
             }
 
@@ -535,7 +545,7 @@ namespace SharpDc.Connections
                 if (ea.Cancel)
                 {
                     Logger.Info("Can't start upload to {0}, no slots available", Source);
-                    SendMessage(new MaxedOutMessage().Raw);
+                    SendMessageAsync(new MaxedOutMessage().Raw);
                     return;
                 }
 
@@ -560,7 +570,7 @@ namespace SharpDc.Connections
                 UploadItem = ea.UploadItem;
                 if (ea.UploadItem == null)
                 {
-                    SendMessage(new ErrorMessage { Error = "File Not Available" }.Raw);
+                    SendMessageAsync(new ErrorMessage { Error = "File Not Available" }.Raw);
                     return;
                 }
             }
@@ -572,7 +582,7 @@ namespace SharpDc.Connections
 
             if (adcgetMessage.Start >= UploadItem.Content.Magnet.Size)
             {
-                SendMessage(new ErrorMessage { Error = "File Not Available" }.Raw);
+                SendMessageAsync(new ErrorMessage { Error = "File Not Available" }.Raw);
                 return;
             }
 
@@ -728,13 +738,13 @@ namespace SharpDc.Connections
         {
             if (lockMessage.ExtendedProtocol)
             {
-                SendMessage(new SupportsMessage { ADCGet = true, TTHF = true, TTHL = true }.Raw);
+                SendMessageAsync(new SupportsMessage { ADCGet = true, TTHF = true, TTHL = true }.Raw);
             }
 
             var r = new Random();
             _ourNumer = r.Next(0, 32768);
-            SendMessage(new DirectionMessage { Download = GetNewDownloadItem(), Number = _ourNumer }.Raw);
-            SendMessage(lockMessage.CreateKey().Raw);
+            SendMessageAsync(new DirectionMessage { Download = GetNewDownloadItem(), Number = _ourNumer }.Raw);
+            SendMessageAsync(lockMessage.CreateKey().Raw);
         }
 
         private void OnMessageSupports(ref SupportsMessage supportsMessage)
@@ -759,8 +769,8 @@ namespace SharpDc.Connections
 
             if (FirstMessages == null)
             {
-                SendMessage(new MyNickMessage { Nickname = ea.OwnNickname }.Raw);
-                SendMessage(new LockMessage().Raw);
+                SendMessageAsync(new MyNickMessage { Nickname = ea.OwnNickname }.Raw);
+                SendMessageAsync(new LockMessage().Raw);
             }
         }
 

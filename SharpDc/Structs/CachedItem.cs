@@ -18,6 +18,7 @@ namespace SharpDc.Structs
         public Magnet Magnet { get; private set; }
         
         public int SegmentLength { get; private set; }
+
         /// <summary>
         /// Indicates if the file is completely cached
         /// </summary>
@@ -26,6 +27,8 @@ namespace SharpDc.Structs
         public BitArray CachedSegments { get; private set; }
 
         public string CachePath { get; set; }
+
+        public DateTime Created { get; set; }
 
         public string BitFileldFilePath
         {
@@ -43,6 +46,7 @@ namespace SharpDc.Structs
             Magnet = magnet;
             SegmentLength = segmentLength;
             CachedSegments = segments;
+            Created = DateTime.Now;
         }
 
         /// <summary>

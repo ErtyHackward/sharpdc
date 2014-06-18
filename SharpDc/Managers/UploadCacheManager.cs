@@ -31,6 +31,9 @@ namespace SharpDc.Managers
         private long _uploadedFromCache;
         private bool _listening;
         private Timer _updateTimer;
+        private const float CacheGap = 0.5f;
+        private const float RemoveThresold = 2f;
+
 
         /// <summary>
         /// Gets current cache read speed
@@ -114,83 +117,89 @@ namespace SharpDc.Managers
                 StatItem statItem;
                 if (!_engine.StatisticsManager.TryGetValue(e.Magnet.TTH, out statItem)) 
                     return; // no statistics on the item, ignore
-                
-                if (statItem.Rate < 0.5)
+
+                if (statItem.Rate < CacheGap)
                     return; // the rate is too low, ignore
 
                 // find current cached items rate
-
                 var list = new List<KeyValuePair<CachedItem, StatItem>>();
-                
+
                 lock (_syncRoot)
                 {
                     foreach (var cachedItem in _items.Values)
                     {
                         StatItem si;
-                        _engine.StatisticsManager.TryGetValue(e.Magnet.TTH, out si);
-                        list.Add(new KeyValuePair<CachedItem, StatItem>(cachedItem, si));
-                    }
-                }
-
-                // sort them by the rate ascending
-                list = list.OrderBy(i => i.Value.TotalUploaded).ToList();
-
-                // check for free point
-                var point = _points.FirstOrDefault(p => p.FreeSpace > e.Magnet.Size);
-                
-                if (point == null)
-                {
-                    // check if the item has higher rate than one in the cache with gap 1
-                    var possibleFreeSize =
-                        list.Where(i => i.Value.TotalUploaded * 1.5 < statItem.TotalUploaded)
-                            .Select(i => i.Value.Magnet.Size)
-                            .DefaultIfEmpty(0)
-                            .Sum();
-
-                    if (possibleFreeSize < statItem.Magnet.Size)
-                        return; // not enough space could be freed for this item
-
-                    for (int i = 0; i < list.Count; i++)
-                    {
-                        if (list[i].Value.TotalUploaded * 1.5 >= statItem.TotalUploaded)
-                            return;
-
-                        Logger.Info("Remove less important item from cache {0}", list[i].Key.Magnet);
-                        try
+                        if (_engine.StatisticsManager.TryGetValue(cachedItem.Magnet.TTH, out si))
+                            list.Add(new KeyValuePair<CachedItem, StatItem>(cachedItem, si));
+                        else
                         {
-                            RemoveItemFromCache(list[i].Key);
-                        }
-                        catch (Exception x)
-                        {
-                            Logger.Error("Can't delete cache file {0}", list[i].Key.Magnet);
-                        }
-
-                        point = _points.FirstOrDefault(p => p.FreeSpace > e.Magnet.Size);
-                        if (point != null)
-                        {
-                            break;
+                            list.Add(new KeyValuePair<CachedItem, StatItem>(cachedItem,
+                                new StatItem { Magnet = e.Magnet }));
                         }
                     }
+                    
+                    // sort them by the rate ascending
+                    list = list.OrderBy(i => i.Value.TotalUploaded).ToList();
+
+                    // check for free point
+                    var point = _points.FirstOrDefault(p => p.FreeSpace > e.Magnet.Size);
 
                     if (point == null)
                     {
+                        // check if the item has higher rate than one in the cache with gap
+                        var possibleFreeSize =
+                            list.Where(i => i.Value.TotalUploaded * RemoveThresold < statItem.TotalUploaded)
+                                .Select(i => i.Value.Magnet.Size)
+                                .DefaultIfEmpty(0)
+                                .Sum();
+
+                        if (possibleFreeSize < statItem.Magnet.Size)
+                            return; // not enough space could be freed for this item
+
+                        for (int i = 0; i < list.Count; i++)
+                        {
+                            if (list[i].Value.TotalUploaded * RemoveThresold >= statItem.TotalUploaded)
+                                return;
+
+                            Logger.Info("Remove less important item from cache {0}", list[i].Key.Magnet);
+                            try
+                            {
+                                RemoveItemFromCache(list[i].Key);
+                            }
+                            catch (Exception x)
+                            {
+                                Logger.Error("Can't delete cache file {0}", list[i].Key.Magnet);
+                            }
+
+                            point = _points.FirstOrDefault(p => p.FreeSpace > e.Magnet.Size);
+                            if (point != null)
+                            {
+                                break;
+                            }
+                        }
+
+                        if (point == null)
+                        {
+                            return;
+                        }
+                    }
+
+                    item = new CachedItem(e.Magnet, e.Length)
+                    {
+                        CachePath = Path.Combine(point.SystemPath, e.Magnet.TTH)
+                    };
+
+                    Exception ex;
+                    if (!FileHelper.AllocateFile(item.CachePath, e.Magnet.Size, out ex))
+                    {
+                        Logger.Error("Cannot allocate file {0} {1} {2}", item.CachePath, Utils.FormatBytes(e.Magnet.Size), ex == null ? "" : ex.Message);
                         return;
                     }
-                }
 
-                item = new CachedItem(e.Magnet, e.Length)
-                {
-                    CachePath = Path.Combine(point.SystemPath, e.Magnet.TTH)
-                };
-                lock (_syncRoot)
-                {
-                    point.CachedSpace += e.Magnet.Size;
                     _items.Add(e.Magnet.TTH, item);
+                    point.CachedSpace += e.Magnet.Size;
                 }
             }
-
-            if (item.SegmentLength != e.Length)
-                return;
 
             using (new PerfLimit("Cache flush"))
             using (var fs = new FileStream(item.CachePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite, 1024 * 64))
@@ -274,16 +283,26 @@ namespace SharpDc.Managers
                     var item = new CachedItem(magnet, segmentLength, bitarray)
                     {
                         CachePath = Path.Combine(point.SystemPath, magnet.TTH),
+                        Created = new FileInfo(filePath).CreationTime
                     };
-                    
-                    lock (_syncRoot)
+
+                    if (File.Exists(item.CachePath))
                     {
-                        point.CachedSpace += magnet.Size;
-                        _items.Add(magnet.TTH, item);
+                        lock (_syncRoot)
+                        {
+                            point.CachedSpace += magnet.Size;
+                            _items.Add(magnet.TTH, item);
+                        }
                     }
-                    
+                    else
+                    {
+                        fs.Close();
+                        File.Delete(item.BitFileldFilePath);
+                    }
                 }
             }
+
+            Logger.Info("Cache loaded {0}", Utils.FormatBytes(point.CachedSpace));
 
             // delete files without bitfields
             foreach (var filePath in Directory.EnumerateFiles(path))
@@ -317,7 +336,7 @@ namespace SharpDc.Managers
             foreach (var statItem in items)
             {
                 var item = statItem;
-                if (item.Rate > 1)
+                if (item.Rate > CacheGap)
                 {
                     item.TotalUploaded -= (long)(item.Magnet.Size * (item.Rate / 2));
                     _engine.StatisticsManager.SetItem(item);
@@ -331,9 +350,7 @@ namespace SharpDc.Managers
     {
         public string SystemPath { get; set; }
         public long TotalSpace { get; set; }
-
         public long CachedSpace { get; set; }
-
         public long FreeSpace {
             get { return TotalSpace - CachedSpace; }
         }
