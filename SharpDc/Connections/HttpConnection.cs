@@ -63,7 +63,7 @@ namespace SharpDc.Connections
 
         protected override void SendFirstMessages()
         {
-            SendNow(_request, 0, _request.Length);
+            Send(_request, 0, _request.Length);
         }
 
         protected override void ParseRaw(byte[] buffer, int length)

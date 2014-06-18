@@ -126,24 +126,33 @@ namespace SharpDc.Helpers
         /// <returns>True is file creation success otherwise false</returns>
         public static bool AllocateFile(string target, long size)
         {
+            Exception x;
+            return AllocateFile(target, size, out x);
+        }
+        
+        public static bool AllocateFile(string target, long size, out Exception x)
+        {
             try
             {
+                x = null;
                 using (var fs = new FileStream(target, FileMode.OpenOrCreate))
                 {
                     fs.SetLength(size);
                 }
                 return true;
             }
-            catch (IOException)
+            catch (IOException ex)
             {
+                x = ex;
                 return false;
             }
-            catch (UnauthorizedAccessException)
+            catch (UnauthorizedAccessException ex)
             {
+                x = ex;
                 return false;
             }
         }
-
+        
         public static bool PathExists(string target)
         {
             var sep = Path.DirectorySeparatorChar;

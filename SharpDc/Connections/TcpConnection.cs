@@ -387,8 +387,6 @@ namespace SharpDc.Connections
 
             return true;
         }
-
-        private bool IsMono = Type.GetType("Mono.Runtime") != null;
         
         private void HandleReceived(int bytesReceived)
         {
@@ -473,6 +471,21 @@ namespace SharpDc.Connections
 
         protected bool Send(SendTask task)
         {
+            var result = Send(task.Buffer, task.Offset, task.Length);
+            if (task.Sync != null)
+                task.Sync.Set();
+            return result;
+        }
+
+        /// <summary>
+        /// Sends data synchronously, could be executed before the async request sent
+        /// </summary>
+        /// <param name="buffer"></param>
+        /// <param name="offset"></param>
+        /// <param name="length"></param>
+        /// <returns></returns>
+        public bool Send(byte[] buffer, int offset, int length)
+        {
             try
             {
                 if (ConnectionStatus != ConnectionStatus.Connected)
@@ -484,23 +497,20 @@ namespace SharpDc.Connections
                     if (_socket != null)
                     {
                         int sent = 0;
-                        int needToSend = task.Length;
-                        int curOffset = task.Offset;
+                        int needToSend = length;
+                        int curOffset = offset;
 
-                        while (sent < task.Length)
+                        while (sent < length)
                         {
-                            var s = _socket.Send(task.Buffer, curOffset, needToSend, SocketFlags.None);
+                            var s = _socket.Send(buffer, curOffset, needToSend, SocketFlags.None);
                             sent += s;
                             curOffset += s;
                             needToSend -= s;
                         }
 
-                        if (task.Sync != null)
-                            task.Sync.Set();
-
-                        _uploadSpeed.Update(task.Length);
-                        UploadSpeedLimit.Update(task.Length);
-                        UploadSpeedLimitGlobal.Update(task.Length);
+                        _uploadSpeed.Update(length);
+                        UploadSpeedLimit.Update(length);
+                        UploadSpeedLimitGlobal.Update(length);
                         return true;
                     }
                 }
@@ -513,45 +523,10 @@ namespace SharpDc.Connections
             return false;
         }
 
-        /// <summary>
-        /// Creates send task and waits until it is finished
-        /// </summary>
-        /// <param name="buffer"></param>
-        /// <param name="offset"></param>
-        /// <param name="length"></param>
-        /// <returns></returns>
-        public int Send(byte[] buffer, int offset, int length)
+        public void Send(string msg)
         {
-            var sync = new ManualResetEvent(false);
-            
-            lock (_delayedMessages)
-            {
-                _delayedMessages.Enqueue(new SendTask
-                                                {
-                                                    Buffer = buffer,
-                                                    Offset = offset,
-                                                    Length = length,
-                                                    Sync = sync
-                                                });
-            }
-
-            BeginSend();
-
-            sync.WaitOne(SendTimeout);
-             
-
-            return ConnectionStatus == ConnectionStatus.Connected ? length : 0;
-        }
-
-        protected int SendNow(byte[] buffer, int offset, int length)
-        {
-            var task = new SendTask
-            {
-                Buffer = buffer,
-                Offset = offset,
-                Length = length
-            };
-            return Send(task) ? length : 0 ;
+            var bytes = Encoding.Default.GetBytes(msg);
+            Send(bytes, 0, bytes.Length);
         }
 
         public void SendAsync(string msg)
@@ -707,12 +682,14 @@ namespace SharpDc.Connections
                     }
                 }
 
+                bool wait = false;
                 SendTask task;
                 lock (_delayedMessages)
                 {
                     task = _delayedMessages.Dequeue();
+                    wait = _delayedMessages.Count == 0;
                 }
-
+                
                 if (!Send(task))
                 {
                     lock (_delayedMessages)
@@ -730,6 +707,9 @@ namespace SharpDc.Connections
                     }
                     break;
                 }
+
+                if (wait)
+                    Thread.Sleep(10);
             }
         }
 
