@@ -146,38 +146,44 @@ namespace SharpDc.Managers
 
                     if (point == null)
                     {
-                        // check if the item has higher rate than one in the cache with gap
-                        var possibleFreeSize =
-                            list.Where(i => i.Value.TotalUploaded * RemoveThresold < statItem.TotalUploaded)
-                                .Select(i => i.Value.Magnet.Size)
-                                .DefaultIfEmpty(0)
-                                .Sum();
-
-                        if (possibleFreeSize < statItem.Magnet.Size)
-                            return; // not enough space could be freed for this item
-
-                        for (int i = 0; i < list.Count; i++)
+                        foreach (var cachePoint in _points)
                         {
-                            if (list[i].Value.TotalUploaded * RemoveThresold >= statItem.TotalUploaded)
-                                return;
+                            // check if the item has higher rate than one in the cache with gap
+                            var possibleFreeSize =
+                                list.Where(i => i.Key.CachePath.StartsWith(cachePoint.SystemPath) && i.Value.TotalUploaded * RemoveThresold < statItem.TotalUploaded)
+                                    .Select(i => i.Value.Magnet.Size)
+                                    .DefaultIfEmpty(0)
+                                    .Sum();
 
-                            Logger.Info("Remove less important item from cache {0}", list[i].Key.Magnet);
-                            try
-                            {
-                                RemoveItemFromCache(list[i].Key);
-                            }
-                            catch (Exception x)
-                            {
-                                Logger.Error("Can't delete cache file {0}", list[i].Key.Magnet);
-                            }
+                            if (possibleFreeSize < statItem.Magnet.Size)
+                                continue; // not enough space could be freed for this item
 
-                            point = _points.FirstOrDefault(p => p.FreeSpace > e.Magnet.Size);
-                            if (point != null)
+                            for (int i = 0; i < list.Count; i++)
                             {
-                                break;
+                                if (!list[i].Key.CachePath.StartsWith(cachePoint.SystemPath))
+                                    continue;
+
+                                if (list[i].Value.TotalUploaded * RemoveThresold >= statItem.TotalUploaded)
+                                    break;
+
+                                Logger.Info("Remove less important item from cache {0}", list[i].Key.Magnet);
+                                try
+                                {
+                                    RemoveItemFromCache(list[i].Key);
+                                }
+                                catch (Exception x)
+                                {
+                                    Logger.Error("Can't delete cache file {0}", list[i].Key.Magnet);
+                                }
+
+                                point = _points.FirstOrDefault(p => p.FreeSpace > e.Magnet.Size);
+                                if (point != null)
+                                {
+                                    break;
+                                }
                             }
                         }
-
+                        
                         if (point == null)
                         {
                             return;
@@ -324,7 +330,7 @@ namespace SharpDc.Managers
                 HttpUploadItem.HttpSegmentDownloaded += HttpUploadItem_HttpSegmentDownloaded;
                 HttpUploadItem.HttpSegmentNeeded += HttpUploadItem_HttpSegmentNeeded;
                 _listening = true;
-                _updateTimer = new Timer(PeriodicAction, null, TimeSpan.FromHours(1), TimeSpan.FromDays(1));
+                _updateTimer = new Timer(PeriodicAction, null, TimeSpan.FromHours(1), TimeSpan.FromHours(1));
             }
         }
 
@@ -338,7 +344,7 @@ namespace SharpDc.Managers
                 var item = statItem;
                 if (item.Rate > CacheGap)
                 {
-                    item.TotalUploaded -= (long)(item.Magnet.Size * (item.Rate / 2));
+                    item.TotalUploaded -= item.TotalUploaded / 2;
                     _engine.StatisticsManager.SetItem(item);
                 }
             }
