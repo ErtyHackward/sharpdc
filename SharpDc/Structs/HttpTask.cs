@@ -91,12 +91,15 @@ namespace SharpDc.Structs
 
         private void Cleanup()
         {
-            if (Connection != null)
+            lock (Event)
             {
-                Connection.ConnectionStatusChanged -= ConnectionConnectionStatusChanged;
-                Connection.DataRecieved -= ConnectionDataRecieved;
+                if (Connection != null)
+                {
+                    Connection.ConnectionStatusChanged -= ConnectionConnectionStatusChanged;
+                    Connection.DataRecieved -= ConnectionDataRecieved;
+                }
+                Connection = null;
             }
-            Connection = null;
         }
     }
 }
