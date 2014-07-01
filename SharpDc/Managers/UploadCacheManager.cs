@@ -330,7 +330,9 @@ namespace SharpDc.Managers
                 HttpUploadItem.HttpSegmentDownloaded += HttpUploadItem_HttpSegmentDownloaded;
                 HttpUploadItem.HttpSegmentNeeded += HttpUploadItem_HttpSegmentNeeded;
                 _listening = true;
-                _updateTimer = new Timer(PeriodicAction, null, TimeSpan.FromHours(1), TimeSpan.FromHours(1));
+
+                var updateInterval = TimeSpan.FromHours(12);
+                _updateTimer = new Timer(PeriodicAction, null, updateInterval, updateInterval);
             }
         }
 
@@ -342,11 +344,9 @@ namespace SharpDc.Managers
             foreach (var statItem in items)
             {
                 var item = statItem;
-                if (item.Rate > CacheGap)
-                {
-                    item.TotalUploaded -= item.TotalUploaded / 2;
-                    _engine.StatisticsManager.SetItem(item);
-                }
+
+                item.TotalUploaded -= item.TotalUploaded / 2;
+                _engine.StatisticsManager.SetItem(item);
             }
             Logger.Info("Decreasing statistics rates done");
         }
