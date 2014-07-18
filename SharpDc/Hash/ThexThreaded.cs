@@ -67,7 +67,7 @@ namespace SharpDc.Hash
 
 		const byte LeafHash = 0x00;
 		const int  LeafSize = 1024;
-		const int  DataBlockSize = LeafSize * 1024; // 1 MB
+		const int  DataBlockSize = LeafSize * 256; // 256 Kb
 		const int  ThreadCount = 4;
         const int  ZERO_BYTE_FILE = 0;
 
@@ -79,6 +79,8 @@ namespace SharpDc.Hash
 
 		FileBlock[] _fileParts = new FileBlock[ThreadCount];
 		Thread[] _threadsList = new Thread[ThreadCount];
+
+        public bool LowPriority { get; set; }
 
         public HashAlgorithm Hasher
         {
@@ -178,7 +180,7 @@ namespace SharpDc.Hash
 			if (_filePtr.Length > 1024 * 1024) 
 				for (int i = 0; i < ThreadCount; i++)
 					_fileParts[i] = new FileBlock(leafsInPart * LeafSize * i,
-												 leafsInPart * LeafSize * (i + 1));
+												  leafsInPart * LeafSize * (i + 1));
 
 			_fileParts[ThreadCount - 1].End = _filePtr.Length;
 		}
@@ -189,7 +191,6 @@ namespace SharpDc.Hash
 			{
 				_threadsList[i] = new Thread(ProcessLeafs);
 				_threadsList[i].IsBackground = true;
-                _threadsList[i].Priority = (ThreadPriority)ProcessPriorityClass.Idle;
 				_threadsList[i].Start(i);
 			}
 
@@ -210,7 +211,7 @@ namespace SharpDc.Hash
 
 		void ProcessLeafs(object threadId)
 		{
-            using (ThreadUtility.EnterBackgroundProcessingMode())
+            using (LowPriority ? ThreadUtility.EnterBackgroundProcessingMode() : null)
             using (var threadFilePtr = new FileStream(_filename, FileMode.Open, FileAccess.Read, FileShare.Read))
 		    {
 		        var threadFileBlock = _fileParts[(int)threadId];
@@ -219,15 +220,17 @@ namespace SharpDc.Hash
 
 		        threadFilePtr.Position = threadFileBlock.Start;
 
+                var dataBlock = new byte[DataBlockSize];
+
 		        while (threadFilePtr.Position < threadFileBlock.End)
 		        {
 		            var leafIndex = (int)(threadFilePtr.Position / 1024);
 
-		            var dataBlock = new byte[Math.Min(threadFileBlock.Length, DataBlockSize)];
+                    var dataBlockSize = (int)Math.Min(threadFileBlock.End - threadFilePtr.Position, DataBlockSize);
 
-		            threadFilePtr.Read(dataBlock, 0, dataBlock.Length); //read block
+                    threadFilePtr.Read(dataBlock, 0, dataBlockSize); //read block
 
-		            var blockLeafs = dataBlock.Length / 1024;
+                    var blockLeafs = dataBlockSize / 1024;
 
 		            int i;
 		            for (i = 0; i < blockLeafs; i++)
@@ -238,9 +241,9 @@ namespace SharpDc.Hash
 		                TTH[0][leafIndex++] = tg.ComputeHash(data);
 		            }
 
-		            if (i * LeafSize < dataBlock.Length)
+                    if (i * LeafSize < dataBlockSize)
 		            {
-		                data = new byte[dataBlock.Length - blockLeafs * LeafSize + 1];
+		                data = new byte[dataBlockSize - blockLeafs * LeafSize + 1];
 		                data[0] = LeafHash;
 
 		                Buffer.BlockCopy(dataBlock, blockLeafs * LeafSize, data, 1, (data.Length - 1));
@@ -367,7 +370,7 @@ namespace SharpDc.Hash
                 {
                     var leafIndex = (int)((threadFilePtr.Position - start) / 1024);
 
-                    var dataBlock = new byte[Math.Min(threadFileBlock.Length, DataBlockSize)];
+                    var dataBlock = new byte[Math.Min(threadFileBlock.End - threadFilePtr.Position, DataBlockSize)];
 
                     threadFilePtr.Read(dataBlock, 0, dataBlock.Length); //read block
 
