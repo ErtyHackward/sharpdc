@@ -80,7 +80,7 @@ namespace SharpDc
             if (arrayIndex != charCount)
             {
                 returnArray[arrayIndex++] = ValueToChar(nextChar);
-                while (arrayIndex != charCount) returnArray[arrayIndex++] = '='; //padding
+                Array.Resize(ref returnArray, arrayIndex);
             }
 
             return new string(returnArray);
