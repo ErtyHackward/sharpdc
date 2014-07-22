@@ -5,8 +5,10 @@
 // -------------------------------------------------------------
 
 using System;
+using System.CodeDom;
 using System.Collections;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.Linq;
 using System.Text;
 using SharpDc.Helpers;
@@ -95,6 +97,23 @@ namespace SharpDc.Structs
             get { return (double)TotalUploaded / Magnet.Size; }
         }
 
+        /// <summary>
+        /// Returns the cache effectivity calculated as (in Gb) TotalUploaded ^ 2 / FileSize
+        /// </summary>
+        public double CacheEffectivity
+        {
+            get
+            {
+                var uploadedGb = (double)TotalUploaded / Utils.GiB;
+                var sizeGb = (double)Magnet.Size / Utils.GiB;
+
+                return uploadedGb * uploadedGb / sizeGb; 
+            }
+        }
+
+        /// <summary>
+        /// Total bytes uploaded from this file
+        /// </summary>
         public long TotalUploaded { get; set; }
     }
 }

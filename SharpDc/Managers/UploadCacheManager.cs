@@ -31,8 +31,8 @@ namespace SharpDc.Managers
         private long _uploadedFromCache;
         private bool _listening;
         private Timer _updateTimer;
-        private const float CacheGap = 0.5f;
-        private const float RemoveThresold = 2f;
+        private const float CacheGap = 2f;
+        private const float RemoveThresold = 1.2f;
 
 
         /// <summary>
@@ -99,6 +99,11 @@ namespace SharpDc.Managers
             catch (Exception exception)
             {
                 Logger.Error("Cache read error {0}", exception.Message);
+
+                if (!File.Exists(item.CachePath))
+                {
+                    RemoveItemFromCache(item);
+                }
             }
 
         }
@@ -138,19 +143,19 @@ namespace SharpDc.Managers
                         }
                     }
                     
-                    // sort them by the rate ascending
-                    list = list.OrderBy(i => i.Value.TotalUploaded).ToList();
-
                     // check for free point
                     var point = _points.FirstOrDefault(p => p.FreeSpace > e.Magnet.Size);
 
                     if (point == null)
                     {
+                        // sort them by the cache efficency ascending
+                        list = list.OrderBy(i => i.Value.CacheEffectivity).ToList();
+
                         foreach (var cachePoint in _points)
                         {
                             // check if the item has higher rate than one in the cache with gap
                             var possibleFreeSize =
-                                list.Where(i => i.Key.CachePath.StartsWith(cachePoint.SystemPath) && i.Value.TotalUploaded * RemoveThresold < statItem.TotalUploaded)
+                                list.Where(i => i.Key.CachePath.StartsWith(cachePoint.SystemPath) && i.Value.CacheEffectivity * RemoveThresold < statItem.CacheEffectivity)
                                     .Select(i => i.Value.Magnet.Size)
                                     .DefaultIfEmpty(0)
                                     .Sum();
@@ -163,7 +168,7 @@ namespace SharpDc.Managers
                                 if (!list[i].Key.CachePath.StartsWith(cachePoint.SystemPath))
                                     continue;
 
-                                if (list[i].Value.TotalUploaded * RemoveThresold >= statItem.TotalUploaded)
+                                if (list[i].Value.CacheEffectivity * RemoveThresold >= statItem.CacheEffectivity)
                                     break;
 
                                 Logger.Info("Remove less important item from cache {0}", list[i].Key.Magnet);
@@ -248,12 +253,15 @@ namespace SharpDc.Managers
 
             lock (_syncRoot)
             {
-                _items.Remove(item.Magnet.TTH);
-                var pInd = _points.FindIndex(cp => item.CachePath.StartsWith(cp.SystemPath));
-
-                if (pInd != -1)
+                if (_items.ContainsKey(item.Magnet.TTH))
                 {
-                    _points[pInd].CachedSpace -= item.Magnet.Size;
+                    _items.Remove(item.Magnet.TTH);
+                    var pInd = _points.FindIndex(cp => item.CachePath.StartsWith(cp.SystemPath));
+
+                    if (pInd != -1)
+                    {
+                        _points[pInd].CachedSpace -= item.Magnet.Size;
+                    }
                 }
             }
         }
