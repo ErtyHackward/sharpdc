@@ -593,11 +593,11 @@ namespace SharpDc.Connections
                 adcgetMessage.Length = UploadItem.Content.Magnet.Size - adcgetMessage.Start;
             }
 
+            var readBufferLength = _readBuffer.Length;
+
             using (UseBackgroundSeedMode ? Thread.CurrentThread.EnterBackgroundProcessingMode() : Scope.Empty)
             {
-                for (var position = adcgetMessage.Start;
-                     !_disposed && position < adcgetMessage.Start + adcgetMessage.Length;
-                     position += _readBuffer.Length)
+                for (var position = adcgetMessage.Start; _readBuffer != null && position < adcgetMessage.Start + adcgetMessage.Length; position += readBufferLength)
                 {
                     if (position == adcgetMessage.Start)
                     {
@@ -610,9 +610,7 @@ namespace SharpDc.Connections
                                     Length = adcgetMessage.Length
                                 }.Raw);
                     }
-
-
-
+                    
                     var length = _readBuffer.Length;
 
                     if (adcgetMessage.Start + adcgetMessage.Length < position + length)

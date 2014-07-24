@@ -375,6 +375,9 @@ namespace SharpDc.Connections
 
         private bool ReceiveInternal()
         {
+            if (_socket == null)
+                return false;
+
             var bytesReceived = _socket.Receive(_connectionBuffer);
 
             if (bytesReceived == 0)
@@ -417,7 +420,7 @@ namespace SharpDc.Connections
                 if (_connectionBuffer == null || _connectionBuffer.Length != ConnectionBufferSize)
                     _connectionBuffer = new byte[ConnectionBufferSize];
 
-                _socket.BeginReceive(_connectionBuffer, 0, _connectionBuffer.Length, SocketFlags.None, ReceiveCallback, null);
+                _socket.BeginReceive(_connectionBuffer, 0, _connectionBuffer.Length, SocketFlags.None, ReceiveCallback, _socket);
 
             }
             catch (Exception x)
@@ -430,7 +433,8 @@ namespace SharpDc.Connections
         {
             try
             {
-                var bytesReceived = _socket.EndReceive(ar);
+                var socket = (Socket)ar.AsyncState;
+                var bytesReceived = socket.EndReceive(ar);
 
                 if (bytesReceived == 0)
                 {
@@ -441,8 +445,7 @@ namespace SharpDc.Connections
                 if (_connectionBuffer != null)
                 {
                     HandleReceived(bytesReceived);
-                    _socket.BeginReceive(_connectionBuffer, 0, _connectionBuffer.Length, SocketFlags.None,
-                        ReceiveCallback, null);
+                    _socket.BeginReceive(_connectionBuffer, 0, _connectionBuffer.Length, SocketFlags.None, ReceiveCallback, _socket);
                 }
             }
             catch (Exception x)

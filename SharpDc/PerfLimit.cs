@@ -23,10 +23,18 @@ namespace SharpDc
         private readonly string _message;
         private readonly int _limitMs;
         private readonly Stopwatch _sw;
+        private readonly Func<string> _func;
 
         public PerfLimit(string message, int limitMs = 100)
         {
             _message = message;
+            _limitMs = limitMs;
+            _sw = Stopwatch.StartNew();
+        }
+
+        public PerfLimit(Func<string> createMsg, int limitMs = 100)
+        {
+            _func = createMsg;
             _limitMs = limitMs;
             _sw = Stopwatch.StartNew();
         }
@@ -36,7 +44,14 @@ namespace SharpDc
             _sw.Stop();
             if (_sw.ElapsedMilliseconds > _limitMs)
             {
-                Logger.Warn("{0} : {1}/{2} ms", _message, _sw.ElapsedMilliseconds, _limitMs);
+                if (_message == null)
+                {
+                    Logger.Warn("{0} : {1}/{2} ms", _func(), _sw.ElapsedMilliseconds, _limitMs);
+                }
+                else
+                {
+                    Logger.Warn("{0} : {1}/{2} ms", _message, _sw.ElapsedMilliseconds, _limitMs);
+                }
             }
         }
     }

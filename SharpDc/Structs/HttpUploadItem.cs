@@ -63,6 +63,7 @@ namespace SharpDc.Structs
             {
                 var ea = new HttpSegmentEventArgs
                 {
+                    UploadItem = this,
                     Buffer   = _buffer,
                     Magnet   = Content.Magnet,
                     Position = _position,
@@ -96,6 +97,7 @@ namespace SharpDc.Structs
             if (HttpSegmentDownloaded != null)
             {
                 OnHttpSegmentDownloaded(new HttpSegmentEventArgs { 
+                    UploadItem = this,
                     Buffer = _buffer, 
                     Magnet = Content.Magnet,
                     Position = _position,
@@ -135,6 +137,7 @@ namespace SharpDc.Structs
 
     public class HttpSegmentEventArgs : EventArgs
     {
+        public HttpUploadItem UploadItem { get; set; }
         public byte[] Buffer { get; set; }
         public Magnet Magnet { get; set; }
         public long Position { get; set; }
