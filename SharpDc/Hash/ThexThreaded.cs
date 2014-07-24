@@ -176,7 +176,7 @@ namespace SharpDc.Hash
 		{
 			long leafsInPart = _leafCount / ThreadCount;
 
-			// check if file is bigger then 1 MB or don't use threads
+			// check if file is bigger than 1 MB or don't use threads
 			if (_filePtr.Length > 1024 * 1024) 
 				for (int i = 0; i < ThreadCount; i++)
 					_fileParts[i] = new FileBlock(leafsInPart * LeafSize * i,

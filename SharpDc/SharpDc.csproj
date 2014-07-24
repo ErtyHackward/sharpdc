@@ -105,6 +105,7 @@
     <Compile Include="Hash\TigerNative.cs" />
     <Compile Include="Hash\tigersbox.cs" />
     <Compile Include="Hash\TthStreamHeader.cs" />
+    <Compile Include="Helpers\DllLoadHelper.cs" />
     <Compile Include="Helpers\Extensions.cs" />
     <Compile Include="Helpers\FileHelper.cs" />
     <Compile Include="Helpers\HttpHelper.cs" />

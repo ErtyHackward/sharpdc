@@ -6,7 +6,11 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
 using System.Security;
+using System.Xml.Serialization;
 using SharpDc.Connections;
 using SharpDc.Structs;
 
@@ -38,6 +42,52 @@ namespace SharpDc.Managers
             if (e.PreviousItem != null)
             {
                 HandleUploaded(e.PreviousItem);
+            }
+        }
+
+        /// <summary>
+        /// Saves statistics information to the file
+        /// </summary>
+        /// <param name="filePath"></param>
+        public void SaveToFile(string filePath)
+        {
+            var xml = new XmlSerializer(typeof(List<StatItem>));
+
+            lock (_synRoot)
+            {
+                using (var fs = File.OpenWrite(filePath))
+                using (var zip = new GZipStream(fs, CompressionMode.Compress))
+                {
+                    xml.Serialize(zip, AllItems().ToList());    
+                }
+            }
+        }
+
+        /// <summary>
+        /// Loads statistics database from the file
+        /// </summary>
+        /// <param name="filePath"></param>
+        public void LoadFromFile(string filePath)
+        {
+            var xml = new XmlSerializer(typeof(List<StatItem>));
+
+            lock (_synRoot)
+            {
+                using (var fs = File.OpenRead(filePath))
+                using (var zip = new GZipStream(fs, CompressionMode.Decompress))
+                {
+                    var list = (List<StatItem>)xml.Deserialize(zip);
+                    
+                    Clear();
+
+                    lock (_synRoot)
+                    {
+                        foreach (var statItem in list)
+                        {
+                            _items.Add(statItem.Magnet.TTH, statItem);
+                        }
+                    }
+                }
             }
         }
 

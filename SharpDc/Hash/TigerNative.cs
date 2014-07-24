@@ -8,11 +8,17 @@ using System;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using SharpDc.Helpers;
 
 namespace SharpDc.Hash
 {
     public class TigerNative : HashAlgorithm
     {
+        static TigerNative()
+        {
+            DllLoadHelper.LoadUmnanagedLibrary("Tiger.dll");
+        }
+
         [DllImport("Tiger.dll")]
         extern static public void tiger(byte[] b, long lenght, long[] sb);
 
