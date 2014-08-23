@@ -91,7 +91,7 @@ namespace SharpDc.Structs
 
         private void Cleanup()
         {
-            lock (Event)
+            lock (this)
             {
                 if (Connection != null)
                 {

@@ -9,14 +9,18 @@ using System.CodeDom;
 using System.Collections;
 using System.Collections.Generic;
 using System.Data.Common;
+using System.IO;
 using System.Linq;
 using System.Text;
 using SharpDc.Helpers;
+using SharpDc.Managers;
 
 namespace SharpDc.Structs
 {
     public class CachedItem
     {
+        public ObjectPool<FileStream> FileStreamPool { get; private set; }
+
         public Magnet Magnet { get; private set; }
         
         public int SegmentLength { get; private set; }
@@ -49,6 +53,8 @@ namespace SharpDc.Structs
             SegmentLength = segmentLength;
             CachedSegments = segments;
             Created = DateTime.Now;
+
+            FileStreamPool = new ObjectPool<FileStream>(() => new FileStream(CachePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1024 * 128));
         }
 
         /// <summary>

@@ -39,10 +39,10 @@ namespace SharpDc.Connections
         protected IPEndPoint RemoteEndPoint;
         private ConnectionStatus _connectionStatus;
         private readonly Queue<SendTask> _delayedMessages = new Queue<SendTask>();
-        private DateTime _lastUpdate = DateTime.Now;
+        private long _lastUpdate = Stopwatch.GetTimestamp();
         protected bool _closingSocket;
         private byte[] _connectionBuffer;
-        private volatile bool _sendThreadActive;
+        private int _sendThreadActive;
         private int _receiveTimeout;
         private int _sendTimeout = 4000;
         private SendTask _currentTask;
@@ -52,6 +52,10 @@ namespace SharpDc.Connections
 
         private readonly SpeedAverage _uploadSpeed = new SpeedAverage();
         private readonly SpeedAverage _downloadSpeed = new SpeedAverage();
+
+        private readonly AsyncCallback _receiveCallback;
+        private readonly AsyncCallback _sendCallback;
+        private readonly ThreadStart _sendDelayedDelegate;
 
         /// <summary>
         /// If set the separate thread will be used for the read process
@@ -89,11 +93,10 @@ namespace SharpDc.Connections
         }
 
         /// <summary>
-        /// Gets last event time (send or receive)
+        /// Gets seconds passed from the last event
         /// </summary>
-        public DateTime LastEventTime
-        {
-            get { return _lastUpdate; }
+        public int IdleSeconds {
+            get { return (int)((Stopwatch.GetTimestamp() - _lastUpdate) / Stopwatch.Frequency); }
         }
 
         public IPEndPoint LocalAddress { get; set; }
@@ -196,6 +199,9 @@ namespace SharpDc.Connections
         protected TcpConnection()
         {
             Initialize();
+            _receiveCallback = ReceiveCallback;
+            _sendCallback = SendCallback;
+            _sendDelayedDelegate = SendDelayed;
         }
 
         protected TcpConnection(IPEndPoint remoteEndPoint) : this()
@@ -331,7 +337,7 @@ namespace SharpDc.Connections
                 {
                     SetConnectionStatus(ConnectionStatus.Connecting);
 
-                    _lastUpdate = DateTime.Now;
+                    _lastUpdate = Stopwatch.GetTimestamp();
                     _socket.Connect(RemoteEndPoint);
 
                     LocalAddress = (IPEndPoint)_socket.LocalEndPoint;
@@ -394,7 +400,7 @@ namespace SharpDc.Connections
         private void HandleReceived(int bytesReceived)
         {
             _downloadSpeed.Update(bytesReceived);
-            _lastUpdate = DateTime.Now;
+            _lastUpdate = Stopwatch.GetTimestamp();
             ParseRaw(_connectionBuffer, bytesReceived);
             DownloadSpeedLimit.Update(bytesReceived);
             DownloadSpeedLimitGlobal.Update(bytesReceived);
@@ -403,6 +409,7 @@ namespace SharpDc.Connections
         protected virtual void SendFirstMessages()
         {
         }
+        
 
         private void BeginRead()
         {
@@ -412,7 +419,7 @@ namespace SharpDc.Connections
                 {
                     SetConnectionStatus(ConnectionStatus.Connecting);
 
-                    _lastUpdate = DateTime.Now;
+                    _lastUpdate = Stopwatch.GetTimestamp();
                     _socket.BeginConnect(RemoteEndPoint, ConnectCallback, null);
                     return;
                 }
@@ -420,7 +427,7 @@ namespace SharpDc.Connections
                 if (_connectionBuffer == null || _connectionBuffer.Length != ConnectionBufferSize)
                     _connectionBuffer = new byte[ConnectionBufferSize];
 
-                _socket.BeginReceive(_connectionBuffer, 0, _connectionBuffer.Length, SocketFlags.None, ReceiveCallback, _socket);
+                _socket.BeginReceive(_connectionBuffer, 0, _connectionBuffer.Length, SocketFlags.None, _receiveCallback, _socket);
 
             }
             catch (Exception x)
@@ -445,7 +452,7 @@ namespace SharpDc.Connections
                 if (_connectionBuffer != null)
                 {
                     HandleReceived(bytesReceived);
-                    _socket.BeginReceive(_connectionBuffer, 0, _connectionBuffer.Length, SocketFlags.None, ReceiveCallback, _socket);
+                    _socket.BeginReceive(_connectionBuffer, 0, _connectionBuffer.Length, SocketFlags.None, _receiveCallback, _socket);
                 }
             }
             catch (Exception x)
@@ -494,7 +501,7 @@ namespace SharpDc.Connections
                 if (ConnectionStatus != ConnectionStatus.Connected)
                     return false;
 
-                _lastUpdate = DateTime.Now;
+                _lastUpdate = Stopwatch.GetTimestamp();
                 lock (_sendLock)
                 {
                     if (_socket != null)
@@ -573,13 +580,9 @@ namespace SharpDc.Connections
 
         private void BeginSend()
         {
-            lock (_threadLock)
+            if (Interlocked.Exchange(ref _sendThreadActive, 1) == 0)
             {
-                if (!_sendThreadActive)
-                {
-                    _sendThreadActive = true;
-                    DcEngine.ThreadPool.QueueWorkItem(SendDelayed);
-                }
+                DcEngine.ThreadPool.QueueWorkItem(_sendDelayedDelegate);
             }
         }
 
@@ -608,7 +611,7 @@ namespace SharpDc.Connections
 
             try
             {
-                _socket.BeginSend(_currentTask.Buffer, 0, _currentTask.Length, SocketFlags.None, SendCallback, null);
+                _socket.BeginSend(_currentTask.Buffer, 0, _currentTask.Length, SocketFlags.None, _sendCallback, null);
                 return true;
             }
             catch (Exception x)
@@ -622,7 +625,7 @@ namespace SharpDc.Connections
         {
             try
             {
-                _lastUpdate = DateTime.Now;
+                _lastUpdate = Stopwatch.GetTimestamp();
 
                 var sent = _socket.EndSend(ar);
 
@@ -640,10 +643,7 @@ namespace SharpDc.Connections
                 
                 if (!SendNext())
                 {
-                    lock (_threadLock)
-                    {
-                        _sendThreadActive = false;
-                    }
+                    Interlocked.Exchange(ref _sendThreadActive, 0);
                 }
             }
             catch (Exception x)
@@ -661,10 +661,7 @@ namespace SharpDc.Connections
                             t.Sync.Set();
                     }
                     _delayedMessages.Clear();
-                    lock (_threadLock)
-                    {
-                        _sendThreadActive = false;
-                    }
+                    Interlocked.Exchange(ref _sendThreadActive, 0);
                 }
             }
         }
@@ -677,15 +674,12 @@ namespace SharpDc.Connections
                 {
                     if (_delayedMessages.Count == 0)
                     {
-                        lock (_threadLock)
-                        {
-                            _sendThreadActive = false;
-                        }
+                        Interlocked.Exchange(ref _sendThreadActive, 0);
                         return;
                     }
                 }
 
-                bool wait = false;
+                bool wait;
                 SendTask task;
                 lock (_delayedMessages)
                 {
@@ -703,10 +697,7 @@ namespace SharpDc.Connections
                                 t.Sync.Set();
                         }
                         _delayedMessages.Clear();
-                        lock (_threadLock)
-                        {
-                            _sendThreadActive = false;
-                        }
+                        Interlocked.Exchange(ref _sendThreadActive, 0);
                     }
                     break;
                 }

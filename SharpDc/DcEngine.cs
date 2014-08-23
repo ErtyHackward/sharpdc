@@ -405,7 +405,7 @@ namespace SharpDc
             foreach (var hub in Hubs)
             {
                 if (Settings.ReconnectTimeout != 0 && hub.ConnectionStatus == ConnectionStatus.Disconnected &&
-                    hub.LastEventTime.AddSeconds(Settings.ReconnectTimeout) < DateTime.Now)
+                    hub.IdleSeconds > Settings.ReconnectTimeout)
                 {
                     Logger.Info("{0}: Hub inactivity timeout reached [{1}]. Reconnecting", hub.Settings.HubName,
                                 Settings.ReconnectTimeout);
@@ -423,13 +423,9 @@ namespace SharpDc
                 return;
             }
 
-            var sw = Stopwatch.StartNew();
-            var swRequest = new Stopwatch();
-            var swTransfers = new Stopwatch();
-            var swSearches = new Stopwatch();
             try
             {
-                swRequest.Start();
+                using (new PerfLimit("EngineUpdate requests",300)) 
                 foreach (var downloadItem in DownloadManager.EnumeratesItemsForProcess())
                 {
                     if (downloadItem.Priority == DownloadPriority.Pause)
@@ -440,15 +436,13 @@ namespace SharpDc
 
                     SearchManager.CheckItem(downloadItem);
                 }
-                swRequest.Stop();
-
-                swTransfers.Start();
-                TransferManager.Update();
-                swTransfers.Stop();
-
-                swSearches.Start();
-                SearchManager.CheckPendingSearches();
-                swSearches.Stop();
+                
+                using (new PerfLimit("EngineUpdate Transfers", 300))
+                    TransferManager.Update();
+                
+                using (new PerfLimit("EngineUpdate Searches", 300))
+                    SearchManager.CheckPendingSearches();
+                
             }
             catch (Exception x)
             {
@@ -458,11 +452,6 @@ namespace SharpDc
             {
                 Monitor.Exit(_updateSynRoot);
             }
-
-            if (sw.ElapsedMilliseconds > 300)
-                Logger.Warn("Slow engine update Total:{0}ms R:{1}ms T:{2}ms S:{3}ms", sw.ElapsedMilliseconds,
-                            swRequest.ElapsedMilliseconds, swTransfers.ElapsedMilliseconds,
-                            swSearches.ElapsedMilliseconds);
         }
 
         private void InitTcp(int p)

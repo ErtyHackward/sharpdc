@@ -6,6 +6,7 @@
 
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -26,20 +27,19 @@ namespace SharpDc.Managers
         private static readonly ILogger Logger = LogManager.GetLogger();
 
         private readonly DcEngine _engine;
-        private readonly List<CachePoint> _points = new List<CachePoint>(); 
-        private readonly object _syncRoot = new object();
-        
+        private readonly List<CachePoint> _points = new List<CachePoint>();
+        private readonly Queue<Tuple<string, CachedItem>> _downloadQueue = new Queue<Tuple<string, CachedItem>>();
         private readonly Dictionary<string, CachedItem> _items = new Dictionary<string, CachedItem>();
+        private readonly object _syncRoot = new object();
+
         private long _uploadedFromCache;
         private bool _listening;
         private Timer _updateTimer;
-        private const float CacheGap = 2f;
+        private const float CacheGap = 10f;
         private const float RemoveThresold = 3f;
-
-        private readonly Queue<Tuple<string, CachedItem>> _downloadQueue = new Queue<Tuple<string, CachedItem>>();
+        
         private bool _downloadThreadAlive;
-
-
+        
         /// <summary>
         /// If set only requested segments will be saved to the cache, otherwise the file will be cached completely when added
         /// </summary>
@@ -92,11 +92,14 @@ namespace SharpDc.Managers
             if (!item.IsAreaCached(e.Position, e.Length))
                 return;
 
+            FileStream fs = null;
+
             try
             {
                 using (new PerfLimit(() => string.Format("Cache segment read {0}", item.CachePath), 300))
-                using (var fs = new FileStream(item.CachePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1024 * 128))
                 {
+                    fs = item.FileStreamPool.GetObject();
+
                     fs.Position = e.Position;
                     if (fs.Read(e.Buffer, 0, e.Length) != e.Length)
                         return;
@@ -105,10 +108,10 @@ namespace SharpDc.Managers
 
                     CacheUseSpeed.Update(e.Length);
 
-                    lock (_syncRoot)
-                    {
-                        _uploadedFromCache += e.Length;
-                    }
+                    Interlocked.Add(ref _uploadedFromCache, e.Length);
+
+                    item.FileStreamPool.PutObject(fs);
+                    fs = null;
                 }
             }
             catch (Exception exception)
@@ -119,8 +122,12 @@ namespace SharpDc.Managers
                 {
                     RemoveItemFromCache(item);
                 }
-            }
 
+                if (fs != null)
+                {
+                    fs.Dispose();
+                }
+            }
         }
 
         void HttpUploadItem_HttpSegmentDownloaded(object sender, HttpSegmentEventArgs e)
@@ -138,8 +145,8 @@ namespace SharpDc.Managers
                 if (!_engine.StatisticsManager.TryGetValue(e.Magnet.TTH, out statItem))
                     return; // no statistics on the item, ignore
 
-                if (statItem.Rate < CacheGap)
-                    return; // the rate is too low, ignore
+                if (statItem.CacheEffectivity < CacheGap)
+                    return; // the eff is too low, ignore
 
                 lock (_syncRoot)
                 {
@@ -167,31 +174,37 @@ namespace SharpDc.Managers
                         {
                             // sort them by the cache efficency ascending
                             list = list.OrderBy(i => i.Value.CacheEffectivity).ToList();
-
+                            
                             foreach (var cachePoint in _points)
                             {
                                 // check if the item has higher rate than one in the cache with gap
                                 var possibleFreeSize =
                                     list.Where(
                                         i =>
+                                            i.Key.Created + TimeSpan.FromMinutes(30) < DateTime.Now &&
                                             i.Key.CachePath.StartsWith(cachePoint.SystemPath) &&
                                             i.Value.CacheEffectivity * RemoveThresold < statItem.CacheEffectivity)
                                         .Select(i => i.Value.Magnet.Size)
                                         .DefaultIfEmpty(0)
                                         .Sum();
 
-                                if (possibleFreeSize < statItem.Magnet.Size)
+                                if (possibleFreeSize + cachePoint.FreeSpace < statItem.Magnet.Size)
                                     continue; // not enough space could be freed for this item
+
+                                Logger.Info("Need more room for {0} {1} eff: {2:0.0}", statItem.Magnet.FileName, statItem.Magnet.TTH, statItem.CacheEffectivity);
 
                                 for (int i = 0; i < list.Count; i++)
                                 {
+                                    if (list[i].Key.Created + TimeSpan.FromMinutes(30) > DateTime.Now)
+                                        continue;
+
                                     if (!list[i].Key.CachePath.StartsWith(cachePoint.SystemPath))
                                         continue;
 
                                     if (list[i].Value.CacheEffectivity * RemoveThresold >= statItem.CacheEffectivity)
-                                        break;
+                                        break; // break because of sorted list
 
-                                    Logger.Info("Remove less important item from cache {0}", list[i].Key.Magnet);
+                                    Logger.Info("Remove less important item from cache {0} {1} {2} eff: {3:0.0} < {4:0.0}", list[i].Key.Magnet.FileName, Utils.FormatBytes(list[i].Key.Magnet.Size), list[i].Key.Magnet.TTH, list[i].Value.CacheEffectivity, statItem.CacheEffectivity);
                                     try
                                     {
                                         RemoveItemFromCache(list[i].Key);
@@ -201,12 +214,15 @@ namespace SharpDc.Managers
                                         Logger.Error("Can't delete cache file {0}", list[i].Key.Magnet);
                                     }
 
-                                    point = _points.FirstOrDefault(p => p.FreeSpace > e.Magnet.Size);
-                                    if (point != null)
+                                    if (cachePoint.FreeSpace > e.Magnet.Size)
                                     {
+                                        point = cachePoint;
                                         break;
                                     }
                                 }
+
+                                if (point != null)
+                                    break;
                             }
 
                             if (point == null)
@@ -237,6 +253,7 @@ namespace SharpDc.Managers
                                 if (_downloadQueue.Count > 5)
                                     return;
 
+                                Logger.Info("Requesting download {0} to {1}", item.Magnet.FileName, item.CachePath);
                                 _downloadQueue.Enqueue(Tuple.Create(e.UploadItem.SystemPath, item));
                                 if (!_downloadThreadAlive)
                                 {
@@ -245,9 +262,8 @@ namespace SharpDc.Managers
                                 }
                             }
                         }
-
-                        _items.Add(e.Magnet.TTH, item);
-                        point.CachedSpace += e.Magnet.Size;
+                        
+                        AddItemToCache(item, point);
                     }
                 }
 
@@ -293,99 +309,144 @@ namespace SharpDc.Managers
             }
         }
 
+        private object _downloadLock = new object();
         private void DownloadCacheFiles()
         {
-            while (_downloadQueue.Count > 0)
+            lock (_downloadLock)
             {
-                Tuple<string, CachedItem> tuple;
-                lock (_downloadQueue)
+                while (_downloadQueue.Count > 0)
                 {
-                    tuple = _downloadQueue.Dequeue();
-                }
+                    Tuple<string, CachedItem> tuple;
+                    lock (_downloadQueue)
+                    {
+                        tuple = _downloadQueue.Dequeue();
+                    }
 
-                try
-                {
                     var httpUri = tuple.Item1;
                     var item = tuple.Item2;
 
-                    Logger.Info("Downloading file to the cache {0}", httpUri);
-
-                    if (File.Exists(item.CachePath))
-                        File.Delete(item.CachePath);
-
-                    using (var wc = new WebClient())
-                        wc.DownloadFile(httpUri, item.CachePath);
-
-                    if (CacheVerification)
+                    try
                     {
-                        Logger.Info("Verifying the data");
-                        var hasher = new ThexThreaded<TigerNative>();
-                        hasher.LowPriority = true;
-                        var tth = Base32Encoding.ToString(hasher.GetTTHRoot(item.CachePath));
+                        var point = _points.First(p => item.CachePath.StartsWith(p.SystemPath));
 
-                        if (tth == item.Magnet.TTH)
+                        var driveInfo = new DriveInfo(Path.GetPathRoot(point.SystemPath));
+
+                        Logger.Info("Downloading file to the cache {0} Estimated free space {1} Real free space {2} {3}", httpUri, point.FreeSpace, driveInfo.AvailableFreeSpace, point.SystemPath);
+
+                        if (File.Exists(item.CachePath))
+                            File.Delete(item.CachePath);
+
+                        using (var wc = new WebClient())
+                            wc.DownloadFile(httpUri, item.CachePath);
+
+                        if (CacheVerification)
                         {
-                            Logger.Info("File cache match {0}", tth);
+                            Logger.Info("Verifying the data");
+                            var hasher = new ThexThreaded<TigerNative>();
+                            hasher.LowPriority = true;
+                            var tth = Base32Encoding.ToString(hasher.GetTTHRoot(item.CachePath));
+
+                            if (tth == item.Magnet.TTH)
+                            {
+                                Logger.Info("File cache match {0}", tth);
+                                item.Complete = true;
+                                item.CachedSegments.SetAll(true);
+                                WriteBitfieldFile(item);
+                            }
+                            else
+                            {
+                                Logger.Info("Error! File cache mismatch {0}, expected {1} repeating the download", tth,
+                                    item.Magnet.TTH);
+                                File.Delete(item.CachePath);
+                                lock (_downloadQueue)
+                                {
+                                    _downloadQueue.Enqueue(tuple);
+                                }
+                                Thread.Sleep(TimeSpan.FromSeconds(1));
+                            }
+                        }
+                        else
+                        {
+                            Logger.Info("Adding file without verification");
                             item.Complete = true;
                             item.CachedSegments.SetAll(true);
                             WriteBitfieldFile(item);
                         }
-                        else
+                    }
+                    catch (Exception ex)
+                    {
+                        while (ex != null)
                         {
-                            Logger.Info("Error! File cache mismatch {0}, expected {1} repeating the download", tth,
-                                item.Magnet.TTH);
-                            File.Delete(item.CachePath);
-                            lock (_downloadQueue)
-                            {
-                                _downloadQueue.Enqueue(tuple);
-                            }
-                            Thread.Sleep(TimeSpan.FromSeconds(1));
+                            Logger.Error("Error occured when processing download of cache item {0} {1}", tuple.Item1,
+                                ex.Message);
+                            ex = ex.InnerException;
                         }
-                    }
-                    else
-                    {
-                        Logger.Info("Adding file without verification");
-                        item.Complete = true;
-                        item.CachedSegments.SetAll(true);
-                        WriteBitfieldFile(item);
+
+                        RemoveItemFromCache(item);
+                        
+                        Thread.Sleep(TimeSpan.FromSeconds(1));
                     }
                 }
-                catch (Exception ex)
+
+                lock (_downloadQueue)
                 {
-                    while (ex != null)
-                    {
-                        Logger.Error("Error occured when processing download of cache item {0} {1}", tuple.Item1, ex.Message);
-                        ex = ex.InnerException;
-                    }
-
-                    Thread.Sleep(TimeSpan.FromSeconds(1));
+                    _downloadThreadAlive = false;
                 }
             }
+        }
 
-            lock (_downloadQueue)
-            {
-                _downloadThreadAlive = false;
-            }
+        private void AddItemToCache(CachedItem item, CachePoint point)
+        {
+            if (_items.ContainsKey(item.Magnet.TTH))
+                throw new InvalidOperationException("The item is already registered");
+
+            _items.Add(item.Magnet.TTH, item);
+            point.AddItem(item);
         }
 
         private void RemoveItemFromCache(CachedItem item)
         {
-            File.Delete(item.CachePath);
-
-            if (File.Exists(item.BitFileldFilePath))
-                File.Delete(item.BitFileldFilePath);
-
+            // remove from the cache registry to prevent new requests to the cache 
             lock (_syncRoot)
             {
                 if (_items.ContainsKey(item.Magnet.TTH))
                 {
                     _items.Remove(item.Magnet.TTH);
-                    var pInd = _points.FindIndex(cp => item.CachePath.StartsWith(cp.SystemPath));
+                }
+            }
+            
+            while (true)
+            {
+                foreach (var pooledStream in item.FileStreamPool)
+                {
+                    pooledStream.Dispose();
+                }
 
-                    if (pInd != -1)
-                    {
-                        _points[pInd].CachedSpace -= item.Magnet.Size;
-                    }
+                try
+                {
+                    File.Delete(item.CachePath);
+                }
+                catch (Exception exception)
+                {
+                    Logger.Error("Cannot delete the cache file: {0} {1}", item.CachePath, exception.Message);
+                    Thread.Sleep(100);
+                    continue;
+                }
+
+                if (File.Exists(item.BitFileldFilePath))
+                    File.Delete(item.BitFileldFilePath);
+
+                break;
+            }
+            
+            // free the space allowing new items to be placed to the cache
+            lock (_syncRoot)
+            {
+                var pInd = _points.FindIndex(cp => item.CachePath.StartsWith(cp.SystemPath));
+
+                if (pInd != -1)
+                {
+                    _points[pInd].RemoveItem(item);
                 }
             }
         }
@@ -407,12 +468,28 @@ namespace SharpDc.Managers
                 using (var fs = File.OpenRead(filePath))
                 using (var reader = new BinaryReader(fs))
                 {
-                    var magnet = new Magnet
+                    Magnet magnet;
+                    try
                     {
-                        TTH = reader.ReadString(),
-                        FileName = reader.ReadString(),
-                        Size = reader.ReadInt64()
-                    };
+                        magnet = new Magnet
+                        {
+                            TTH = reader.ReadString(),
+                            FileName = reader.ReadString(),
+                            Size = reader.ReadInt64()
+                        };
+                    }
+                    catch (Exception x)
+                    {
+                        Logger.Error("Error when loading bitfield: {0}", x.Message);
+                        fs.Close();
+                        File.Delete(filePath);
+                        var dataFile = Path.ChangeExtension(filePath, "");
+                        if (File.Exists(dataFile))
+                            File.Delete(dataFile);
+                        continue;
+                    }
+
+
                     var segmentLength = reader.ReadInt32();
                     var bytesLength = reader.ReadInt32();
                     var bitarray = new BitArray(reader.ReadBytes(bytesLength));
@@ -448,8 +525,7 @@ namespace SharpDc.Managers
                             }
                             else
                             {
-                                point.CachedSpace += magnet.Size;
-                                _items.Add(magnet.TTH, item);
+                                AddItemToCache(item, point);
                             }
                         }
                     }
@@ -461,7 +537,7 @@ namespace SharpDc.Managers
                 }
             }
 
-            Logger.Info("Cache loaded {0}", Utils.FormatBytes(point.CachedSpace));
+            Logger.Info("Cache loaded {0}", Utils.FormatBytes(point.UsedSpace));
 
             // delete files without bitfields
             foreach (var filePath in Directory.EnumerateFiles(path))
@@ -507,11 +583,78 @@ namespace SharpDc.Managers
 
     internal class CachePoint
     {
+        private long _usedSpace;
+        private readonly List<CachedItem> _items = new List<CachedItem>();
+
         public string SystemPath { get; set; }
+
         public long TotalSpace { get; set; }
-        public long CachedSpace { get; set; }
+        
         public long FreeSpace {
-            get { return TotalSpace - CachedSpace; }
+            get { return TotalSpace - _usedSpace; }
+        }
+
+        public long UsedSpace
+        {
+            get { return _usedSpace; }
+        }
+
+        public void AddItem(CachedItem item)
+        {
+            _items.Add(item);
+            _usedSpace = _items.Sum(i => i.Magnet.Size);
+        }
+
+        public void RemoveItem(CachedItem item)
+        {
+            if (_items.Remove(item))
+            {
+                if (_items.Count > 0)
+                    _usedSpace = _items.Sum(i => i.Magnet.Size);
+                else
+                {
+                    _usedSpace = 0;
+                }
+            }
+        }
+
+
+    }
+
+    public class ObjectPool<T> : IEnumerable<T>
+    {
+        private readonly ConcurrentBag<T> _objects;
+        private readonly Func<T> _objectGenerator;
+        
+        public ObjectPool(Func<T> objectGenerator)
+        {
+            if (objectGenerator == null) throw new ArgumentNullException("objectGenerator");
+            _objects = new ConcurrentBag<T>();
+            _objectGenerator = objectGenerator;
+        }
+
+        public T GetObject()
+        {
+            T item;
+
+            if (_objects.TryTake(out item)) 
+                return item;
+            return _objectGenerator();
+        }
+
+        public void PutObject(T item)
+        {
+            _objects.Add(item);
+        }
+        
+        public IEnumerator<T> GetEnumerator()
+        {
+            return _objects.GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
         }
     }
 }
