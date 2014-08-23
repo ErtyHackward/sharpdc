@@ -16,41 +16,43 @@ namespace SharpDc
     /// <summary>
     /// Allows to measure performance time of a section
     /// </summary>
-    public class PerfLimit : IDisposable
+    public struct PerfLimit : IDisposable
     {
         private static readonly ILogger Logger = LogManager.GetLogger();
 
         private readonly string _message;
         private readonly int _limitMs;
-        private readonly Stopwatch _sw;
+        private readonly long _timestamp;
         private readonly Func<string> _func;
 
         public PerfLimit(string message, int limitMs = 100)
         {
             _message = message;
             _limitMs = limitMs;
-            _sw = Stopwatch.StartNew();
+            _timestamp = Stopwatch.GetTimestamp();
+            _func = null;
         }
 
         public PerfLimit(Func<string> createMsg, int limitMs = 100)
         {
             _func = createMsg;
             _limitMs = limitMs;
-            _sw = Stopwatch.StartNew();
+            _timestamp = Stopwatch.GetTimestamp();
+            _message = null;
         }
 
         public void Dispose()
         {
-            _sw.Stop();
-            if (_sw.ElapsedMilliseconds > _limitMs)
+            var ms = (Stopwatch.GetTimestamp() - _timestamp) / (Stopwatch.Frequency / 1000);
+            if (ms > _limitMs)
             {
                 if (_message == null)
                 {
-                    Logger.Warn("{0} : {1}/{2} ms", _func(), _sw.ElapsedMilliseconds, _limitMs);
+                    Logger.Warn("{0} : {1}/{2} ms", _func(), ms.ToString(), _limitMs.ToString());
                 }
                 else
                 {
-                    Logger.Warn("{0} : {1}/{2} ms", _message, _sw.ElapsedMilliseconds, _limitMs);
+                    Logger.Warn("{0} : {1}/{2} ms", _message, ms.ToString(), _limitMs.ToString());
                 }
             }
         }

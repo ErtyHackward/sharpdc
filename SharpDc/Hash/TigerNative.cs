@@ -20,7 +20,7 @@ namespace SharpDc.Hash
         }
 
         [DllImport("Tiger.dll")]
-        extern static public void tiger(byte[] b, long lenght, long[] sb);
+        extern static private void tiger(byte[] b, long lenght, long[] sb);
 
         private byte[] ComputeHash(string sinput)
         {

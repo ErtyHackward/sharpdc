@@ -498,7 +498,7 @@ namespace SharpDc
         }
 
         /// <summary>
-        /// Gets or sets the maximum number of simultaneous connectons to each server for http upload items (server usage only)
+        /// Gets or sets the maximum number of simultaneous connectons to each server for http upload items with custom pool (server usage only)
         /// Default 0
         /// </summary>
         public int HttpConnectionsPerServer

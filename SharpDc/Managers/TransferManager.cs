@@ -335,14 +335,13 @@ namespace SharpDc.Managers
 
         public void DeleteOldRequests()
         {
-            var swLock = Stopwatch.StartNew();
-            var swRemove = new Stopwatch();
+            var lockTime = new PerfLimit("DeleteOldReq Lock", 500);
+
             lock (_synRoot)
             {
-                swLock.Stop();
-
-                swRemove.Start();
-
+                lockTime.Dispose();
+                
+                using (new PerfLimit("DeleteOldReq Remove"))
                 for (var i = _allowedUsers.Count - 1; i >= 0; i--)
                 {
                     if ((DateTime.Now - _allowedUsers[i].Added).TotalSeconds > ConnectionWaitTimeout)
@@ -350,13 +349,6 @@ namespace SharpDc.Managers
                         _allowedUsers.RemoveAt(i);
                     }
                 }
-
-                swRemove.Stop();
-            }
-
-            if (swLock.ElapsedMilliseconds > 500 || swRemove.ElapsedMilliseconds > 500)
-            {
-                Logger.Warn("Slow DeleteOldReq L:{0} D:{1}", swLock.ElapsedMilliseconds, swRemove.ElapsedMilliseconds);
             }
         }
 
@@ -472,38 +464,42 @@ namespace SharpDc.Managers
         {
             DeleteOldRequests();
 
-            var swLock = Stopwatch.StartNew();
+            int disconnects = 0;
 
-            var swUpdate = new Stopwatch();
+            List<TransferConnection> listCopy;
+
+            using (new PerfLimit("TransferUpdate List creation", 300))
             lock (_synRoot)
             {
-                swLock.Stop();
-
-                swUpdate.Start();
-                foreach (var transferConnection in Transfers())
-                {
-                    var idleSeconds = (DateTime.Now - transferConnection.LastEventTime).TotalSeconds;
-
-                    if (transferConnection.DownloadItem != null && DownloadInactivityTimeout > 0 &&
-                        idleSeconds > DownloadInactivityTimeout)
-                    {
-                        Logger.Info("Download inactivity timeout reached [{0}, {1}]. Disconnect.",
-                                    DownloadInactivityTimeout, transferConnection.Source);
-                        transferConnection.DisconnectAsync();
-                    }
-                    else if (UploadInactivityTimeout > 0 && idleSeconds > UploadInactivityTimeout)
-                    {
-                        Logger.Info("Upload inactivity timeout reached [{0}, {1}]. Disconnect.", UploadInactivityTimeout,
-                                    transferConnection.Source);
-                        transferConnection.DisconnectAsync();
-                    }
-                }
-                swUpdate.Stop();
+                listCopy = new List<TransferConnection>(_connections);
             }
 
-            if (swLock.ElapsedMilliseconds > 500 || swUpdate.ElapsedMilliseconds > 500)
+            using (new PerfLimit("TransferUpdate Cycle", 300))
+            foreach (var transferConnection in listCopy)
             {
-                Logger.Warn("Slow TransferUpdate L:{0} U:{1}", swLock.ElapsedMilliseconds, swUpdate.ElapsedMilliseconds);
+                var idleSeconds = transferConnection.IdleSeconds;
+
+                if (transferConnection.DownloadItem != null && DownloadInactivityTimeout > 0 &&
+                    idleSeconds > DownloadInactivityTimeout)
+                {
+                    Logger.Info("Download inactivity timeout reached [{0}, {1}]. Disconnect.",
+                        DownloadInactivityTimeout.ToString(), transferConnection.Source.ToString());
+                    transferConnection.DisconnectAsync();
+                    disconnects++;
+                }
+                else if (UploadInactivityTimeout > 0 && idleSeconds > UploadInactivityTimeout)
+                {
+                    Logger.Info("Upload inactivity timeout reached [{0}, {1}]. Disconnect.",
+                        UploadInactivityTimeout.ToString(),
+                        transferConnection.Source.ToString());
+                    transferConnection.DisconnectAsync();
+                    disconnects++;
+                }
+            }
+
+            if (disconnects > 20)
+            {
+                Logger.Warn("Many disconnects at once: {0}", disconnects.ToString());
             }
         }
 

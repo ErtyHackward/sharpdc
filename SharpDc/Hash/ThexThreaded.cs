@@ -82,6 +82,13 @@ namespace SharpDc.Hash
 
         public bool LowPriority { get; set; }
 
+        private long _processedBytes = 0;
+
+        public float Progress
+        {
+            get { return (float)_processedBytes / _filePtr.Length; }
+        }
+
         public HashAlgorithm Hasher
         {
             get { return new T(); }
@@ -138,6 +145,7 @@ namespace SharpDc.Hash
 				throw new Exception("file doesn't exists!");
 
 		    _filePtr = new FileStream(_filename, FileMode.Open, FileAccess.Read, FileShare.Read);
+		    _processedBytes = 0;
 		}
 
 		bool Initialize()
@@ -191,6 +199,8 @@ namespace SharpDc.Hash
 			{
 				_threadsList[i] = new Thread(ProcessLeafs);
 				_threadsList[i].IsBackground = true;
+                if (LowPriority) 
+                    _threadsList[i].Priority = ThreadPriority.Lowest;
 				_threadsList[i].Start(i);
 			}
 
@@ -229,7 +239,11 @@ namespace SharpDc.Hash
                     var dataBlockSize = (int)Math.Min(threadFileBlock.End - threadFilePtr.Position, DataBlockSize);
 
                     threadFilePtr.Read(dataBlock, 0, dataBlockSize); //read block
-
+		            lock (_fileParts)
+		            {
+                        _processedBytes += dataBlockSize;    
+		            }
+		            
                     var blockLeafs = dataBlockSize / 1024;
 
 		            int i;
