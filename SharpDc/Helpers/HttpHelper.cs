@@ -61,7 +61,7 @@ namespace SharpDc.Helpers
             if (readLength > buffer.Length)
                 throw new ArgumentException("Requested to read more than buffer size");
 
-            var sw = Stopwatch.StartNew();
+            var sw = PerfTimer.StartNew();
 
             var req = (HttpWebRequest)WebRequest.Create(uri);
             req.ReadWriteTimeout = 4000;

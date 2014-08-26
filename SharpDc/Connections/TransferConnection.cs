@@ -616,7 +616,7 @@ namespace SharpDc.Connections
                     if (adcgetMessage.Start + adcgetMessage.Length < position + length)
                         length = (int)(adcgetMessage.Start + adcgetMessage.Length - position);
 
-                    var sw = Stopwatch.StartNew();
+                    var sw = PerfTimer.StartNew();
                     var read = UploadItem.Read(_readBuffer, position, length);
                     sw.Stop();
 

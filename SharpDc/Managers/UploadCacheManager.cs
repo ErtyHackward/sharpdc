@@ -636,7 +636,7 @@ namespace SharpDc.Managers
         public T GetObject()
         {
             T item;
-
+            
             if (_objects.TryTake(out item)) 
                 return item;
             return _objectGenerator();

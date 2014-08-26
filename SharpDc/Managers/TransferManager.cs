@@ -360,9 +360,13 @@ namespace SharpDc.Managers
             // They will have an address of a hub in the Source property
             // defined in ConnectToMe command handle section
 
+            List<TransferConnection> list;
+            TransferRequest req;
+            Source source;
+
             lock (_synRoot)
             {
-                TransferRequest req;
+
                 var index = _allowedUsers.FindIndex(p => p.Nickname == e.UserNickname);
 
                 if (index != -1)
@@ -379,43 +383,52 @@ namespace SharpDc.Managers
                     req = TransferRequest.Empty;
                 }
 
-                var source = new Source
-                                 {
-                                     UserNickname = e.UserNickname,
-                                     HubAddress = req.IsEmpty ? transfer.Source.HubAddress : req.Hub.RemoteAddressString
-                                 };
+                source = new Source
+                {
+                    UserNickname = e.UserNickname,
+                    HubAddress = req.IsEmpty ? transfer.Source.HubAddress : req.Hub.RemoteAddressString
+                };
 
                 // find connections with the same user
-                var list = _connections.Where(transferConnection => transferConnection.Source == source).ToList();
+                list = _connections.Where(transferConnection => transferConnection.Source == source).ToList();
+            }
 
-                // do not allow duplicate connections
-                foreach (var connection in list)
-                {
-                    connection.DisconnectAsync();
-                    Logger.Info("Disconnecting old transfer {0}", source);
-                }
+            // do not allow duplicate connections
+            using (new PerfLimit("TransferManager disconnecting transfers"))
+            foreach (var connection in list)
+            {
+                connection.DisconnectAsync();
+                Logger.Info("Disconnecting old transfer {0}", source);
+            }
 
-                var ea = new TransferManagerAuthorizationEventArgs
-                             {
-                                 Connection = (TransferConnection)sender,
-                                 Nickname = e.UserNickname
-                             };
 
-                OnTransferAuthorization(ea);
+            var ea = new TransferManagerAuthorizationEventArgs
+            {
+                Connection = (TransferConnection)sender,
+                Nickname = e.UserNickname
+            };
 
-                if (ea.Cancel)
-                {
-                    Logger.Info("Transfer connection cancelled at top level {0}", e.UserNickname);
-                    return;
-                }
+            OnTransferAuthorization(ea);
 
-                e.Allowed = true;
+            if (ea.Cancel)
+            {
+                Logger.Info("Transfer connection cancelled at top level {0}", e.UserNickname);
+                return;
+            }
 
+            e.Allowed = true;
+
+            lock (_synRoot)
+            {
                 if (req.IsEmpty)
                 {
                     e.HubAddress = source.HubAddress;
 
-                    var hub = _engine.Hubs.FirstOrDefault(h => h.RemoteAddressString == e.HubAddress);
+                    HubConnection hub;
+
+                    using (new PerfLimit("TransferManager Hub obtaining"))
+                        hub = _engine.Hubs.FirstOrDefault(h => h.RemoteAddressString == e.HubAddress);
+
                     if (hub != null)
                     {
                         e.OwnNickname = hub.Settings.Nickname;
@@ -423,7 +436,7 @@ namespace SharpDc.Managers
                     else
                     {
                         Logger.Error("Authorisation failed for {0}. There is no such hub: {1} ", e.UserNickname,
-                                     e.HubAddress);
+                            e.HubAddress);
                         e.Allowed = false;
                     }
                 }
@@ -433,7 +446,8 @@ namespace SharpDc.Managers
                     e.HubAddress = req.Hub.RemoteAddressString;
                 }
 
-                _engine.SourceManager.UpdateRequests(source, -1);
+                using (new PerfLimit("TransferManager SourceUpdate"))
+                    _engine.SourceManager.UpdateRequests(source, -1);
             }
         }
 
@@ -596,15 +610,12 @@ namespace SharpDc.Managers
         {
             lock (_synRoot)
             {
-                var swDispose = Stopwatch.StartNew();
+                using (new PerfLimit("Connection dispose", 500))
                 foreach (var transferConnection in _connections)
                 {
                     if (transferConnection.Source == source)
                         transferConnection.DisconnectAsync();
                 }
-                swDispose.Stop();
-                if (swDispose.ElapsedMilliseconds > 500)
-                    Logger.Warn("!!! Slow connections dispose {0}ms", swDispose.ElapsedMilliseconds);
             }
         }
 
@@ -638,6 +649,7 @@ namespace SharpDc.Managers
         {
             lock (_synRoot)
             {
+                using (new PerfLimit("Transfers enumeration", 300))
                 foreach (var transferConnection in _connections)
                 {
                     yield return transferConnection;

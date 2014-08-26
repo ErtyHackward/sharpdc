@@ -59,6 +59,51 @@ namespace SharpDc
     }
 
     /// <summary>
+    /// Stopwatch analogue that does not require objects allocations
+    /// </summary>
+    public struct PerfTimer
+    {
+        private long _timestampStart;
+        private long _timestampEnd;
+        private bool _finished;
+
+        public static PerfTimer StartNew()
+        {
+            return new PerfTimer { _timestampStart = Stopwatch.GetTimestamp(), _finished = false};
+        }
+        
+        public void Start()
+        {
+            _timestampStart = Stopwatch.GetTimestamp();
+            _finished = false;
+        }
+
+        public void Stop()
+        {
+            _timestampEnd = Stopwatch.GetTimestamp();
+            _finished = true;
+        }
+
+        public long ElapsedMilliseconds {
+            get
+            {
+                return ((_finished ? _timestampEnd : Stopwatch.GetTimestamp()) - _timestampStart) /
+                       (Stopwatch.Frequency / 1000);
+            }
+        }
+
+        public TimeSpan Elapsed {
+            get
+            {
+                return
+                    TimeSpan.FromMilliseconds(((_finished ? _timestampEnd : Stopwatch.GetTimestamp()) - _timestampStart) /
+                                              ((double)Stopwatch.Frequency / 1000));
+            }
+        }
+
+    }
+
+    /// <summary>
     /// Allows to measure performance time of a section
     /// </summary>
     public class PerfCounter

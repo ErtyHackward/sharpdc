@@ -239,11 +239,9 @@ namespace SharpDc.Hash
                     var dataBlockSize = (int)Math.Min(threadFileBlock.End - threadFilePtr.Position, DataBlockSize);
 
                     threadFilePtr.Read(dataBlock, 0, dataBlockSize); //read block
-		            lock (_fileParts)
-		            {
-                        _processedBytes += dataBlockSize;    
-		            }
-		            
+
+		            Interlocked.Add(ref _processedBytes, dataBlockSize);
+                    
                     var blockLeafs = dataBlockSize / 1024;
 
 		            int i;
