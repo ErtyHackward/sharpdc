@@ -14,7 +14,7 @@ namespace SharpDc
     /// </summary>
     public class ThreadPoolProxy : IThreadPoolProxy
     {
-        SpeedAverage _threadCalls = new SpeedAverage();
+        readonly SpeedAverage _threadCalls = new SpeedAverage();
 
         public void QueueWorkItem(ThreadStart workItem)
         {

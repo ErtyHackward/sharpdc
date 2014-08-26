@@ -41,12 +41,12 @@ namespace SharpDc
             return seq;
         }
 
-        public static Stopwatch Measure(Action action)
+        public static TimeSpan Measure(Action action)
         {
-            Stopwatch sw = Stopwatch.StartNew();
+            var sw = PerfTimer.StartNew();
             action();
             sw.Stop();
-            return sw;
+            return sw.Elapsed;
         }
 
         /// <summary>

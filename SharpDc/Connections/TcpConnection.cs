@@ -239,32 +239,41 @@ namespace SharpDc.Connections
         {
             _connectionBuffer = null;
             _readThread = null;
-            CloseSocket();
-        }
-
-        private void CloseSocket()
-        {
-            lock (_sendLock)
+            if (_socket != null)
             {
-                if (_socket != null)
-                {
-                    _socket.Close();
-                    _socket = null;
-                }
+                _socket.Close();
+                _socket = null;
             }
             SetConnectionStatus(ConnectionStatus.Disconnected);
         }
 
         public void DisconnectAsync()
         {
-            if (_connectionStatus == ConnectionStatus.Disconnected)
+            if (_connectionStatus == ConnectionStatus.Disconnected || _connectionStatus == ConnectionStatus.Disconnecting)
                 return;
 
-            if (!_closingSocket)
+            SetConnectionStatus(ConnectionStatus.Disconnecting);
+            
+            lock (_sendLock)
             {
-                _closingSocket = true;
-                DcEngine.ThreadPool.QueueWorkItem(CloseSocket);
+                _socket.BeginDisconnect(false, SocketDisconnected, _socket);
+            }            
+        }
+
+        private void SocketDisconnected(IAsyncResult ar)
+        {
+            var socket = (Socket)ar.AsyncState;
+            Exception ex = null;
+            try
+            {
+                socket.EndDisconnect(ar);
             }
+            catch (Exception x)
+            {
+                ex = x;
+            }
+
+            SetConnectionStatus(ConnectionStatus.Disconnected, ex);
         }
 
 

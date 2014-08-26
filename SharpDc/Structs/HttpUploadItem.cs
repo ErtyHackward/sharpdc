@@ -5,7 +5,6 @@
 // -------------------------------------------------------------
 
 using System;
-using System.Diagnostics;
 using SharpDc.Connections;
 using SharpDc.Helpers;
 using SharpDc.Logging;
@@ -79,8 +78,8 @@ namespace SharpDc.Structs
                 }
             }
 
-            var sw = Stopwatch.StartNew();
-            using (new PerfLimit(string.Format("Slow http request {0} pos: {1} len: {2} filelen: {3}", SystemPath, pos, length, Content.Magnet.Size), 4000))
+            var sw = PerfTimer.StartNew();
+            using (new PerfLimit(() => string.Format("Slow http request {0} pos: {1} len: {2} filelen: {3}", SystemPath, pos, length, Content.Magnet.Size), 4000))
             {
                 //done = Manager.DownloadChunk(SystemPath, _buffer, _position, length);
                 try
