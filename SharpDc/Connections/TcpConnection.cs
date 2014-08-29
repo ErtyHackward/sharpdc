@@ -26,7 +26,7 @@ namespace SharpDc.Connections
         private static readonly ILogger Logger = LogManager.GetLogger();
 
         internal static int DefaultConnectionBufferSize = 1024 * 64;
-        
+
         protected struct SendTask
         {
             public byte[] Buffer;
@@ -71,7 +71,7 @@ namespace SharpDc.Connections
         {
             get { return _socket; }
         }
-        
+
         public int ReceiveTimeout
         {
             get { return _receiveTimeout; }
@@ -95,7 +95,8 @@ namespace SharpDc.Connections
         /// <summary>
         /// Gets seconds passed from the last event
         /// </summary>
-        public int IdleSeconds {
+        public int IdleSeconds
+        {
             get { return (int)((Stopwatch.GetTimestamp() - _lastUpdate) / Stopwatch.Frequency); }
         }
 
@@ -216,8 +217,7 @@ namespace SharpDc.Connections
                 throw new ArgumentNullException("socket");
 
             _socket = socket;
-            _socket.SendTimeout = SendTimeout;
-            _socket.ReceiveTimeout = ReceiveTimeout;
+            PrepareSocket(_socket);
             LocalAddress = (IPEndPoint)_socket.LocalEndPoint;
             _connectionStatus = _socket.Connected ? ConnectionStatus.Connected : ConnectionStatus.Disconnected;
             try
@@ -249,15 +249,16 @@ namespace SharpDc.Connections
 
         public void DisconnectAsync()
         {
-            if (_connectionStatus == ConnectionStatus.Disconnected || _connectionStatus == ConnectionStatus.Disconnecting)
+            if (_connectionStatus == ConnectionStatus.Disconnected ||
+                _connectionStatus == ConnectionStatus.Disconnecting)
                 return;
 
             SetConnectionStatus(ConnectionStatus.Disconnecting);
-            
+
             lock (_sendLock)
             {
                 _socket.BeginDisconnect(false, SocketDisconnected, _socket);
-            }            
+            }
         }
 
         private void SocketDisconnected(IAsyncResult ar)
@@ -278,6 +279,7 @@ namespace SharpDc.Connections
 
 
         private Thread _readThread;
+
         private void StartRead()
         {
             if (DontUseAsync)
@@ -310,6 +312,14 @@ namespace SharpDc.Connections
             StartRead();
         }
 
+        private void PrepareSocket(Socket socket)
+        {
+            socket.SendTimeout = SendTimeout;
+            socket.ReceiveTimeout = ReceiveTimeout;
+            socket.SendBufferSize = 1024 * 1024;
+            socket.ReceiveBufferSize = 1024 * 64;
+        }
+
         public void ConnectAsync()
         {
             try
@@ -319,8 +329,7 @@ namespace SharpDc.Connections
                     if (_socket == null)
                     {
                         _socket = new Socket(RemoteEndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-                        _socket.SendTimeout = SendTimeout;
-                        _socket.ReceiveTimeout = ReceiveTimeout;
+                        PrepareSocket(_socket);
                     }
                     _closingSocket = false;
                 }
@@ -413,6 +422,13 @@ namespace SharpDc.Connections
             ParseRaw(_connectionBuffer, bytesReceived);
             DownloadSpeedLimit.Update(bytesReceived);
             DownloadSpeedLimitGlobal.Update(bytesReceived);
+        }
+
+        private void HandleSent(int bytesSent)
+        {
+            _uploadSpeed.Update(bytesSent);
+            UploadSpeedLimit.Update(bytesSent);
+            UploadSpeedLimitGlobal.Update(bytesSent);
         }
 
         protected virtual void SendFirstMessages()
@@ -527,9 +543,7 @@ namespace SharpDc.Connections
                             needToSend -= s;
                         }
 
-                        _uploadSpeed.Update(length);
-                        UploadSpeedLimit.Update(length);
-                        UploadSpeedLimitGlobal.Update(length);
+                        HandleSent(sent);
                         return true;
                     }
                 }
@@ -606,6 +620,33 @@ namespace SharpDc.Connections
                 }    
                 Thread.Sleep(0);
             }
+        }
+
+        public void BeginSend(byte[] buffer, int offset, int length, AsyncCallback callback)
+        {
+            try
+            {
+                _socket.BeginSend(buffer, offset, length, SocketFlags.None, callback, null);
+            }
+            catch (Exception x)
+            {
+                SetConnectionStatus(ConnectionStatus.Disconnected, x);
+            }
+        }
+
+        public int EndSend(IAsyncResult result)
+        {
+            try
+            {
+                var sent = _socket.EndSend(result);
+                HandleSent(sent);
+                return sent;
+            }
+            catch (Exception x)
+            {
+                SetConnectionStatus(ConnectionStatus.Disconnected, x);
+            }
+            return 0;
         }
 
         private bool SendNext()

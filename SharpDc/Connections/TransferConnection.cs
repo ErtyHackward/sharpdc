@@ -7,6 +7,7 @@
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -40,6 +41,8 @@ namespace SharpDc.Connections
 
         private TransferDirection _direction;
         private UploadItem _uploadItem;
+
+        public static MovingAverage ServiceTime = new MovingAverage(TimeSpan.FromSeconds(30));
 
         internal bool UseBackgroundSeedMode { get; set; }
 
@@ -216,11 +219,13 @@ namespace SharpDc.Connections
             : base(address)
         {
             _segmentInfo = new SegmentInfo { Index = -1, Length = -1, StartPosition = -1 };
+            _sendComplete = OnSendComplete;
         }
 
         public TransferConnection(Socket socket) : base(socket)
         {
             _segmentInfo = new SegmentInfo { Index = -1, Length = -1, StartPosition = -1 };
+            _sendComplete = OnSendComplete;
         }
 
         protected override void SendFirstMessages()
@@ -575,10 +580,7 @@ namespace SharpDc.Connections
                 }
             }
 
-            if (_readBuffer == null)
-            {
-                _readBuffer = new byte[1024 * 64];
-            }
+
 
             if (adcgetMessage.Start >= UploadItem.Content.Magnet.Size)
             {
@@ -593,8 +595,23 @@ namespace SharpDc.Connections
                 adcgetMessage.Length = UploadItem.Content.Magnet.Size - adcgetMessage.Start;
             }
 
+            #region Async send
+
+            //_sendTimer.Start();
+            //SendChunk(adcgetMessage, adcgetMessage.Start);
+
+            #endregion
+
+            #region Sync send
+
+            if (_readBuffer == null)
+            {
+                _readBuffer = new byte[1024 * 64];
+            }
+
             var readBufferLength = _readBuffer.Length;
 
+            var timer = PerfTimer.StartNew();
             using (UseBackgroundSeedMode ? Thread.CurrentThread.EnterBackgroundProcessingMode() : Scope.Empty)
             {
                 for (var position = adcgetMessage.Start; _readBuffer != null && position < adcgetMessage.Start + adcgetMessage.Length; position += readBufferLength)
@@ -610,7 +627,7 @@ namespace SharpDc.Connections
                                     Length = adcgetMessage.Length
                                 }.Raw);
                     }
-                    
+
                     var length = _readBuffer.Length;
 
                     if (adcgetMessage.Start + adcgetMessage.Length < position + length)
@@ -626,11 +643,98 @@ namespace SharpDc.Connections
                         Dispose();
                         return;
                     }
-                    
                     Send(_readBuffer, 0, read);
                 }
             }
+
+            timer.Stop();
+            ServiceTime.Update((int)timer.ElapsedMilliseconds);
+            #endregion
         }
+
+        private readonly AsyncCallback _sendComplete;
+        private ADCGETMessage _adcgetMessage;
+        private long _adcgetPosition;
+        private int _adcgetChunkSize;
+        private PerfTimer _sendTimer;
+
+        private void SendChunk(ADCGETMessage adcgetMessage, long position)
+        {
+            _adcgetPosition = position;
+            _adcgetMessage = adcgetMessage;
+            var uploadItem = UploadItem;
+
+            if (position >= adcgetMessage.Start + adcgetMessage.Length)
+            {
+                // all data was sent
+                _sendTimer.Stop();
+                ServiceTime.Update((int)_sendTimer.ElapsedMilliseconds);
+                return;
+            }
+
+            if (_disposed || uploadItem == null)
+                return;
+
+            if (position == adcgetMessage.Start)
+            {
+                SendMessage(
+                    new ADCSNDMessage
+                    {
+                        Type = ADCGETType.File,
+                        Request = adcgetMessage.Request,
+                        Start = adcgetMessage.Start,
+                        Length = adcgetMessage.Length
+                    }.Raw);
+            }
+
+            if (_readBuffer == null)
+            {
+                _readBuffer = new byte[1024 * 1024];
+            }
+
+            var length = _readBuffer.Length;
+
+            if (adcgetMessage.Start + adcgetMessage.Length < position + length)
+                length = (int)(adcgetMessage.Start + adcgetMessage.Length - position);
+
+            var sw = PerfTimer.StartNew();
+            using (UseBackgroundSeedMode ? Thread.CurrentThread.EnterBackgroundProcessingMode() : Scope.Empty)
+            {
+                if (_disposed)
+                    return;
+
+                _adcgetChunkSize = uploadItem.Read(_readBuffer, position, length);
+            }
+            sw.Stop();
+
+            if (_adcgetChunkSize != length)
+            {
+                Logger.Error("Upload read error ({0}/{1}/{3}): {2}", _adcgetChunkSize, length, uploadItem.Content.SystemPath, sw.ElapsedMilliseconds);
+                Dispose();
+                return;
+            }
+
+            BeginSend(_readBuffer, 0, _adcgetChunkSize, _sendComplete);
+        }
+
+        private void OnSendComplete(IAsyncResult result)
+        {
+            var sent = EndSend(result);
+
+            if (sent == 0)
+                return;
+
+            if (sent != _adcgetChunkSize)
+            {
+                Logger.Error("Sent less than asked");
+                return;
+            }
+
+            // send next chunk
+            _adcgetPosition += _adcgetChunkSize;
+            SendChunk(_adcgetMessage, _adcgetPosition);
+        }
+
 
         private void OnMessageKey(ref KeyMessage keyMessage)
         {
@@ -727,7 +831,7 @@ namespace SharpDc.Connections
 
             if (!_userDirection.Download && DownloadItem == null)
             {
-                Logger.Warn("User want to upload and we have no DownloadItem for him. Disconnecting.");
+                Logger.Warn("User {0} want to upload and we have no DownloadItem for him. Disconnecting.", _source.UserNickname);
                 Dispose();
             }
         }
