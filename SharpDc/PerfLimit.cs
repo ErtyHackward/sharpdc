@@ -111,16 +111,24 @@ namespace SharpDc
         private static readonly ILogger Logger = LogManager.GetLogger();
 
         private readonly string _name;
-        private readonly long _sw;
+        private readonly int _thresold;
+        private long _sw;
         private readonly List<KeyValuePair<string, long>> _tasks = new List<KeyValuePair<string, long>>();
 
         private long _last = 0;
 
-        public PerfCounter(string name)
+        public PerfCounter(string name, int thresold = 0)
         {
             _name = name;
+            _thresold = thresold;
+            Reset();
+        }
+
+        public void Reset()
+        {
             _sw = Stopwatch.GetTimestamp();
             _last = _sw;
+            _tasks.Clear();
         }
 
         public void Stage(string name)
@@ -132,6 +140,9 @@ namespace SharpDc
         public void LastStage(string name)
         {
             Stage(name);
+
+            if (ToMs(_last - _sw) < _thresold)
+                return;
 
             var sb = new StringBuilder();
 

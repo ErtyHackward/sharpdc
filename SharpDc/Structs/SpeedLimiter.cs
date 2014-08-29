@@ -38,6 +38,9 @@ namespace SharpDc.Structs
         /// <param name="bytesCount"></param>
         public void Update(int bytesCount)
         {
+            if (SpeedLimit <= 0)
+                return;
+
             lock (_synRoot)
             {
                 _bytesProcessed += bytesCount;
