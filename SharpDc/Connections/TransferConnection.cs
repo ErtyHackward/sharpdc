@@ -23,7 +23,7 @@ namespace SharpDc.Connections
     /// <summary>
     /// Represents a DC transfer
     /// </summary>
-    public class TransferConnection : TcpConnection
+    public class TransferConnection : TcpConnection, INotifyOnSend
     {
         private static readonly ILogger Logger = LogManager.GetLogger();
 
@@ -162,7 +162,12 @@ namespace SharpDc.Connections
 
         public event EventHandler<MessageEventArgs> OutgoingMessage;
 
-        private void OnOutgoingMessage(MessageEventArgs e)
+        public bool NotificationsEnabled
+        {
+            get { return OutgoingMessage != null; }
+        }
+
+        public void OnOutgoingMessage(MessageEventArgs e)
         {
             var handler = OutgoingMessage;
             if (handler != null) handler(this, e);
@@ -233,9 +238,10 @@ namespace SharpDc.Connections
             if (FirstMessages == null || FirstMessages.Length == 0)
                 return;
 
+            using (var transaction = new SendTransaction(this))
             foreach (var message in FirstMessages)
             {
-                SendMessageAsync(message);
+                transaction.Send(message);
             }
         }
 
@@ -294,7 +300,6 @@ namespace SharpDc.Connections
             }
             else
             {
-                SendMessageAsync(new ErrorMessage { Error = "Sorry I can't write your data" }.Raw);
                 Dispose();
             }
         }
@@ -357,13 +362,15 @@ namespace SharpDc.Connections
                 throw new InvalidOperationException();
             }
 
+
+
             SendMessageAsync(new ADCGETMessage
                             {
                                 Type = ADCGETType.File,
                                 Start = _segmentInfo.StartPosition,
                                 Length = _segmentInfo.Length,
                                 Request = "TTH/" + DownloadItem.Magnet.TTH
-                            }.Raw);
+                            }.Raw + "|");
         }
 
         /// <summary>
@@ -385,18 +392,15 @@ namespace SharpDc.Connections
                 var ea = new MessageEventArgs { Message = msg };
                 OnOutgoingMessage(ea);
             }
-            SendAsync(msg + "|");
+
+            BeginSend(msg + "|");
         }
 
         private void SendMessage(string msg)
         {
-            if (OutgoingMessage != null)
-            {
-                var ea = new MessageEventArgs { Message = msg };
-                OnOutgoingMessage(ea);
-            }
             Send(msg + "|");
         }
+
 
         protected override void ParseRaw(byte[] buffer, int length)
         {
@@ -594,68 +598,15 @@ namespace SharpDc.Connections
                             adcgetMessage.Start + adcgetMessage.Length, UploadItem.Content.Magnet.Size);
                 adcgetMessage.Length = UploadItem.Content.Magnet.Size - adcgetMessage.Start;
             }
-
-            #region Async send
-
-            //_sendTimer.Start();
-            //SendChunk(adcgetMessage, adcgetMessage.Start);
-
-            #endregion
-
-            #region Sync send
-
-            if (_readBuffer == null)
-            {
-                _readBuffer = new byte[1024 * 64];
-            }
-
-            var readBufferLength = _readBuffer.Length;
-
-            var timer = PerfTimer.StartNew();
-            using (UseBackgroundSeedMode ? Thread.CurrentThread.EnterBackgroundProcessingMode() : Scope.Empty)
-            {
-                for (var position = adcgetMessage.Start; _readBuffer != null && position < adcgetMessage.Start + adcgetMessage.Length; position += readBufferLength)
-                {
-                    if (position == adcgetMessage.Start)
-                    {
-                        SendMessage(
-                            new ADCSNDMessage
-                                {
-                                    Type = ADCGETType.File,
-                                    Request = adcgetMessage.Request,
-                                    Start = adcgetMessage.Start,
-                                    Length = adcgetMessage.Length
-                                }.Raw);
-                    }
-
-                    var length = _readBuffer.Length;
-
-                    if (adcgetMessage.Start + adcgetMessage.Length < position + length)
-                        length = (int)(adcgetMessage.Start + adcgetMessage.Length - position);
-
-                    var sw = PerfTimer.StartNew();
-                    var read = UploadItem.Read(_readBuffer, position, length);
-                    sw.Stop();
-
-                    if (read != length)
-                    {
-                        Logger.Error("Upload read error ({0}/{1}/{3}): {2}", read, length, UploadItem.Content.SystemPath, sw.ElapsedMilliseconds);
-                        Dispose();
-                        return;
-                    }
-                    Send(_readBuffer, 0, read);
-                }
-            }
-
-            timer.Stop();
-            ServiceTime.Update((int)timer.ElapsedMilliseconds);
-            #endregion
+            
+            SendChunk(adcgetMessage, adcgetMessage.Start);
         }
 
         private readonly AsyncCallback _sendComplete;
         private ADCGETMessage _adcgetMessage;
         private long _adcgetPosition;
         private int _adcgetChunkSize;
+        private int _adcsndHeaderLength;
         private PerfTimer _sendTimer;
 
         private void SendChunk(ADCGETMessage adcgetMessage, long position)
@@ -663,6 +614,11 @@ namespace SharpDc.Connections
             _adcgetPosition = position;
             _adcgetMessage = adcgetMessage;
             var uploadItem = UploadItem;
+
+            if (position == adcgetMessage.Start)
+            {
+                _sendTimer.Start();
+            }
 
             if (position >= adcgetMessage.Start + adcgetMessage.Length)
             {
@@ -675,24 +631,29 @@ namespace SharpDc.Connections
             if (_disposed || uploadItem == null)
                 return;
 
-            if (position == adcgetMessage.Start)
-            {
-                SendMessage(
-                    new ADCSNDMessage
-                    {
-                        Type = ADCGETType.File,
-                        Request = adcgetMessage.Request,
-                        Start = adcgetMessage.Start,
-                        Length = adcgetMessage.Length
-                    }.Raw);
-            }
+            _adcsndHeaderLength = 0;
 
             if (_readBuffer == null)
             {
-                _readBuffer = new byte[1024 * 1024];
+                _readBuffer = new byte[1024 * 1024 + 256];
             }
 
-            var length = _readBuffer.Length;
+            if (position == adcgetMessage.Start)
+            {
+                var adcsndBytes = Encoding.Default.GetBytes(new ADCSNDMessage
+                {
+                    Type = ADCGETType.File,
+                    Request = adcgetMessage.Request,
+                    Start = adcgetMessage.Start,
+                    Length = adcgetMessage.Length
+                }.Raw + "|");
+
+                _adcsndHeaderLength = adcsndBytes.Length;
+                Buffer.BlockCopy(adcsndBytes, 0, _readBuffer, 0, _adcsndHeaderLength);
+            }
+
+
+            var length = _readBuffer.Length - _adcsndHeaderLength;
 
             if (adcgetMessage.Start + adcgetMessage.Length < position + length)
                 length = (int)(adcgetMessage.Start + adcgetMessage.Length - position);
@@ -703,35 +664,41 @@ namespace SharpDc.Connections
                 if (_disposed)
                     return;
 
-                _adcgetChunkSize = uploadItem.Read(_readBuffer, position, length);
+                _adcgetChunkSize = uploadItem.Read(_readBuffer, _adcsndHeaderLength, position, length);
             }
             sw.Stop();
 
             if (_adcgetChunkSize != length)
             {
-                Logger.Error("Upload read error ({0}/{1}/{3}): {2}", _adcgetChunkSize, length, uploadItem.Content.SystemPath, sw.ElapsedMilliseconds);
+                Logger.Error("Upload read error ({0}/{1}/{3}/{4}): {2}", _adcgetChunkSize, length, uploadItem.Content.SystemPath, sw.ElapsedMilliseconds, _adcsndHeaderLength);
                 Dispose();
                 return;
             }
 
+            _adcgetChunkSize += _adcsndHeaderLength;
+            _chunkOffset = 0;
             BeginSend(_readBuffer, 0, _adcgetChunkSize, _sendComplete);
         }
+
+        private int _chunkOffset;
 
         private void OnSendComplete(IAsyncResult result)
         {
             var sent = EndSend(result);
 
+            _chunkOffset += sent;
+
             if (sent == 0)
                 return;
 
-            if (sent != _adcgetChunkSize)
+            if (_chunkOffset + sent < _adcgetChunkSize)
             {
-                Logger.Error("Sent less than asked");
+                BeginSend(_readBuffer, _chunkOffset, _adcgetChunkSize - _chunkOffset, _sendComplete);
                 return;
             }
 
             // send next chunk
-            _adcgetPosition += _adcgetChunkSize;
+            _adcgetPosition += _adcgetChunkSize - _adcsndHeaderLength;
             SendChunk(_adcgetMessage, _adcgetPosition);
         }
 
@@ -838,15 +805,18 @@ namespace SharpDc.Connections
 
         private void OnMessageLock(ref LockMessage lockMessage)
         {
-            if (lockMessage.ExtendedProtocol)
+            using (var transaction = new SendTransaction(this))
             {
-                SendMessageAsync(new SupportsMessage { ADCGet = true, TTHF = true, TTHL = true }.Raw);
-            }
+                if (lockMessage.ExtendedProtocol)
+                {
+                    transaction.Send(new SupportsMessage { ADCGet = true, TTHF = true, TTHL = true }.Raw);
+                }
 
-            var r = new Random();
-            _ourNumer = r.Next(0, 32768);
-            SendMessageAsync(new DirectionMessage { Download = GetNewDownloadItem(), Number = _ourNumer }.Raw);
-            SendMessageAsync(lockMessage.CreateKey().Raw);
+                var r = new Random();
+                _ourNumer = r.Next(0, 32768);
+                transaction.Send(new DirectionMessage { Download = GetNewDownloadItem(), Number = _ourNumer }.Raw);
+                transaction.Send(lockMessage.CreateKey().Raw);
+            }
         }
 
         private void OnMessageSupports(ref SupportsMessage supportsMessage)
@@ -871,8 +841,11 @@ namespace SharpDc.Connections
 
             if (FirstMessages == null)
             {
-                SendMessageAsync(new MyNickMessage { Nickname = ea.OwnNickname }.Raw);
-                SendMessageAsync(new LockMessage().Raw);
+                using (var transaction = new SendTransaction(this))
+                {
+                    transaction.Send(new MyNickMessage { Nickname = ea.OwnNickname }.Raw);
+                    transaction.Send(new LockMessage().Raw);
+                }
             }
         }
 

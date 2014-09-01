@@ -111,7 +111,7 @@ namespace SharpDc.Structs
             return done;
         }
 
-        protected override int InternalRead(byte[] array, long start, int count)
+        protected override int InternalRead(byte[] array, int offset, long start, int count)
         {
             try
             {            
@@ -128,7 +128,7 @@ namespace SharpDc.Structs
                 return 0;
             }
 
-            Buffer.BlockCopy(_buffer, (int)(start - _position), array, 0, count);
+            Buffer.BlockCopy(_buffer, (int)(start - _position), array, offset, count);
 
             _uploadedBytes += count;
 

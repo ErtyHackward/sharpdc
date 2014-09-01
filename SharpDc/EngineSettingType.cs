@@ -25,7 +25,6 @@ namespace SharpDc
         LocalAddress,
         SearchAlternativesInterval,
         TcpBacklog,
-        TcpReceiveBufferSize,
         FileReadBufferSize,
         ConnectionsLimit,
         NetworkInterface,
@@ -35,7 +34,6 @@ namespace SharpDc
         UploadSourceQuality,
         HttpMemoryCacheSize,
         HttpQueueLimit,
-        HttpConnectionsPerServer,
-        AsyncTransfers
+        HttpConnectionsPerServer
     }
 }

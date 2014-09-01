@@ -93,7 +93,7 @@ namespace SharpDc.Structs
             FileStreamReadBufferSize = bufferSize;
         }
 
-        protected virtual int InternalRead(byte[] array, long start, int count)
+        protected virtual int InternalRead(byte[] array, int offset, long start, int count)
         {
             if (_fileStream == null)
             {
@@ -122,7 +122,7 @@ namespace SharpDc.Structs
                 {
                     _fileStream.Position = start;
 
-                    var read = _fileStream.Read(array, 0, count);
+                    var read = _fileStream.Read(array, offset, count);
 
                     if (read == count)
                         _uploadedBytes += count;
@@ -132,13 +132,13 @@ namespace SharpDc.Structs
             }
         }
 
-        public int Read(byte[] array, long start, int count)
+        public int Read(byte[] array, int offset, long start, int count)
         {
             try
             {
                 if (EnableRequestEventFire)
                     OnRequest(new UploadItemEventArgs());
-                return InternalRead(array, start, count);
+                return InternalRead(array, offset, start, count);
             }
             catch (Exception x)
             {

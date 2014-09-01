@@ -47,8 +47,6 @@ namespace SharpDc.Connections
         {
             Headers = new Dictionary<string, string>();
             _buffer = new byte[64 * 1024];
-            DontUseAsync = true;
-            HighPriorityReadThread = true;
         }
 
         public void SetRange(long start, long end)

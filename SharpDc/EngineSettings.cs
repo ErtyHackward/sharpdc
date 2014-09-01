@@ -32,26 +32,23 @@ namespace SharpDc
         private bool _dumpTransferMessages;
         private string _localAddress;
         private int _tcpBackLog;
-        private int _tcpReceiveBufferSize;
         private int _fileReadBufferSize;
         private int _connectionsLimit;
         private IPAddress _netInterface;
         private bool _useSparse;
         private bool _autoSelectPort;
         private bool _measureUploadSourceQuality;
-
-        /// <summary>
-        /// Occurs when some setting is changed
-        /// </summary>
-        public event EventHandler<EngineSettingsEventArgs> Changed;
-
         private int _searchAlternativesInterval;
         private bool _backgroundSeedMode;
         private long _httpMemoryCacheSize;
         private int _httpQueueLimit;
         private int _httpConnectionsPerServer;
-        private bool _asyncTransfers;
 
+        /// <summary>
+        /// Occurs when some setting is changed
+        /// </summary>
+        public event EventHandler<EngineSettingsEventArgs> Changed;
+        
         protected void OnChanged(EngineSettingType st)
         {
             EventHandler<EngineSettingsEventArgs> handler = Changed;
@@ -347,23 +344,6 @@ namespace SharpDc
         }
 
         /// <summary>
-        /// Gets or sets the default size of the tcp connection buffer used to read data.
-        /// Concrete buffer size can be changed on each connection
-        /// </summary>
-        public int TcpReceiveBufferSize
-        {
-            get { return _tcpReceiveBufferSize; }
-            set
-            {
-                if (_tcpReceiveBufferSize != value)
-                {
-                    _tcpReceiveBufferSize = value;
-                    OnChanged(EngineSettingType.TcpReceiveBufferSize);
-                }
-            }
-        }
-
-        /// <summary>
         /// Gets or sets the default size of the FileStream buffer used to read data for uploads.
         /// </summary>
         public int FileReadBufferSize
@@ -515,22 +495,6 @@ namespace SharpDc
         }
 
         /// <summary>
-        /// Indicates if the transfers use async operations or create a thread for each connection
-        /// </summary>
-        public bool AsyncTransfers
-        {
-            get { return _asyncTransfers; }
-            set {
-                if (_asyncTransfers != value)
-                {
-                    _asyncTransfers = value;
-                    OnChanged(EngineSettingType.AsyncTransfers);
-                }
-            }
-        }
-
-
-        /// <summary>
         /// Gets default settings
         /// </summary>
         public static EngineSettings Default
@@ -553,15 +517,13 @@ namespace SharpDc
                                _dumpHubMessages = false,
                                _searchAlternativesInterval = 5,
                                _tcpBackLog = 10,
-                               _tcpReceiveBufferSize = 64 * 1024,
                                _fileReadBufferSize = 64 * 1024,
                                _netInterface = null,
                                _useSparse = false,
                                _backgroundSeedMode = true,
                                _measureUploadSourceQuality = false,
                                _httpQueueLimit = 0,
-                               _httpConnectionsPerServer = 0,
-                               _asyncTransfers = true
+                               _httpConnectionsPerServer = 0
                            };
             }
         }

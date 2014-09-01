@@ -613,11 +613,6 @@ namespace SharpDc
             {
                 e.Transfer.UseBackgroundSeedMode = true;
             }
-
-            if (!Settings.AsyncTransfers)
-            {
-                e.Transfer.DontUseAsync = true;
-            }
         }
 
         private void TransferManagerTransferUploadItemError(object sender, UploadItemEventArgs e)
@@ -686,9 +681,6 @@ namespace SharpDc
                     break;
                 case EngineSettingType.TcpBacklog:
                     InitTcp(Settings.TcpPort);
-                    break;
-                case EngineSettingType.TcpReceiveBufferSize:
-                    TcpConnection.DefaultConnectionBufferSize = Settings.TcpReceiveBufferSize;
                     break;
                 case EngineSettingType.HttpMemoryCacheSize:
                     HttpUploadItem.Manager.CacheSize = Settings.HttpMemoryCacheSize;
