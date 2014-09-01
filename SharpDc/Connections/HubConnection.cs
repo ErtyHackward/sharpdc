@@ -14,7 +14,7 @@ using SharpDc.Structs;
 
 namespace SharpDc.Connections
 {
-    public class HubConnection : TcpConnection
+    public class HubConnection : TcpConnection, INotifyOnSend
     {
         private static readonly ILogger Logger = LogManager.GetLogger();
 
@@ -96,7 +96,12 @@ namespace SharpDc.Connections
 
         public event EventHandler<MessageEventArgs> OutgoingMessage;
 
-        private void OnOutgoingMessage(MessageEventArgs e)
+        public bool NotificationsEnabled
+        {
+            get { return OutgoingMessage != null; }
+        }
+
+        public void OnOutgoingMessage(MessageEventArgs e)
         {
             var handler = OutgoingMessage;
             if (handler != null) handler(this, e);
@@ -398,7 +403,7 @@ namespace SharpDc.Connections
 
             if (!string.IsNullOrEmpty(_settings.Password))
             {
-                SendAsync(new MyPassMessage { Password = _settings.Password }.Raw);
+                SendMessageAsync(new MyPassMessage { Password = _settings.Password }.Raw);
                 Logger.Info("Password sent...");
             }
             else
@@ -412,24 +417,36 @@ namespace SharpDc.Connections
             OnSearchRequest(new SearchRequestEventArgs { Message = searchMessage });
         }
 
+        public void SendMessageAsync(string message)
+        {
+            if (OutgoingMessage != null)
+            {
+                OnOutgoingMessage(new MessageEventArgs { Message = message });
+            }
+            BeginSend(message + "|");
+        }
+
         public void SendMessage(string message)
         {
             if (OutgoingMessage != null)
             {
                 OnOutgoingMessage(new MessageEventArgs { Message = message });
             }
-            SendAsync(message + "|");
+            Send(message + "|");
         }
 
         private void OnMessageLock(ref LockMessage lockMsg)
         {
-            if (lockMsg.ExtendedProtocol)
+            using (var transaction = new SendTransaction(this))
             {
-                SendMessage(new SupportsMessage { NoHello = true, NoGetINFO = true, UserIP2 = true }.Raw);
-            }
+                if (lockMsg.ExtendedProtocol)
+                {
+                    transaction.Send(new SupportsMessage { NoHello = true, NoGetINFO = true, UserIP2 = true }.Raw);
+                }
 
-            SendMessage(lockMsg.CreateKey().Raw);
-            SendMessage(new ValidateNickMessage { Nick = _currentUser.Nickname }.Raw);
+                transaction.Send(lockMsg.CreateKey().Raw);
+                transaction.Send(new ValidateNickMessage { Nick = _currentUser.Nickname }.Raw);
+            }
         }
 
         private void OnMessageHubName(ref HubNameMessage arg)
@@ -438,10 +455,13 @@ namespace SharpDc.Connections
 
         private void OnMessageHello(ref HelloMessage helloMessage)
         {
-            SendMessage(new VersionMessage().Raw);
-            if (Settings.GetUsersList)
-                SendMessage(new GetNickListMessage().Raw);
-            SendMyINFO();
+            using (var transaction = new SendTransaction(this))
+            {
+                transaction.Send(new VersionMessage().Raw);
+                if (Settings.GetUsersList)
+                    transaction.Send(new GetNickListMessage().Raw);
+                SendMyINFO(transaction);
+            }
 
             if (!Settings.GetUsersList)
             {
@@ -450,7 +470,7 @@ namespace SharpDc.Connections
             }
         }
 
-        public void SendMyINFO()
+        public void SendMyINFO(SendTransaction transaction = null)
         {
             var myInfo = new MyINFOMessage
             {
@@ -465,7 +485,12 @@ namespace SharpDc.Connections
             };
 
             if (!myInfo.Equals(_prevMessage))
-                SendMessage(myInfo.Raw);
+            {
+                if (transaction == null)
+                    SendMessage(myInfo.Raw);
+                else
+                    transaction.Send(myInfo.Raw);
+            }
 
             _prevMessage = myInfo;
         }

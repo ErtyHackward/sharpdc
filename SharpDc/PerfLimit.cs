@@ -87,8 +87,8 @@ namespace SharpDc
         public long ElapsedMilliseconds {
             get
             {
-                return ((_finished ? _timestampEnd : Stopwatch.GetTimestamp()) - _timestampStart) /
-                       (Stopwatch.Frequency / 1000);
+                return (long)(((_finished ? _timestampEnd : Stopwatch.GetTimestamp()) - _timestampStart) /
+                       ((double)Stopwatch.Frequency / 1000));
             }
         }
 

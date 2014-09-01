@@ -98,7 +98,6 @@ namespace SharpDc.Structs
                     conn.ReceiveTimeout = ReceiveTimeout;
                     conn.ConnectionStatusChanged += HttpConConnectionStatusChanged;
                     conn.RequestComplete += HttpConRequestComplete;
-                    conn.ReceiveTimeoutHit += conn_ReceiveTimeoutHit;
                     Connections.Add(conn);
                 }
 
@@ -118,11 +117,6 @@ namespace SharpDc.Structs
                 task.SetConnection(conn);
         }
 
-        private void conn_ReceiveTimeoutHit(object sender, EventArgs e)
-        {
-            var httpCon = (HttpConnection)sender;
-            httpCon.DisconnectAsync();
-        }
 
         private void HttpConRequestComplete(object sender, EventArgs e)
         {
@@ -157,7 +151,6 @@ namespace SharpDc.Structs
 
                 httpCon.ConnectionStatusChanged -= HttpConConnectionStatusChanged;
                 httpCon.RequestComplete -= HttpConRequestComplete;
-                httpCon.ReceiveTimeoutHit -= conn_ReceiveTimeoutHit;
 
                 lock (SyncRoot)
                 {
