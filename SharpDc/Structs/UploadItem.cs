@@ -6,7 +6,9 @@
 
 using System;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Threading;
+using System.Threading.Tasks;
 using SharpDc.Connections;
 using SharpDc.Logging;
 using SharpDc.Managers;
@@ -93,74 +95,6 @@ namespace SharpDc.Structs
             FileStreamReadBufferSize = bufferSize;
         }
 
-        protected virtual int InternalRead(byte[] array, int offset, long start, int count)
-        {
-            if (_fileStream == null)
-            {
-                FileStream fs;
-                using (new PerfLimit("Slow open " + Content.SystemPath, 4000))
-                {
-                    fs = new FileStream(SystemPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
-                                        FileStreamReadBufferSize, false);
-                }
-
-                lock (_syncRoot)
-                {
-                    if (_isDisposed)
-                    {
-                        fs.Dispose();
-                        return 0;
-                    }
-                    Interlocked.Increment(ref _fileStreamsCount);
-                    _fileStream = fs;
-                }
-            }
-
-            lock (_syncRoot)
-            {
-                using (new PerfLimit("Slow read " + Content.SystemPath, 4000))
-                {
-                    _fileStream.Position = start;
-
-                    var read = _fileStream.Read(array, offset, count);
-
-                    if (read == count)
-                        _uploadedBytes += count;
-
-                    return read;
-                }
-            }
-        }
-
-        public int Read(byte[] array, int offset, long start, int count)
-        {
-            try
-            {
-                if (EnableRequestEventFire)
-                    OnRequest(new UploadItemEventArgs());
-                return InternalRead(array, offset, start, count);
-            }
-            catch (Exception x)
-            {
-                OnError(new UploadItemEventArgs { Exception = x });
-                Logger.Error("Unable to read the data for upload: " + x.Message);
-                return 0;
-            }
-        }
-
-        public bool IsLocked
-        {
-            get
-            {
-                if (Monitor.TryEnter(_syncRoot, 100))
-                {
-                    Monitor.Exit(_syncRoot);
-                    return false;
-                }
-                return true;
-            }
-        }
-
         public virtual void Dispose()
         {
             lock (_syncRoot)
@@ -174,6 +108,62 @@ namespace SharpDc.Structs
                 _isDisposed = true;
             }
             OnDisposed();
+        }
+
+        protected virtual async Task<long> InternalCopyChunk(Stream stream, long filePos, long bytesRequired)
+        {
+            if (_fileStream == null)
+            {
+                FileStream fs;
+                using (new PerfLimit("Slow open " + Content.SystemPath, 4000))
+                {
+                    fs = new FileStream(SystemPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
+                                        FileStreamReadBufferSize, true);
+                }
+
+                lock (_syncRoot)
+                {
+                    if (_isDisposed)
+                    {
+                        fs.Dispose();
+                        return 0;
+                    }
+                    _fileStream = fs;
+                }
+
+                Interlocked.Increment(ref _fileStreamsCount);
+            }
+
+            long readSoFar = 0L;
+            var buffer = new byte[64 * 1024];
+            do
+            {
+                var toRead = Math.Min(bytesRequired - readSoFar, buffer.Length);
+                var readNow = await _fileStream.ReadAsync(buffer, 0, (int)toRead);
+                if (readNow == 0)
+                    break; // End of stream
+                await stream.WriteAsync(buffer, 0, readNow);
+                readSoFar += readNow;
+                Interlocked.Add(ref _uploadedBytes, readNow);
+            } while (readSoFar < bytesRequired);
+            return readSoFar;
+        }
+
+        public async Task<long> CopyChunkAsync(Stream stream, long filePos, long bytesRequired)
+        {
+            if (EnableRequestEventFire)
+                OnRequest(new UploadItemEventArgs());
+
+            try
+            {
+                return await InternalCopyChunk(stream, filePos, bytesRequired);
+            }
+            catch (Exception x)
+            {
+                OnError(new UploadItemEventArgs { Exception = x });
+                Logger.Error("Unable to read the data for upload: " + x.Message);
+                return 0;
+            }
         }
     }
 }

@@ -92,6 +92,8 @@ namespace SharpDc.Managers
             if (!item.IsAreaCached(e.Position, e.Length))
                 return;
 
+
+
             FileStream fs = null;
 
             try
@@ -100,9 +102,13 @@ namespace SharpDc.Managers
                 {
                     fs = item.FileStreamPool.GetObject();
 
+                    var buffer = new byte[e.Length];
+                    
                     fs.Position = e.Position;
-                    if (fs.Read(e.Buffer, 0, e.Length) != e.Length)
+                    if (fs.Read(buffer, 0, buffer.Length) != e.Length)
                         return;
+
+                    e.Stream = new MemoryStream(buffer);
 
                     e.FromCache = true;
 
@@ -231,7 +237,7 @@ namespace SharpDc.Managers
                             }
                         }
 
-                        item = new CachedItem(e.Magnet, e.Length)
+                        item = new CachedItem(e.Magnet, (int)e.Length)
                         {
                             CachePath = Path.Combine(point.SystemPath, e.Magnet.TTH)
                         };
@@ -269,27 +275,27 @@ namespace SharpDc.Managers
 
             }
 
-            if (LazyCacheDownload)
-            {
-                using (new PerfLimit("Cache flush"))
-                using (var fs = new FileStream(item.CachePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite,1024 * 64))
-                {
-                    fs.Position = e.Position;
-                    using (var ms = new MemoryStream(e.Buffer, 0, e.Length, false))
-                    {
-                        ms.CopyTo(fs);
-                    }
-                }
+            //if (LazyCacheDownload)
+            //{
+            //    using (new PerfLimit("Cache flush"))
+            //    using (var fs = new FileStream(item.CachePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite,1024 * 64))
+            //    {
+            //        fs.Position = e.Position;
+            //        using (var ms = new MemoryStream(e.Buffer, 0, e.Length, false))
+            //        {
+            //            ms.CopyTo(fs);
+            //        }
+            //    }
 
-                lock (_syncRoot)
-                {
-                    item.CachedSegments.Set(DownloadItem.GetSegmentIndex(e.Position, item.SegmentLength), true);
-                    if (item.CachedSegments.FirstFalse() == -1)
-                        item.Complete = true;
-                }
+            //    lock (_syncRoot)
+            //    {
+            //        item.CachedSegments.Set(DownloadItem.GetSegmentIndex(e.Position, item.SegmentLength), true);
+            //        if (item.CachedSegments.FirstFalse() == -1)
+            //            item.Complete = true;
+            //    }
 
-                WriteBitfieldFile(item);
-            }
+            //    WriteBitfieldFile(item);
+            //}
         }
 
         private void WriteBitfieldFile(CachedItem item)

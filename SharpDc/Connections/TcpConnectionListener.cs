@@ -24,7 +24,6 @@ namespace SharpDc.Connections
         private readonly IPEndPoint _ep;
         private readonly int _backlog = 10;
         private readonly AsyncCallback _incomingConnectionCallback;
-        private Thread _thread;
 
         /// <summary>
         /// Occurs when we receive a new connection, if event is not handled the socket will be closed
@@ -110,12 +109,12 @@ namespace SharpDc.Connections
 
         public void ListenAsync()
         {
-            if (_thread != null)
-                throw new InvalidOperationException("Already started");
+            _listenSocket.Listen(_backlog);
 
-            _thread = new Thread(Listen);
-            _thread.IsBackground = true;
-            _thread.Start();
+            for (int i = 0; i < 3; i++)
+            {
+                AcceptNext(_listenSocket);    
+            }
         }
 
         protected void AcceptNext(Socket sc)
@@ -130,6 +129,44 @@ namespace SharpDc.Connections
             catch (SocketException e)
             {
                 OnException(new ExceptionEventArgs { Exception = e });
+            }
+        }
+
+        protected void OnIncomingConnection(IAsyncResult ar)
+        {
+            try
+            {
+                var s = (Socket)ar.AsyncState;
+                var incomingSocket = s.EndAccept(ar);
+                var ea = new IncomingConnectionEventArgs { Socket = incomingSocket };
+
+                OnIncomingConnection(ea);
+
+                if (!ea.Handled)
+                {
+                    incomingSocket.BeginDisconnect(false, null, null);
+                }
+
+                // continue accepting
+                AcceptNext(s);
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (SocketException e)
+            {
+                OnException(new ExceptionEventArgs { Exception = e });
+
+                // try to continue listening
+                try
+                {
+                    var s = (Socket)ar.AsyncState;
+                    AcceptNext(s);
+                }
+                catch (Exception x)
+                {
+                    OnException(new ExceptionEventArgs { Exception = x });
+                }
             }
         }
 
@@ -165,44 +202,6 @@ namespace SharpDc.Connections
             {
                 if (socket != null)
                     socket.Dispose();
-            }
-        }
-
-        protected void OnIncomingConnection(IAsyncResult ar)
-        {
-            try
-            {
-                var s = (Socket)ar.AsyncState;
-                var incomingSocket = s.EndAccept(ar);
-                var ea = new IncomingConnectionEventArgs { Socket = incomingSocket };
-
-                OnIncomingConnection(ea);
-
-                if (!ea.Handled)
-                {
-                    incomingSocket.Disconnect(false);
-                }
-
-                // continue accepting
-                AcceptNext(s);
-            }
-            catch (ObjectDisposedException)
-            {
-            }
-            catch (SocketException e)
-            {
-                OnException(new ExceptionEventArgs { Exception = e });
-
-                // try to continue listening
-                try
-                {
-                    var s = (Socket)ar.AsyncState;
-                    AcceptNext(s);
-                }
-                catch (Exception x)
-                {
-                    OnException(new ExceptionEventArgs { Exception = x });
-                }
             }
         }
 

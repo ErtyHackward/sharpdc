@@ -5,13 +5,11 @@
 // -------------------------------------------------------------
 
 using System;
-using System.Linq;
-using System.Collections.Generic;
+using System.IO;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading;
 using SharpDc.Events;
 using SharpDc.Logging;
 using SharpDc.Structs;
@@ -25,6 +23,72 @@ namespace SharpDc.Connections
     {
         private static readonly ILogger Logger = LogManager.GetLogger();
 
+        private class CounterStream : Stream
+        {
+            private readonly Stream _baseStream;
+            private readonly SpeedAverage _upload;
+            private readonly SpeedAverage _download;
+
+            public CounterStream(Stream baseStream, SpeedAverage upload, SpeedAverage download)
+            {
+                _baseStream = baseStream;
+                _upload = upload;
+                _download = download;
+            }
+
+            public override void Flush()
+            {
+                _baseStream.Flush();
+            }
+
+            public override long Seek(long offset, SeekOrigin origin)
+            {
+                return _baseStream.Seek(offset, origin);
+            }
+
+            public override void SetLength(long value)
+            {
+                _baseStream.SetLength(value);
+            }
+
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                _download.Update(count);
+                return _baseStream.Read(buffer, offset, count);
+            }
+
+            public override void Write(byte[] buffer, int offset, int count)
+            {
+                _baseStream.Write(buffer, offset, count);
+                _upload.Update(count);
+            }
+
+            public override bool CanRead
+            {
+                get { return _baseStream.CanRead; }
+            }
+
+            public override bool CanSeek
+            {
+                get { return _baseStream.CanSeek; }
+            }
+
+            public override bool CanWrite
+            {
+                get { return _baseStream.CanWrite; }
+            }
+
+            public override long Length
+            {
+                get { return _baseStream.Length; }
+            }
+
+            public override long Position {
+                get { return _baseStream.Position; }
+                set { _baseStream.Position = value; }
+            }
+        }
+
         private Socket _socket;
         protected IPEndPoint RemoteEndPoint;
         private ConnectionStatus _connectionStatus;
@@ -32,7 +96,9 @@ namespace SharpDc.Connections
         protected bool _closingSocket;
         private int _receiveTimeout;
         private int _sendTimeout = 1000;
-        
+
+        private Stream _stream;
+
         private readonly SpeedAverage _uploadSpeed = new SpeedAverage();
         private readonly SpeedAverage _downloadSpeed = new SpeedAverage();
 
@@ -40,7 +106,12 @@ namespace SharpDc.Connections
         private readonly AsyncCallback _defaultSendCallback;
 
         private byte[] _receiveBuffer;
-        
+
+        public Stream Stream
+        {
+            get { return _stream; }
+        }
+
         public Socket Socket
         {
             get { return _socket; }
@@ -241,8 +312,10 @@ namespace SharpDc.Connections
         {
             socket.SendTimeout = SendTimeout;
             socket.ReceiveTimeout = ReceiveTimeout;
-            socket.SendBufferSize = 1024 * 1024;
+            socket.SendBufferSize = 1024 * 1024 + 256;
             socket.ReceiveBufferSize = 1024 * 64;
+            
+            _stream = new BufferedStream(new CounterStream(new NetworkStream(socket, FileAccess.Write), _uploadSpeed, _uploadSpeed ) , 64 * 1024);
         }
 
         public void ConnectAsync()
@@ -292,7 +365,6 @@ namespace SharpDc.Connections
         protected virtual void SendFirstMessages()
         {
         }
-        
 
         private void BeginRead()
         {
