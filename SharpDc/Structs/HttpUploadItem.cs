@@ -5,6 +5,9 @@
 // -------------------------------------------------------------
 
 using System;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using SharpDc.Connections;
 using SharpDc.Helpers;
 using SharpDc.Logging;
@@ -17,9 +20,8 @@ namespace SharpDc.Structs
         private static readonly ILogger Logger = LogManager.GetLogger();
 
         public static HttpDownloadManager Manager = new HttpDownloadManager();
-
-        private readonly byte[] _buffer;
-        private long _position;
+        
+        private readonly int _requestLength;
 
         public static event EventHandler<HttpSegmentEventArgs> HttpSegmentDownloaded;
 
@@ -40,109 +42,91 @@ namespace SharpDc.Structs
 
         public HttpUploadItem(ContentItem item, int bufferSize = 1024 * 1024) : base(item, bufferSize)
         {
-            _buffer = new byte[bufferSize];
-            _position = -1;
+            _requestLength = bufferSize;
         }
 
-        private bool ValidateBuffer(long pos, int count)
+        protected override async Task<long> InternalCopyChunk(Stream stream, long filePos, long bytesRequired)
         {
-            if (_position != -1 && _position <= pos && _position + _buffer.Length >= pos + count)
-                return true;
+            var startTime = DateTime.UtcNow;
 
-            _position = pos;
-
-            var length = _buffer.Length;
-
-            if (_position + _buffer.Length > Content.Magnet.Size)
-                length = (int)(Content.Magnet.Size - _position);
-
-            bool done;
-            var startTime = DateTime.Now;
-            
             if (HttpSegmentNeeded != null)
             {
                 var ea = new HttpSegmentEventArgs
                 {
                     UploadItem = this,
-                    Buffer   = _buffer,
-                    Magnet   = Content.Magnet,
-                    Position = _position,
-                    Length   = length
+                    Magnet = Content.Magnet,
+                    Position = filePos,
+                    Length = (int)bytesRequired
                 };
 
                 OnHttpSegmentNeeded(ea);
 
                 if (ea.FromCache)
                 {
-                    return true;
+                    return bytesRequired;
                 }
             }
 
+            long bytesCopied = 0;
+
             var sw = PerfTimer.StartNew();
-            using (new PerfLimit(() => string.Format("Slow http request {0} pos: {1} len: {2} filelen: {3}", SystemPath, pos, length, Content.Magnet.Size), 4000))
+            using (new PerfLimit(() => string.Format("Slow http request {0} pos: {1} len: {2} filelen: {3}", SystemPath, filePos, bytesRequired, Content.Magnet.Size), 4000))
             {
-                //done = Manager.DownloadChunk(SystemPath, _buffer, _position, length);
                 try
                 {
-                    HttpHelper.DownloadChunk(SystemPath, _buffer, _position, length);
-                    done = true;
+                    var responseStream = await HttpHelper.GetHttpChunkAsync(SystemPath, filePos, bytesRequired);
+                    bytesCopied = await CopyTo(responseStream, stream, bytesRequired);
                 }
                 catch (Exception x)
                 {
                     Logger.Error("DownloadChunk error: {0}", x.Message);
-                    done = false;
                 }
             }
             sw.Stop();
 
+            HttpHelper.RegisterDownloadTime((int)sw.ElapsedMilliseconds);
+
             if (HttpSegmentDownloaded != null)
             {
-                OnHttpSegmentDownloaded(new HttpSegmentEventArgs { 
+                OnHttpSegmentDownloaded(new HttpSegmentEventArgs
+                {
                     UploadItem = this,
-                    Buffer = _buffer, 
                     Magnet = Content.Magnet,
-                    Position = _position,
-                    Length = length,
+                    Position = filePos,
+                    Length = bytesRequired,
                     RequestedAt = startTime,
                     DownloadingTime = sw.Elapsed
                 });
             }
 
-            return done;
+            return bytesCopied;
         }
 
-        protected override int InternalRead(byte[] array, int offset, long start, int count)
+        private async Task<long> CopyTo(Stream source, Stream destination, long bytesRequired)
         {
-            try
-            {            
-                if (!ValidateBuffer(start, count))
-                {
-                    OnError(new UploadItemEventArgs());
-                    return 0;
-                }
-            }
-            catch (Exception x)
+            long readSoFar = 0L;
+            var buffer = new byte[64 * 1024];
+            do
             {
-                OnError(new UploadItemEventArgs { Exception = x });
-                Logger.Error("Http read error: " + x.Message);
-                return 0;
-            }
-
-            Buffer.BlockCopy(_buffer, (int)(start - _position), array, offset, count);
-
-            _uploadedBytes += count;
-
-            return count;
+                var toRead = Math.Min(bytesRequired - readSoFar, buffer.Length);
+                var readNow = await source.ReadAsync(buffer, 0, (int)toRead);
+                if (readNow == 0)
+                    break; // End of stream
+                await destination.WriteAsync(buffer, 0, readNow);
+                readSoFar += readNow;
+                Interlocked.Add(ref _uploadedBytes, readNow);
+            } while (readSoFar < bytesRequired);
+            return readSoFar;
         }
     }
 
     public class HttpSegmentEventArgs : EventArgs
     {
         public HttpUploadItem UploadItem { get; set; }
-        public byte[] Buffer { get; set; }
+        public Stream Stream { get; set; }
         public Magnet Magnet { get; set; }
         public long Position { get; set; }
-        public int Length { get; set; }
+        public long Length { get; set; }
         public bool FromCache { get; set; }
         public DateTime RequestedAt { get; set; }
         public TimeSpan DownloadingTime { get; set; }

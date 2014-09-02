@@ -12,6 +12,7 @@ using System.Net.Mime;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Threading;
+using System.Threading.Tasks;
 using SharpDc.Logging;
 using SharpDc.Structs;
 
@@ -35,6 +36,11 @@ namespace SharpDc.Helpers
 
         public static long HttpDownloadSpeed {
             get { return (long)DownloadSpeed.GetSpeed(); }
+        }
+
+        public static void RegisterDownloadTime(int ms)
+        {
+            SegmentDownloadTime.Update(ms);
         }
 
         /// <summary>Adds a byte range header to the request for a specified range.</summary>
@@ -88,7 +94,7 @@ namespace SharpDc.Helpers
             DownloadSpeed.Update(readLength);
         }
 
-        public static void DownloadChunkAsync(string uri, long filePosition, int readLength, Action<Stream,Exception> callback)
+        public static async Task<Stream> GetHttpChunkAsync(string uri, long filePosition, long readLength)
         {
             var req = (HttpWebRequest)WebRequest.Create(uri);
             req.ReadWriteTimeout = 4000;
@@ -97,19 +103,8 @@ namespace SharpDc.Helpers
             req.KeepAlive = true;
             req.Timeout = 4000;
             req.ServicePoint.ConnectionLimit = HttpUploadItem.Manager.ConnectionsPerServer;
-            
-            req.BeginGetResponse(delegate(IAsyncResult ar) {
-                try
-                {
-                    using (var response = req.EndGetResponse(ar))
-                    using (var stream = response.GetResponseStream())
-                        callback(stream, null);
-                }
-                catch (Exception x)
-                {
-                    callback(null, x);                             
-                }
-            }, null);
+            var response = await req.GetResponseAsync();
+            return response.GetResponseStream();
         }
 
         public static long GetFileSize(string uri)

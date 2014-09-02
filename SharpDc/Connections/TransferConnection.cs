@@ -37,12 +37,24 @@ namespace SharpDc.Connections
         private DirectionMessage _userDirection;
         private int _ourNumer;
         private bool _disposed;
-        private byte[] _readBuffer;
+        private bool _isResponding;
 
         private TransferDirection _direction;
         private UploadItem _uploadItem;
+        private static SpeedAverage _requests = new SpeedAverage();
+        private static SpeedAverage _fails = new SpeedAverage();
 
         public static MovingAverage ServiceTime = new MovingAverage(TimeSpan.FromSeconds(30));
+
+        public static int AVGRequestsPerSecond
+        {
+            get { return (int)_requests.GetSpeed(); }
+        }
+
+        public static int AVGFailsPerSecond
+        {
+            get { return (int)_fails.GetSpeed(); }
+        }
 
         internal bool UseBackgroundSeedMode { get; set; }
 
@@ -224,13 +236,11 @@ namespace SharpDc.Connections
             : base(address)
         {
             _segmentInfo = new SegmentInfo { Index = -1, Length = -1, StartPosition = -1 };
-            _sendComplete = OnSendComplete;
         }
 
         public TransferConnection(Socket socket) : base(socket)
         {
             _segmentInfo = new SegmentInfo { Index = -1, Length = -1, StartPosition = -1 };
-            _sendComplete = OnSendComplete;
         }
 
         protected override void SendFirstMessages()
@@ -516,7 +526,7 @@ namespace SharpDc.Connections
                         case "$ADCGET":
                             {
                                 var arg = ADCGETMessage.Parse(command);
-                                OnMessageAdcget(ref arg);
+                                OnMessageAdcget(arg);
                             }
                             break;
                     }
@@ -524,7 +534,7 @@ namespace SharpDc.Connections
             }
         }
 
-        private void OnMessageAdcget(ref ADCGETMessage adcgetMessage)
+        private async void OnMessageAdcget(ADCGETMessage adcgetMessage)
         {
             var reqItem = new ContentItem();
 
@@ -545,6 +555,9 @@ namespace SharpDc.Connections
                     reqItem.Magnet = new Magnet { FileName = adcgetMessage.Request };
                 }
             }
+
+            _requests.Update(1);
+            _isResponding = true;
 
             if (!SlotUsed)
             {
@@ -583,9 +596,7 @@ namespace SharpDc.Connections
                     return;
                 }
             }
-
-
-
+            
             if (adcgetMessage.Start >= UploadItem.Content.Magnet.Size)
             {
                 SendMessageAsync(new ErrorMessage { Error = "File Not Available" }.Raw);
@@ -598,111 +609,51 @@ namespace SharpDc.Connections
                             adcgetMessage.Start + adcgetMessage.Length, UploadItem.Content.Magnet.Size);
                 adcgetMessage.Length = UploadItem.Content.Magnet.Size - adcgetMessage.Start;
             }
-            
-            SendChunk(adcgetMessage, adcgetMessage.Start);
-        }
 
-        private readonly AsyncCallback _sendComplete;
-        private ADCGETMessage _adcgetMessage;
-        private long _adcgetPosition;
-        private int _adcgetChunkSize;
-        private int _adcsndHeaderLength;
-        private PerfTimer _sendTimer;
 
-        private void SendChunk(ADCGETMessage adcgetMessage, long position)
-        {
-            _adcgetPosition = position;
-            _adcgetMessage = adcgetMessage;
             var uploadItem = UploadItem;
-
-            if (position == adcgetMessage.Start)
-            {
-                _sendTimer.Start();
-            }
-
-            if (position >= adcgetMessage.Start + adcgetMessage.Length)
-            {
-                // all data was sent
-                _sendTimer.Stop();
-                ServiceTime.Update((int)_sendTimer.ElapsedMilliseconds);
-                return;
-            }
 
             if (_disposed || uploadItem == null)
                 return;
 
-            _adcsndHeaderLength = 0;
-
-            if (_readBuffer == null)
+            var adcsndBytes = Encoding.Default.GetBytes(new ADCSNDMessage
             {
-                _readBuffer = new byte[1024 * 1024 + 256];
-            }
+                Type = ADCGETType.File,
+                Request = adcgetMessage.Request,
+                Start = adcgetMessage.Start,
+                Length = adcgetMessage.Length
+            }.Raw + "|");
 
-            if (position == adcgetMessage.Start)
-            {
-                var adcsndBytes = Encoding.Default.GetBytes(new ADCSNDMessage
-                {
-                    Type = ADCGETType.File,
-                    Request = adcgetMessage.Request,
-                    Start = adcgetMessage.Start,
-                    Length = adcgetMessage.Length
-                }.Raw + "|");
+            Stream.Write(adcsndBytes, 0, adcsndBytes.Length);
 
-                _adcsndHeaderLength = adcsndBytes.Length;
-                Buffer.BlockCopy(adcsndBytes, 0, _readBuffer, 0, _adcsndHeaderLength);
-            }
-
-
-            var length = _readBuffer.Length - _adcsndHeaderLength;
-
-            if (adcgetMessage.Start + adcgetMessage.Length < position + length)
-                length = (int)(adcgetMessage.Start + adcgetMessage.Length - position);
 
             var sw = PerfTimer.StartNew();
-            using (UseBackgroundSeedMode ? Thread.CurrentThread.EnterBackgroundProcessingMode() : Scope.Empty)
+
+            try
             {
                 if (_disposed)
                     return;
 
-                _adcgetChunkSize = uploadItem.Read(_readBuffer, _adcsndHeaderLength, position, length);
+                await uploadItem.CopyChunkAsync(Stream, adcgetMessage.Start, adcgetMessage.Length).ConfigureAwait(false);
+                Stream.Flush();
+                sw.Stop();
+                _isResponding = false;
+                ServiceTime.Update((int)sw.ElapsedMilliseconds);
             }
-            sw.Stop();
-
-            if (_adcgetChunkSize != length)
+            catch (Exception x)
             {
-                Logger.Error("Upload read error ({0}/{1}/{3}/{4}): {2}", _adcgetChunkSize, length, uploadItem.Content.SystemPath, sw.ElapsedMilliseconds, _adcsndHeaderLength);
+                Logger.Error("Upload read error {0} (L:{1}) {2} {3} ms",
+                    x.Message,
+                    adcgetMessage.Length,
+                    uploadItem.Content.SystemPath,
+                    sw.ElapsedMilliseconds);
                 Dispose();
-                return;
             }
-
-            _adcgetChunkSize += _adcsndHeaderLength;
-            _chunkOffset = 0;
-            BeginSend(_readBuffer, 0, _adcgetChunkSize, _sendComplete);
         }
 
-        private int _chunkOffset;
+        
 
-        private void OnSendComplete(IAsyncResult result)
-        {
-            var sent = EndSend(result);
-
-            _chunkOffset += sent;
-
-            if (sent == 0)
-                return;
-
-            if (_chunkOffset + sent < _adcgetChunkSize)
-            {
-                BeginSend(_readBuffer, _chunkOffset, _adcgetChunkSize - _chunkOffset, _sendComplete);
-                return;
-            }
-
-            // send next chunk
-            _adcgetPosition += _adcgetChunkSize - _adcsndHeaderLength;
-            SendChunk(_adcgetMessage, _adcgetPosition);
-        }
-
-
+        
         private void OnMessageKey(ref KeyMessage keyMessage)
         {
             if (DownloadItem != null)
@@ -854,7 +805,9 @@ namespace SharpDc.Connections
             if (_disposed)
                 return;
 
-            _readBuffer = null;
+            if (_isResponding)
+                _fails.Update(1);
+
             ReleaseSegment();
             DownloadItem = null;
             if (UploadItem != null)
