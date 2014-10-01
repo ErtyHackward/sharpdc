@@ -5,6 +5,7 @@
 // -------------------------------------------------------------
 
 using System;
+using System.IO;
 
 namespace SharpDc.Messages
 {
@@ -39,7 +40,7 @@ namespace SharpDc.Messages
 
             long.TryParse(parts[4], out msg.Length);
 
-            return msg;
+            return msg;            
         }
 
         //$ADCGET file TTH/CUHKZ6J3D2AGAJ6FAAS7YIPRYXNDJMZ7G3WC6II 0 1048576|
@@ -65,7 +66,7 @@ namespace SharpDc.Messages
                         throw new ArgumentOutOfRangeException();
                 }
 
-                return string.Format("$ADCSND {0} {1} {2} {3}", typeStr, Request, Start, Length);
+                return string.Format("$ADCSND {0} {1} {2} {3}", typeStr, Request, Start.ToString(), Length.ToString());
             }
         }
     }

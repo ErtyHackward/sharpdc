@@ -65,7 +65,7 @@ namespace SharpDc.Messages
                         throw new ArgumentOutOfRangeException();
                 }
 
-                return string.Format("$ADCGET {0} {1} {2} {3}", typeStr, Request, Start, Length);
+                return string.Format("$ADCGET {0} {1} {2} {3}", typeStr, Request, Start.ToString(), Length.ToString());
             }
         }
 

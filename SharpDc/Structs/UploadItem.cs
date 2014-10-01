@@ -110,7 +110,7 @@ namespace SharpDc.Structs
             OnDisposed();
         }
 
-        protected virtual async Task<long> InternalCopyChunk(Stream stream, long filePos, long bytesRequired)
+        private async Task<long> InternalCopyChunk(Stream stream, long filePos, long bytesRequired)
         {
             if (_fileStream == null)
             {
@@ -134,6 +134,8 @@ namespace SharpDc.Structs
                 Interlocked.Increment(ref _fileStreamsCount);
             }
 
+            _fileStream.Position = filePos;
+
             long readSoFar = 0L;
             var buffer = new byte[64 * 1024];
             do
@@ -149,14 +151,14 @@ namespace SharpDc.Structs
             return readSoFar;
         }
 
-        public async Task<long> CopyChunkAsync(Stream stream, long filePos, long bytesRequired)
+        public virtual async Task<long> SendChunkAsync(TransferConnection transfer, long filePos, long bytesRequired)
         {
             if (EnableRequestEventFire)
                 OnRequest(new UploadItemEventArgs());
 
             try
             {
-                return await InternalCopyChunk(stream, filePos, bytesRequired);
+                return await InternalCopyChunk(transfer.Stream, filePos, bytesRequired);
             }
             catch (Exception x)
             {

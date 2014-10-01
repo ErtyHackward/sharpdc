@@ -7,6 +7,7 @@
 using System;
 using System.Diagnostics;
 using System.Threading;
+using System.Threading.Tasks;
 using SharpDc.Connections;
 using SharpDc.Logging;
 
@@ -15,18 +16,16 @@ namespace SharpDc.Structs
     public class HttpTask
     {
         private static readonly ILogger Logger = LogManager.GetLogger();
-
-        private int _pos;
-
-        public byte[] Buffer;
+        
+        public TransferConnection Transfer;
         public long FilePosition;
-        public int Length;
+        public long Length;
         public long CreatedTimestamp;
         public long AssignedTimestamp;
         public bool Completed;
         public string Url;
-        public ManualResetEvent Event;
         public HttpConnection Connection;
+        private TaskCompletionSource<bool> _taskCompletionSource;
         
         /// <summary>
         /// Gets total wait time
@@ -51,55 +50,35 @@ namespace SharpDc.Structs
         public HttpTask()
         {
             CreatedTimestamp = Stopwatch.GetTimestamp();
-            Event = new ManualResetEvent(false);
+            _taskCompletionSource = new TaskCompletionSource<bool>();
         }
 
-        public void SetConnection(HttpConnection connection)
+        public Task<bool> GetTask()
+        {
+            return _taskCompletionSource.Task;
+        }
+
+        public async void Execute(HttpConnection connection)
         {
             AssignedTimestamp = Stopwatch.GetTimestamp();
             Connection = connection;
-            connection.DataRecieved += ConnectionDataRecieved;
-            connection.ConnectionStatusChanged += ConnectionConnectionStatusChanged;
 
-            connection.SetRange(FilePosition, FilePosition + Length - 1);
-            using (new PerfLimit("Http segment request", 50))
-                connection.Request(Url);
-        }
-
-        private void ConnectionConnectionStatusChanged(object sender, Events.ConnectionStatusEventArgs e)
-        {
-            if (e.Status == Events.ConnectionStatus.Disconnected)
+            try
             {
-                Logger.Error("Dropping task because of disconnect");
-                Event.Set();
-                Cleanup();
-            }
-        }
-
-        private void ConnectionDataRecieved(object sender, HttpDataEventArgs e)
-        {
-            System.Buffer.BlockCopy(e.Buffer, e.BufferOffset, Buffer, _pos, e.Length);
-            _pos += e.Length;
-
-            if (_pos == Length)
-            {
-                Cleanup();
+                await connection.CopyHttpChunkToAsync(Transfer, Url, FilePosition, Length).ConfigureAwait(false);
                 Completed = true;
-                Event.Set();
+                _taskCompletionSource.TrySetResult(true);
+            }
+            catch (Exception x)
+            {
+                Logger.Error("Async copy failed {0} {1}", x.Message, x.StackTrace);
+                _taskCompletionSource.TrySetResult(false);
             }
         }
 
-        private void Cleanup()
+        public void Cancel()
         {
-            lock (this)
-            {
-                if (Connection != null)
-                {
-                    Connection.ConnectionStatusChanged -= ConnectionConnectionStatusChanged;
-                    Connection.DataRecieved -= ConnectionDataRecieved;
-                }
-                Connection = null;
-            }
+            _taskCompletionSource.TrySetResult(false);
         }
     }
 }

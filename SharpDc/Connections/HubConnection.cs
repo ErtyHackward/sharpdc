@@ -7,7 +7,9 @@
 using System;
 using System.Collections.Concurrent;
 using System.Text;
+using System.Threading.Tasks;
 using SharpDc.Events;
+using SharpDc.Helpers;
 using SharpDc.Logging;
 using SharpDc.Messages;
 using SharpDc.Structs;
@@ -403,7 +405,7 @@ namespace SharpDc.Connections
 
             if (!string.IsNullOrEmpty(_settings.Password))
             {
-                SendMessageAsync(new MyPassMessage { Password = _settings.Password }.Raw);
+                SendMessage(new MyPassMessage { Password = _settings.Password }.Raw);
                 Logger.Info("Password sent...");
             }
             else
@@ -417,22 +419,13 @@ namespace SharpDc.Connections
             OnSearchRequest(new SearchRequestEventArgs { Message = searchMessage });
         }
 
-        public void SendMessageAsync(string message)
-        {
-            if (OutgoingMessage != null)
-            {
-                OnOutgoingMessage(new MessageEventArgs { Message = message });
-            }
-            BeginSend(message + "|");
-        }
-
         public void SendMessage(string message)
         {
             if (OutgoingMessage != null)
             {
                 OnOutgoingMessage(new MessageEventArgs { Message = message });
             }
-            Send(message + "|");
+            SendQueued(message + "|");
         }
 
         private void OnMessageLock(ref LockMessage lockMsg)
@@ -451,6 +444,7 @@ namespace SharpDc.Connections
 
         private void OnMessageHubName(ref HubNameMessage arg)
         {
+
         }
 
         private void OnMessageHello(ref HelloMessage helloMessage)

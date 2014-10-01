@@ -403,15 +403,9 @@ namespace SharpDc.Connections
                 OnOutgoingMessage(ea);
             }
 
-            BeginSend(msg + "|");
+            SendAsync(msg + "|").NoWarning();
         }
-
-        private void SendMessage(string msg)
-        {
-            Send(msg + "|");
-        }
-
-
+        
         protected override void ParseRaw(byte[] buffer, int length)
         {
             if (_disposed)
@@ -616,25 +610,22 @@ namespace SharpDc.Connections
             if (_disposed || uploadItem == null)
                 return;
 
-            var adcsndBytes = Encoding.Default.GetBytes(new ADCSNDMessage
+            var sw = PerfTimer.StartNew();
+
+            await SendAsync(new ADCSNDMessage
             {
                 Type = ADCGETType.File,
                 Request = adcgetMessage.Request,
                 Start = adcgetMessage.Start,
                 Length = adcgetMessage.Length
-            }.Raw + "|");
-
-            Stream.Write(adcsndBytes, 0, adcsndBytes.Length);
-
-
-            var sw = PerfTimer.StartNew();
-
+            }.Raw + "|").ConfigureAwait(false);
+            
             try
             {
                 if (_disposed)
                     return;
 
-                await uploadItem.CopyChunkAsync(Stream, adcgetMessage.Start, adcgetMessage.Length).ConfigureAwait(false);
+                await uploadItem.SendChunkAsync(this, adcgetMessage.Start, adcgetMessage.Length).ConfigureAwait(false);
                 Stream.Flush();
                 sw.Stop();
                 _isResponding = false;
@@ -650,9 +641,6 @@ namespace SharpDc.Connections
                 Dispose();
             }
         }
-
-        
-
         
         private void OnMessageKey(ref KeyMessage keyMessage)
         {

@@ -21,8 +21,6 @@ namespace SharpDc.Structs
 
         public static HttpDownloadManager Manager = new HttpDownloadManager();
         
-        private readonly int _requestLength;
-
         public static event EventHandler<HttpSegmentEventArgs> HttpSegmentDownloaded;
 
         private static void OnHttpSegmentDownloaded(HttpSegmentEventArgs e)
@@ -42,10 +40,10 @@ namespace SharpDc.Structs
 
         public HttpUploadItem(ContentItem item, int bufferSize = 1024 * 1024) : base(item, bufferSize)
         {
-            _requestLength = bufferSize;
+
         }
 
-        protected override async Task<long> InternalCopyChunk(Stream stream, long filePos, long bytesRequired)
+        public async override Task<long> SendChunkAsync(TransferConnection transfer, long filePos, long bytesRequired)
         {
             var startTime = DateTime.UtcNow;
 
@@ -63,6 +61,8 @@ namespace SharpDc.Structs
 
                 if (ea.FromCache)
                 {
+                    await transfer.SendAsync(ea.Stream).ConfigureAwait(false);
+                    Interlocked.Add(ref _uploadedBytes, ea.Length);
                     return bytesRequired;
                 }
             }
@@ -74,8 +74,16 @@ namespace SharpDc.Structs
             {
                 try
                 {
-                    var responseStream = await HttpHelper.GetHttpChunkAsync(SystemPath, filePos, bytesRequired);
-                    bytesCopied = await CopyTo(responseStream, stream, bytesRequired);
+                    // custom http connections pool
+                    await Manager.CopyChunkToTransferAsync(transfer, SystemPath, filePos, bytesRequired).ConfigureAwait(false);
+                    
+                    // default http connections pool
+                    //var responseStream = await HttpHelper.GetHttpChunkAsync(SystemPath, filePos, bytesRequired);
+                    //await transfer.SendAsync(responseStream);
+
+                    bytesCopied = bytesRequired;
+
+                    Interlocked.Add(ref _uploadedBytes, bytesCopied);
                 }
                 catch (Exception x)
                 {
@@ -100,23 +108,6 @@ namespace SharpDc.Structs
             }
 
             return bytesCopied;
-        }
-
-        private async Task<long> CopyTo(Stream source, Stream destination, long bytesRequired)
-        {
-            long readSoFar = 0L;
-            var buffer = new byte[64 * 1024];
-            do
-            {
-                var toRead = Math.Min(bytesRequired - readSoFar, buffer.Length);
-                var readNow = await source.ReadAsync(buffer, 0, (int)toRead);
-                if (readNow == 0)
-                    break; // End of stream
-                await destination.WriteAsync(buffer, 0, readNow);
-                readSoFar += readNow;
-                Interlocked.Add(ref _uploadedBytes, readNow);
-            } while (readSoFar < bytesRequired);
-            return readSoFar;
         }
     }
 

@@ -99,13 +99,11 @@ namespace SharpDc.Structs
                 if (count == 0)
                     return 0;
                 
-                var success = Manager.DownloadChunk(_uri, buffer, _position, count);
+                HttpHelper.DownloadChunk(_uri, buffer, _position, count);
                 
-                if (success)
-                {
-                    _position += count;
-                    return count;
-                }
+                _position += count;
+                return count;
+                
                 return 0;
             }
         }

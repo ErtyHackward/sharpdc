@@ -634,7 +634,7 @@ namespace SharpDc.Managers
         {
             lock (_synRoot)
             {
-                foreach (var transferConnection in _connections)
+                foreach (var transferConnection in _connections.ToList())
                 {
                     transferConnection.Dispose();
                 }

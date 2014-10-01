@@ -32,7 +32,6 @@ namespace SharpDc
         AutoSelectPort,
         BackgroundSeedMode,
         UploadSourceQuality,
-        HttpMemoryCacheSize,
         HttpQueueLimit,
         HttpConnectionsPerServer
     }

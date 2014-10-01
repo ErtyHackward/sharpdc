@@ -5,13 +5,20 @@
 // -------------------------------------------------------------
 
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using SharpDc.Events;
+using SharpDc.Helpers;
 using SharpDc.Logging;
+using SharpDc.Managers;
 using SharpDc.Structs;
 
 namespace SharpDc.Connections
@@ -26,14 +33,14 @@ namespace SharpDc.Connections
         private class CounterStream : Stream
         {
             private readonly Stream _baseStream;
-            private readonly SpeedAverage _upload;
-            private readonly SpeedAverage _download;
+            private readonly SpeedAverage _rederSpeedAverage;
+            private readonly SpeedAverage _writeSpeedAverage;
 
-            public CounterStream(Stream baseStream, SpeedAverage upload, SpeedAverage download)
+            public CounterStream(Stream baseStream, SpeedAverage readSpeed, SpeedAverage writeSpeed)
             {
                 _baseStream = baseStream;
-                _upload = upload;
-                _download = download;
+                _rederSpeedAverage = readSpeed;
+                _writeSpeedAverage = writeSpeed;
             }
 
             public override void Flush()
@@ -53,14 +60,15 @@ namespace SharpDc.Connections
 
             public override int Read(byte[] buffer, int offset, int count)
             {
-                _download.Update(count);
-                return _baseStream.Read(buffer, offset, count);
+                var read =  _baseStream.Read(buffer, offset, count);
+                _rederSpeedAverage.Update(read);
+                return read;
             }
 
             public override void Write(byte[] buffer, int offset, int count)
             {
                 _baseStream.Write(buffer, offset, count);
-                _upload.Update(count);
+                _writeSpeedAverage.Update(count);
             }
 
             public override bool CanRead
@@ -101,11 +109,21 @@ namespace SharpDc.Connections
 
         private readonly SpeedAverage _uploadSpeed = new SpeedAverage();
         private readonly SpeedAverage _downloadSpeed = new SpeedAverage();
+        
+        private static ObjectPool<TransferSocketAwaitable> _transferAwaitablesPool;
+        private static ObjectPool<VoidSocketAwaitable> _voidAwaitablesPool;
+        private static int _awaitablesCount;
 
-        private readonly AsyncCallback _receiveCallback;
-        private readonly AsyncCallback _defaultSendCallback;
+        private Queue<string> _sendQueue = new Queue<string>();
+        private int _flushingQueue;
 
-        private byte[] _receiveBuffer;
+        /// <summary>
+        /// Gets number of objects alive for the transfer operations
+        /// </summary>
+        public static int AwaitablesAlive 
+        {
+            get { return _awaitablesCount; }
+        }
 
         public Stream Stream
         {
@@ -207,13 +225,27 @@ namespace SharpDc.Connections
         {
             UploadSpeedLimitGlobal = new SpeedLimiter();
             DownloadSpeedLimitGlobal = new SpeedLimiter();
+
+            _transferAwaitablesPool = new ObjectPool<TransferSocketAwaitable>(() =>
+            {
+                var arg = new SocketAsyncEventArgs();
+                const int bufferLength = 1024 * 128;
+                arg.SetBuffer(new byte[bufferLength], 0, bufferLength);
+                Interlocked.Increment(ref _awaitablesCount);
+                return new TransferSocketAwaitable(arg); 
+            });
+
+            _voidAwaitablesPool = new ObjectPool<VoidSocketAwaitable>(() => {
+                var arg = new SocketAsyncEventArgs();
+                return new VoidSocketAwaitable(arg);
+            });
+
         }
 
         private void Initialize()
         {
             UploadSpeedLimit = new SpeedLimiter();
             DownloadSpeedLimit = new SpeedLimiter();
-            _receiveBuffer = new byte[1024 * 64];
         }
 
         protected TcpConnection(string address) : this(ParseAddress(address))
@@ -223,8 +255,6 @@ namespace SharpDc.Connections
         protected TcpConnection()
         {
             Initialize();
-            _receiveCallback = ReceiveCallback;
-            _defaultSendCallback = DefaultEndSend;
         }
 
         protected TcpConnection(IPEndPoint remoteEndPoint) : this()
@@ -302,55 +332,132 @@ namespace SharpDc.Connections
             SetConnectionStatus(ConnectionStatus.Disconnected, ex);
         }
 
-        public void ListenAsync()
+        protected async Task EnsureConnected()
         {
             _closingSocket = false;
-            BeginRead();
+
+            var socket = _socket;
+
+            if (socket == null)
+            {
+                _closingSocket = false;
+                socket = new Socket(RemoteEndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+                PrepareSocket(socket);
+
+                if (LocalAddress != null)
+                {
+                    socket.Bind(LocalAddress);
+                }
+
+                _socket = socket;
+            }
+
+            if (!socket.Connected)
+            {
+                SetConnectionStatus(ConnectionStatus.Connecting);
+
+                _lastUpdate = Stopwatch.GetTimestamp();
+
+                var args = _voidAwaitablesPool.GetObject();
+
+                try
+                {
+                    args.m_eventArgs.RemoteEndPoint = RemoteEndPoint;
+                    await socket.ConnectAsync(args);
+
+                    LocalAddress = (IPEndPoint)socket.LocalEndPoint;
+                    _stream = new BufferedStream(new CounterStream(new NetworkStream(socket, FileAccess.Write), _downloadSpeed, _uploadSpeed), 128 * 1024);
+                    SetConnectionStatus(ConnectionStatus.Connected);
+                    SendFirstMessages();
+                }
+                finally
+                {
+                    _voidAwaitablesPool.PutObject(args);
+                }
+            }
+            else if (_stream == null)
+            {
+                _stream = new BufferedStream(new CounterStream(new NetworkStream(socket, FileAccess.Write), _downloadSpeed, _uploadSpeed), 128 * 1024);
+            }
         }
 
-        private void PrepareSocket(Socket socket)
+        public async void StartAsync()
+        {
+            await EnsureConnected().ConfigureAwait(false);
+
+            var socket = _socket;
+
+            while (true)
+            {
+                var args = _transferAwaitablesPool.GetObject();
+                try
+                {
+                    var bytesReceived = await socket.ReceiveAsync(args);
+                    if (bytesReceived != 0)
+                        HandleReceived(bytesReceived, args.m_eventArgs.Buffer);
+                    else
+                    {
+                        SetConnectionStatus(ConnectionStatus.Disconnected);
+                        break;
+                    }
+                }
+                catch (Exception x)
+                {
+                    SetConnectionStatus(ConnectionStatus.Disconnected, x);
+                    break;
+                }
+                finally
+                {
+                    _transferAwaitablesPool.PutObject(args);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Always return used object back to the pool with ReleaseAwaitable method
+        /// </summary>
+        /// <returns></returns>
+        protected async Task<TransferSocketAwaitable> ReceiveAsync()
+        {
+            var socket = _socket;
+
+            if (socket == null)
+                return null;
+
+            var awaitable = _transferAwaitablesPool.GetObject();
+            
+            try
+            {
+                var bytesReceived = await socket.ReceiveAsync(awaitable);
+                HandleReceived(bytesReceived, awaitable.m_eventArgs.Buffer);
+                return awaitable;
+            }
+            catch (Exception x)
+            {
+                SetConnectionStatus(ConnectionStatus.Disconnected, x);
+                _transferAwaitablesPool.PutObject(awaitable);
+                return null;
+            }
+        }
+
+        protected void ReleaseAwaitable(TransferSocketAwaitable awaitable)
+        {
+            _transferAwaitablesPool.PutObject(awaitable);
+        }
+
+        protected virtual void PrepareSocket(Socket socket)
         {
             socket.SendTimeout = SendTimeout;
             socket.ReceiveTimeout = ReceiveTimeout;
             socket.SendBufferSize = 1024 * 1024 + 256;
             socket.ReceiveBufferSize = 1024 * 64;
-            
-            _stream = new BufferedStream(new CounterStream(new NetworkStream(socket, FileAccess.Write), _uploadSpeed, _uploadSpeed ) , 64 * 1024);
         }
-
-        public void ConnectAsync()
-        {
-            try
-            {
-                var socket = _socket;
-
-                if (socket == null)
-                {
-                    _socket = new Socket(RemoteEndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-                    PrepareSocket(_socket);
-                }
-
-                _closingSocket = false;
-                
-                if (LocalAddress != null)
-                {
-                    _socket.Bind(LocalAddress);
-                }
-
-                BeginRead();
-            }
-            catch (Exception x)
-            {
-                SetConnectionStatus(ConnectionStatus.Disconnected, x);
-            }
-        }
-
         
-        private void HandleReceived(int bytesReceived)
+        private void HandleReceived(int bytesReceived, byte[] buffer)
         {
             _downloadSpeed.Update(bytesReceived);
             _lastUpdate = Stopwatch.GetTimestamp();
-            ParseRaw(_receiveBuffer, bytesReceived);
+            ParseRaw(buffer, bytesReceived);
             DownloadSpeedLimit.Update(bytesReceived);
             DownloadSpeedLimitGlobal.Update(bytesReceived);
         }
@@ -366,144 +473,119 @@ namespace SharpDc.Connections
         {
         }
 
-        private void BeginRead()
+        protected abstract void ParseRaw(byte[] buffer, int length);
+
+        public async Task SendAsync(string data)
+        {
+            var bytes = Encoding.Default.GetBytes(data);
+            await SendAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
+        }
+
+        public async Task SendAsync(byte[] buffer, int offset, int length)
         {
             var socket = _socket;
 
             if (socket == null)
                 return;
 
+            var awaitable = _transferAwaitablesPool.GetObject();
+            var previousBuffer = awaitable.m_eventArgs.Buffer;
+
             try
             {
-                if (!socket.Connected)
-                {
-                    SetConnectionStatus(ConnectionStatus.Connecting);
+                awaitable.m_eventArgs.SetBuffer(buffer, offset, length);
+                var bytesSent = await socket.SendAsync(awaitable);
+                HandleSent(bytesSent);
+            }
+            catch (Exception x)
+            {
+                SetConnectionStatus(ConnectionStatus.Disconnected, x);
+            }
+            finally
+            {
+                awaitable.m_eventArgs.SetBuffer(previousBuffer, 0, previousBuffer.Length);
+                _transferAwaitablesPool.PutObject(awaitable);
+            }
+        }
 
-                    _lastUpdate = Stopwatch.GetTimestamp();
-                    socket.BeginConnect(RemoteEndPoint, ConnectCallback, null);
+        public async Task SendAsync(Stream stream)
+        {
+            var socket = _socket;
+
+            if (socket == null)
+                return;
+
+            var awaitable = _transferAwaitablesPool.GetObject();
+            var buffer = awaitable.m_eventArgs.Buffer;
+
+            try
+            {
+                while (true)
+                {
+                    int num = await stream.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
+                    int bytesRead;
+                    if ((bytesRead = num) != 0)
+                    {
+                        awaitable.m_eventArgs.SetBuffer(buffer, 0, bytesRead);
+                        var bytesSent = await socket.SendAsync(awaitable);
+                        HandleSent(bytesSent);
+                    }
+                    else
+                        break;
+                }
+            }
+            finally
+            {
+                awaitable.m_eventArgs.SetBuffer(buffer, 0, buffer.Length);
+                _transferAwaitablesPool.PutObject(awaitable);
+            }
+        }
+
+        public async void SendQueued(string message)
+        {
+            lock (_sendQueue)
+            {
+                _sendQueue.Enqueue(message);
+            }
+
+            if (Interlocked.Exchange(ref _flushingQueue, 1) == 0)
+            {
+                try
+                {
+                    await FlushQueue().ConfigureAwait(false);
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref _flushingQueue, 0);
+                }
+            }
+        }
+
+        private async Task FlushQueue()
+        {
+            string stringToSend;
+
+            lock (_sendQueue)
+            {
+                if (_sendQueue.Count > 1)
+                {
+                    stringToSend = string.Join("", _sendQueue);
+                    _sendQueue.Clear();
+                }
+                else if (_sendQueue.Count == 1)
+                {
+                    stringToSend = _sendQueue.Dequeue();
+                }
+                else
+                {
                     return;
                 }
+            }
 
-                socket.BeginReceive(_receiveBuffer, 0, _receiveBuffer.Length, SocketFlags.None, _receiveCallback, socket);
-            }
-            catch (Exception x)
-            {
-                SetConnectionStatus(ConnectionStatus.Disconnected, x);
-            }
+            await SendAsync(stringToSend);
         }
 
-        private void ReceiveCallback(IAsyncResult ar)
-        {
-            try
-            {
-                var socket = (Socket)ar.AsyncState;
-                var bytesReceived = socket.EndReceive(ar);
 
-                if (bytesReceived == 0)
-                {
-                    SetConnectionStatus(ConnectionStatus.Disconnected);
-                    return;
-                }
-                
-                HandleReceived(bytesReceived);
-                socket.BeginReceive(_receiveBuffer, 0, _receiveBuffer.Length, SocketFlags.None, _receiveCallback, socket);
-            }
-            catch (Exception x)
-            {
-                SetConnectionStatus(ConnectionStatus.Disconnected, x);
-            }
-        }
-
-        private void ConnectCallback(IAsyncResult ar)
-        {
-            try
-            {
-                _socket.EndConnect(ar);
-                LocalAddress = (IPEndPoint)_socket.LocalEndPoint;
-                SetConnectionStatus(ConnectionStatus.Connected);
-                SendFirstMessages();
-                BeginRead();
-            }
-            catch (Exception x)
-            {
-                SetConnectionStatus(ConnectionStatus.Disconnected, x);
-            }
-        }
-
-        protected abstract void ParseRaw(byte[] buffer, int length);
-
-        public void Send(string data)
-        {
-            var bytes = Encoding.Default.GetBytes(data);
-
-            var result = BeginSend(bytes, 0, bytes.Length, null);
-
-            if (result != null)
-                EndSend(result);
-        }
-
-        public void Send(byte[] buffer, int offset, int length)
-        {
-            var result = BeginSend(buffer, offset, length, null);
-
-            if (result != null)
-                EndSend(result);
-        }
-
-        public void BeginSend(string data)
-        {
-            var bytes = Encoding.Default.GetBytes(data);
-            BeginSend(bytes, 0, bytes.Length, _defaultSendCallback);
-        }
-
-        public void BeginSend(byte[] buffer, int offset, int length)
-        {
-            BeginSend(buffer, offset, length, _defaultSendCallback);
-        }
-
-        public IAsyncResult BeginSend(byte[] buffer, int offset, int length, AsyncCallback callback)
-        {
-            try
-            {
-                var socket = _socket;
-
-                if (socket == null)
-                {
-                    SetConnectionStatus(ConnectionStatus.Disconnected);
-                    return null;
-                }
-
-                return socket.BeginSend(buffer, offset, length, SocketFlags.None, callback, socket);
-            }
-            catch (Exception x)
-            {
-                SetConnectionStatus(ConnectionStatus.Disconnected, x);
-            }
-            return null;
-        }
-
-        private void DefaultEndSend(IAsyncResult result)
-        {
-            EndSend(result);
-        }
-
-        public int EndSend(IAsyncResult result)
-        {
-            var socket = (Socket)result.AsyncState;
-
-            try
-            {
-                var sent = socket.EndSend(result);
-                HandleSent(sent);
-                return sent;
-            }
-            catch (Exception x)
-            {
-                SetConnectionStatus(ConnectionStatus.Disconnected, x);
-            }
-            return 0;
-        }
-        
         /// <summary>
         /// Updates current connection status
         /// </summary>
@@ -608,7 +690,7 @@ namespace SharpDc.Connections
             if (_builder != null && _connection != null)
             {
                 var bytes = Encoding.Default.GetBytes(_builder.ToString());
-                _connection.BeginSend(bytes, 0, bytes.Length);
+                _connection.SendAsync(bytes, 0, bytes.Length).NoWarning();
             }
         }
     }

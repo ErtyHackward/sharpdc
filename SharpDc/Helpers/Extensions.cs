@@ -9,7 +9,9 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 
 namespace SharpDc.Helpers
 {
@@ -56,6 +58,24 @@ namespace SharpDc.Helpers
             var bytes = new byte[array.Length / 8 + (array.Length % 8 == 0 ? 0 : 1)];
             array.CopyTo(bytes,0);
             return bytes;
+        }
+
+        /// <summary>
+        /// Silences compiler warning of async execution of the task
+        /// </summary>
+        /// <param name="task"></param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void NoWarning(this Task task)
+        {
+        }
+
+        /// <summary>
+        /// Silences compiler warning of async execution of the task
+        /// </summary>
+        /// <param name="task"></param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void NoWarning(this INotifyCompletion task)
+        {
         }
     }
 }
