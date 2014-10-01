@@ -5,8 +5,10 @@
 // -------------------------------------------------------------
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using SharpDc.Connections;
 using SharpDc.Events;
 using SharpDc.Interfaces;
 using SharpDc.Logging;
@@ -23,8 +25,9 @@ namespace SharpDc.Managers
 
         private readonly List<ISearchResult> _results = new List<ISearchResult>();
         private readonly Dictionary<string, HubSearchResult> _tthList = new Dictionary<string, HubSearchResult>();
+        // our user requests
         private readonly List<SearchMessage> _searchQueue = new List<SearchMessage>();
-
+        
         private readonly object _syncRoot = new object();
 
         private SearchMessage? _currentSearch;

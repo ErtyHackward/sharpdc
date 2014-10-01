@@ -118,6 +118,7 @@
     <Compile Include="Helpers\HttpHelper.cs" />
     <Compile Include="Helpers\Scope.cs" />
     <Compile Include="Helpers\SearchHelper.cs" />
+    <Compile Include="Helpers\SocketAwaitable.cs" />
     <Compile Include="Helpers\ThreadUtility.cs" />
     <Compile Include="Helpers\Windows.cs" />
     <Compile Include="Interfaces\ISearchResult.cs" />

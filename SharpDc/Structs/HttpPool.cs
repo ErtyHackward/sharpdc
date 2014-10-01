@@ -6,8 +6,10 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using SharpDc.Connections;
 using SharpDc.Logging;
 
@@ -24,6 +26,8 @@ namespace SharpDc.Structs
         public List<HttpTask> TasksQueue;
         public object SyncRoot;
         public string Server;
+        private int _isDeletingOldTasks;
+        private long _lastDeletionOfTasks;
 
         public int ConnectionsLimit { get; set; }
 
@@ -42,6 +46,8 @@ namespace SharpDc.Structs
             Connections = new List<HttpConnection>();
             TasksQueue = new List<HttpTask>();
             _freeList = new List<HttpConnection>();
+
+            _lastDeletionOfTasks = Stopwatch.GetTimestamp();
         }
 
         private void DeleteOldTasksFromQueue()
@@ -49,11 +55,17 @@ namespace SharpDc.Structs
             if (ReceiveTimeout == 0)
                 return;
 
-            // this operation is not reasonable to run multiple times in the short period
-            if (Monitor.TryEnter(SyncRoot))
+            // this operation is not reasonable to run multiple times in the short period or in more than in one thread
+            if (Interlocked.Exchange(ref _isDeletingOldTasks, 1) == 0)
             {
                 try
                 {
+                    if ( (double)(Stopwatch.GetTimestamp() - _lastDeletionOfTasks) / Stopwatch.Frequency < 1)
+                        return;
+
+                    _lastDeletionOfTasks = Stopwatch.GetTimestamp();
+
+                    lock (SyncRoot)
                     using (new PerfLimit("Delete old tasks int"))
                     {
                         var removeList = new List<HttpTask>();
@@ -63,21 +75,21 @@ namespace SharpDc.Structs
                                 TasksQueue.Where(t => t.ExecutionTime.TotalMilliseconds > ReceiveTimeout))
                         {
                             Logger.Error("Dropping task because of time out {0}. QueueWait {1}", ReceiveTimeout, httpTask.QueueTime.TotalMilliseconds);
-                            httpTask.Event.Set();
+                            httpTask.Cancel();
                             removeList.Add(httpTask);
                         }
 
                         TasksQueue.RemoveAll(removeList.Contains);
                     }
                 }
-                finally 
+                finally
                 {
-                    Monitor.Exit(SyncRoot);
+                    Interlocked.Exchange(ref _isDeletingOldTasks, 0);
                 }
             }
         }
 
-        public void StartTask(HttpTask task)
+        public Task<bool> ExecuteTaskAsync(HttpTask task)
         {
             DeleteOldTasksFromQueue();
 
@@ -108,13 +120,15 @@ namespace SharpDc.Structs
                     else
                     {
                         Logger.Error("Dropping task because of full queue");
-                        task.Event.Set();
+                        task.Cancel();
                     }
                 }
             }
 
             if (conn != null)
-                task.SetConnection(conn);
+                task.Execute(conn);
+
+            return task.GetTask();
         }
 
 
@@ -139,8 +153,7 @@ namespace SharpDc.Structs
             }
 
             if (task != null)
-                task.SetConnection(httpCon);
-            
+                task.Execute(httpCon);
         }
 
         private void HttpConConnectionStatusChanged(object sender, Events.ConnectionStatusEventArgs e)
@@ -164,7 +177,7 @@ namespace SharpDc.Structs
         {
             lock (SyncRoot)
             {
-                foreach (var httpConnection in Connections)
+                foreach (var httpConnection in Connections.ToList())
                 {
                     httpConnection.DisconnectAsync();
                 }

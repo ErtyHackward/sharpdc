@@ -40,7 +40,6 @@ namespace SharpDc
         private bool _measureUploadSourceQuality;
         private int _searchAlternativesInterval;
         private bool _backgroundSeedMode;
-        private long _httpMemoryCacheSize;
         private int _httpQueueLimit;
         private int _httpConnectionsPerServer;
 
@@ -439,23 +438,6 @@ namespace SharpDc
                 {
                     _measureUploadSourceQuality = value;
                     OnChanged(EngineSettingType.UploadSourceQuality);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets the maximum size (in bytes) of memory cache for http upload items (server usage only)
-        /// Default 0 means no cache
-        /// </summary>
-        public long HttpMemoryCacheSize
-        {
-            get { return _httpMemoryCacheSize; }
-            set
-            {
-                if (_httpMemoryCacheSize != value)
-                {
-                    _httpMemoryCacheSize = value;
-                    OnChanged(EngineSettingType.HttpMemoryCacheSize);
                 }
             }
         }

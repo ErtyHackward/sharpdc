@@ -42,6 +42,7 @@ namespace SharpDc
         private long _totalDownloaded;
         private readonly object _speedSyncRoot = new object();
         private readonly List<DcStream> _streams = new List<DcStream>();
+        private readonly SpeedAverage _searchesAverage = new SpeedAverage();
 
         /// <summary>
         /// Gets or sets thread pool used by engine
@@ -167,6 +168,11 @@ namespace SharpDc
                 UpdateShared();
             }
         }
+
+        public int AVGSearchesPerSecond {
+            get { return (int)_searchesAverage.GetSpeed(); }
+        }
+
         #endregion
 
         #region Events
@@ -322,8 +328,6 @@ namespace SharpDc
             else
                 LocalAddress = Settings.LocalAddress;
 
-            if (Settings.HttpMemoryCacheSize != 0)
-                HttpUploadItem.Manager.CacheSize = Settings.HttpMemoryCacheSize;
             if (Settings.HttpQueueLimit != 0)
                 HttpUploadItem.Manager.QueueLimit = Settings.HttpQueueLimit;
             if (Settings.HttpConnectionsPerServer != 0)
@@ -409,7 +413,7 @@ namespace SharpDc
                 {
                     Logger.Info("{0}: Hub inactivity timeout reached [{1}]. Reconnecting", hub.Settings.HubName,
                                 Settings.ReconnectTimeout);
-                    hub.ConnectAsync();
+                    hub.StartAsync();
                 }
             }
 
@@ -576,7 +580,7 @@ namespace SharpDc
                 e.Handled = true;
                 var transfer = new TransferConnection(e.Socket);
                 TransferManager.AddTransfer(transfer);
-                transfer.ListenAsync();
+                transfer.StartAsync();
             }
             else
             {
@@ -682,9 +686,6 @@ namespace SharpDc
                 case EngineSettingType.TcpBacklog:
                     InitTcp(Settings.TcpPort);
                     break;
-                case EngineSettingType.HttpMemoryCacheSize:
-                    HttpUploadItem.Manager.CacheSize = Settings.HttpMemoryCacheSize;
-                    break;
                 case EngineSettingType.HttpQueueLimit:
                     HttpUploadItem.Manager.QueueLimit = Settings.HttpQueueLimit;               
                     break;
@@ -760,8 +761,9 @@ namespace SharpDc
 
             if (Share != null && e.Message.SearchType == SearchType.TTH)
             {
-                var results =
-                    Share.Search(new SearchQuery { Query = e.Message.SearchRequest, SearchType = SearchType.TTH });
+                _searchesAverage.Update(1);
+
+                var results = Share.Search(new SearchQuery { Query = e.Message.SearchRequest, SearchType = SearchType.TTH });
                 if (results.Count > 0)
                 {
                     var result = results[0];
@@ -837,7 +839,7 @@ namespace SharpDc
                                              new MyNickMessage { Nickname = hubConnection.Settings.Nickname }.Raw,
                                              new LockMessage { ExtendedProtocol = true }.Raw
                                          };
-            transfer.ConnectAsync();
+            transfer.StartAsync();
         }
 
         private void HubConnectionRequest(object sender, IncomingConnectionRequestEventArgs e)
@@ -1014,7 +1016,7 @@ namespace SharpDc
 
             if (Hubs.Count < 20)
             {
-                Hubs.ForEach(h => h.ConnectAsync());
+                Hubs.ForEach(h => h.StartAsync());
             }
             else
             {
@@ -1026,7 +1028,7 @@ namespace SharpDc
 
                                                           for (int i = 0; i < list.Count; i++)
                                                           {
-                                                              list[i].ConnectAsync();
+                                                              list[i].StartAsync();
                                                               Thread.Sleep(100);
                                                           }
                                                       });

@@ -7,6 +7,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using SharpDc.Connections;
 using SharpDc.Logging;
 using SharpDc.Structs;
@@ -22,11 +24,10 @@ namespace SharpDc.Managers
 
         private readonly List<HttpPool> _pools;
 
-        private readonly Queue<HttpCacheSegment> _cache = new Queue<HttpCacheSegment>();
         private readonly object _syncRoot = new object();
-        private long _cacheSize;
         private int _connectionsPerServer;
         private int _queueLimit;
+        private long _totalDownloaded;
 
         public List<HttpPool> Pools
         {
@@ -78,32 +79,15 @@ namespace SharpDc.Managers
             }
         }
 
-        /// <summary>
-        /// Gets or sets maximum cache size for http segments (in bytes)
-        /// </summary>
-        public long CacheSize
-        {
-            get { return _cacheSize; }
-            set { 
-                _cacheSize = value;
-                FreeMemory(0);
-            }
-        }
-
-        /// <summary>
-        /// Gets bytes used for cache
-        /// </summary>
-        public long MemoryUsed { get; private set; }
 
         /// <summary>
         /// Gets total bytes downloaded using this manager
         /// </summary>
-        public long TotalDownloaded { get; private set; }
-
-        /// <summary>
-        /// Gets total bytes were taken from the cache in this manager
-        /// </summary>
-        public long TotalFromCache { get; private set; }
+        public long TotalDownloaded
+        {
+            get { return _totalDownloaded; }
+            private set { _totalDownloaded = value; }
+        }
 
         public MovingAverage SegmentDelay { get; set; }
 
@@ -115,73 +99,26 @@ namespace SharpDc.Managers
             SegmentDelay = new MovingAverage(TimeSpan.FromSeconds(30));
         }
 
-        private void FreeMemory(int length)
+        public async Task<bool> CopyChunkToTransferAsync(TransferConnection transfer, string url, long filePos, long length)
         {
-            while (_cache.Count > 0 && MemoryUsed + length > CacheSize)
-            {
-                var seg = _cache.Dequeue();
-                seg.Buffer = null;
-                MemoryUsed -= seg.Length;
-            }
-        }
-
-        public bool DownloadChunk(string url, byte[] buffer, long filePos, int length)
-        {
-            HttpCacheSegment segment;
-            lock (_syncRoot)
-            {
-                segment = _cache.FirstOrDefault(s => s.Url == url && s.Position <= filePos && length <= s.Length - (filePos - s.Position));
-            }
-
-            if (segment.Buffer != null)
-            {
-                Buffer.BlockCopy(segment.Buffer, (int)(filePos - segment.Position), buffer, 0, length);
-                lock (_syncRoot)
-                {
-                    TotalFromCache += length;
-                }
-                return true;
-            }
-            
             var parsedUrl = new HttpUrl(url);
 
             var pool = GetPool(parsedUrl.Server);
-
+            
             var task = new HttpTask
-                           {
-                               Url = url,
-                               Buffer = buffer,
-                               FilePosition = filePos,
-                               Length = length
-                           };
+            {
+                Url = url,
+                Transfer = transfer,
+                FilePosition = filePos,
+                Length = length
+            };
 
-            pool.StartTask(task);
-
-            task.Event.WaitOne();
-
+            await pool.ExecuteTaskAsync(task).ConfigureAwait(false);
+            
             if (task.Completed)
                 SegmentDelay.Update((int)task.ExecutionTime.TotalMilliseconds);
 
-            if (CacheSize > 0 && task.Completed)
-            {
-                segment.Url = url;
-                segment.Position = filePos;
-                segment.Length = length;
-                segment.Buffer = new byte[segment.Length];
-                Buffer.BlockCopy(task.Buffer, 0, segment.Buffer, 0, segment.Length);
-
-                lock (_syncRoot)
-                {
-                    FreeMemory(length);
-                    _cache.Enqueue(segment);
-                    MemoryUsed += segment.Length;
-                }
-            }
-
-            lock (_syncRoot)
-            {
-                TotalDownloaded += length;    
-            }
+            Interlocked.Add(ref _totalDownloaded, length);
             
             if (!task.Completed)
                 logger.Error("Unable to complete the task");
