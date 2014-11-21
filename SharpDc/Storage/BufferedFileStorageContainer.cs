@@ -16,7 +16,7 @@ namespace SharpDc.Storage
     /// </summary>
     public class BufferedFileStorageContainer : IStorageContainer
     {
-        public override bool WriteData(Structs.SegmentInfo segment, int offset, byte[] buffer, int length)
+        public override bool WriteData(Structs.SegmentInfo segment, int offset, byte[] buffer, int srcOffset, int length)
         {
             throw new NotImplementedException();
         }

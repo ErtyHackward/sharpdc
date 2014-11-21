@@ -83,7 +83,7 @@ namespace SharpDc.Storage
             TempFilePath = tempFilePath;
         }
         
-        public override bool WriteData(SegmentInfo segment, int offset, byte[] buffer, int length)
+        public override bool WriteData(SegmentInfo segment, int offset, byte[] buffer, int srcOffset, int length)
         {
             if (_isDisposed || _isDisposing)
                 throw new ObjectDisposedException("FileStorageContainer");
@@ -138,7 +138,7 @@ namespace SharpDc.Storage
                     _maxPosition = Math.Max(_maxPosition, segment.StartPosition);
                 }
 
-                stream.Write(buffer, 0, length);
+                stream.Write(buffer, srcOffset, length);
 
                 if (length + offset >= segment.Length)
                 {
