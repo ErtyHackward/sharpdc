@@ -5,13 +5,12 @@
 // -------------------------------------------------------------
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
+using System.Data;
 using System.IO;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -110,12 +109,51 @@ namespace SharpDc.Connections
         private readonly SpeedAverage _uploadSpeed = new SpeedAverage();
         private readonly SpeedAverage _downloadSpeed = new SpeedAverage();
         
-        private static ObjectPool<TransferSocketAwaitable> _transferAwaitablesPool;
-        private static ObjectPool<VoidSocketAwaitable> _voidAwaitablesPool;
+        private static readonly ObjectPool<TransferSocketAwaitable> _transferAwaitablesPool;
+        private static readonly ObjectPool<VoidSocketAwaitable> _voidAwaitablesPool;
         private static int _awaitablesCount;
 
-        private Queue<string> _sendQueue = new Queue<string>();
+        private static byte[] _largeBuffer;
+        private static int _operationBufferLength;
+        private static int _maxConcurrentOperations;
+        private static int _currentBufferOffset;
+        private static int _defaultSocketReceiveBufferLength = 65536;
+        private static int _defaultSocketSendBufferLength = 65536;
+
+        private readonly Queue<string> _sendQueue = new Queue<string>();
         private int _flushingQueue;
+
+        /// <summary>
+        /// Gets or sets async operation buffer length this value multiplied to the maxSimultaneousOperations will define socket big_memory_buffer
+        /// You can set this value only before any network operation
+        /// Default is 65536
+        /// </summary>
+        public static int OperationBufferLength
+        {
+            get { return _operationBufferLength; }
+            set
+            {
+                if (_largeBuffer != null)
+                    throw new InvalidOperationException(string.Format("TcpConnection BufferLength is already initialized to {0} and cannot be changed", _operationBufferLength));
+                _operationBufferLength = value;
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets how many simultaneous socket operation could be performed
+        /// You can set this value before any network operation
+        /// Default is 128
+        /// </summary>
+        public static int MaxConcurrentOperations 
+        {
+            get { return _maxConcurrentOperations; }
+            set 
+            {
+                if (_largeBuffer != null)
+                    throw new InvalidOperationException(string.Format("TcpConnection MaxConcurrentOperations is already initialized to {0} and cannot be changed", _maxConcurrentOperations));
+                _maxConcurrentOperations = value;
+            }
+        }
 
         /// <summary>
         /// Gets number of objects alive for the transfer operations
@@ -125,22 +163,54 @@ namespace SharpDc.Connections
             get { return _awaitablesCount; }
         }
 
+        /// <summary>
+        /// Defines system-level receive buffer length
+        /// Default value is 65536
+        /// </summary>
+        public static int DefaultSocketReceiveBufferLength
+        {
+            get { return _defaultSocketReceiveBufferLength; }
+            set { _defaultSocketReceiveBufferLength = value; }
+        }
+
+        /// <summary>
+        /// Defines system-level send buffer length
+        /// Default value is 65536
+        /// </summary>
+        public static int DefaultSocketSendBufferLength
+        {
+            get { return _defaultSocketSendBufferLength; }
+            set { _defaultSocketSendBufferLength = value; }
+        }
+
+        /// <summary>
+        /// Gets network stream. Provides alternative way of communicating with the socket
+        /// </summary>
         public Stream Stream
         {
             get { return _stream; }
         }
 
+        /// <summary>
+        /// Gets the socket
+        /// </summary>
         public Socket Socket
         {
             get { return _socket; }
         }
 
+        /// <summary>
+        /// Gets or sets a socket receive timeout in milliseconds
+        /// </summary>
         public int ReceiveTimeout
         {
             get { return _receiveTimeout; }
             set { _receiveTimeout = value; }
         }
 
+        /// <summary>
+        /// Gets or sets a socket send timeout in milliseconds
+        /// </summary>
         public int SendTimeout
         {
             get { return _sendTimeout; }
@@ -156,7 +226,7 @@ namespace SharpDc.Connections
         }
 
         /// <summary>
-        /// Gets seconds passed from the last event
+        /// Gets seconds passed from the last network event
         /// </summary>
         public int IdleSeconds
         {
@@ -228,10 +298,42 @@ namespace SharpDc.Connections
 
             _transferAwaitablesPool = new ObjectPool<TransferSocketAwaitable>(() =>
             {
-                var arg = new SocketAsyncEventArgs();
-                const int bufferLength = 1024 * 128;
-                arg.SetBuffer(new byte[bufferLength], 0, bufferLength);
+                // we will initialize large buffer when first network operation is performed
+                if (_largeBuffer == null)
+                {
+                    // lock to avoid multiple initialization
+                    lock (_transferAwaitablesPool)
+                    {
+                        if (_largeBuffer == null)
+                        {
+                            if (_maxConcurrentOperations <= 0)
+                                _maxConcurrentOperations = 128;
+                            if (_operationBufferLength <= 0)
+                                _operationBufferLength = 64 * 1024;
+
+                            if (_maxConcurrentOperations * _operationBufferLength > int.MaxValue)
+                                throw new ConstraintException("Resulting big_socket_buffer is more than 4Gb, reduce maxSimultaneousOperations or operationBufferLength. Buffer sizes larger than 4Gb are not supported.");
+
+                            _largeBuffer = new byte[_maxConcurrentOperations * _operationBufferLength];
+
+                            Logger.Info("Large socket buffer is initialized to {1} ({0} bytes) buf length: {2} max operations: {3}",
+                                _largeBuffer.Length, 
+                                Utils.FormatBytes(_largeBuffer.Length), 
+                                _operationBufferLength, 
+                                _maxConcurrentOperations);
+                        }
+                    }
+                }
+
+                if (_awaitablesCount >= _maxConcurrentOperations)
+                    throw new OverflowException("Too many awaitables were created. Consider to increase big socket buffer or reduce simultaneous connections count");
+
                 Interlocked.Increment(ref _awaitablesCount);
+                
+                var arg = new SocketAsyncEventArgs();
+                var bufferOffset = Interlocked.Add(ref _currentBufferOffset, _operationBufferLength) - _operationBufferLength;
+                arg.SetBuffer(_largeBuffer, bufferOffset, _operationBufferLength);
+                
                 return new TransferSocketAwaitable(arg); 
             });
 
@@ -239,7 +341,6 @@ namespace SharpDc.Connections
                 var arg = new SocketAsyncEventArgs();
                 return new VoidSocketAwaitable(arg);
             });
-
         }
 
         private void Initialize()
@@ -366,7 +467,7 @@ namespace SharpDc.Connections
                     await socket.ConnectAsync(args);
 
                     LocalAddress = (IPEndPoint)socket.LocalEndPoint;
-                    _stream = new BufferedStream(new CounterStream(new NetworkStream(socket, FileAccess.Write), _downloadSpeed, _uploadSpeed), 128 * 1024);
+                    _stream = new BufferedStream(new CounterStream(new NetworkStream(socket, FileAccess.Write), _downloadSpeed, _uploadSpeed), _operationBufferLength);
                     SetConnectionStatus(ConnectionStatus.Connected);
                     SendFirstMessages();
                 }
@@ -377,7 +478,7 @@ namespace SharpDc.Connections
             }
             else if (_stream == null)
             {
-                _stream = new BufferedStream(new CounterStream(new NetworkStream(socket, FileAccess.Write), _downloadSpeed, _uploadSpeed), 128 * 1024);
+                _stream = new BufferedStream(new CounterStream(new NetworkStream(socket, FileAccess.Write), _downloadSpeed, _uploadSpeed), _operationBufferLength);
             }
         }
 
@@ -394,7 +495,7 @@ namespace SharpDc.Connections
                 {
                     var bytesReceived = await socket.ReceiveAsync(args);
                     if (bytesReceived != 0)
-                        HandleReceived(bytesReceived, args.m_eventArgs.Buffer);
+                        HandleReceived(args.m_eventArgs.Buffer, args.m_eventArgs.Offset, bytesReceived);
                     else
                     {
                         SetConnectionStatus(ConnectionStatus.Disconnected);
@@ -429,7 +530,7 @@ namespace SharpDc.Connections
             try
             {
                 var bytesReceived = await socket.ReceiveAsync(awaitable);
-                HandleReceived(bytesReceived, awaitable.m_eventArgs.Buffer);
+                HandleReceived(awaitable.m_eventArgs.Buffer, awaitable.m_eventArgs.Offset, bytesReceived);
                 return awaitable;
             }
             catch (Exception x)
@@ -449,15 +550,15 @@ namespace SharpDc.Connections
         {
             socket.SendTimeout = SendTimeout;
             socket.ReceiveTimeout = ReceiveTimeout;
-            socket.SendBufferSize = 1024 * 1024 + 256;
-            socket.ReceiveBufferSize = 1024 * 64;
+            socket.SendBufferSize = _defaultSocketSendBufferLength;
+            socket.ReceiveBufferSize = _defaultSocketReceiveBufferLength;
         }
-        
-        private void HandleReceived(int bytesReceived, byte[] buffer)
+
+        private void HandleReceived(byte[] buffer, int bufferOffset, int bytesReceived)
         {
             _downloadSpeed.Update(bytesReceived);
             _lastUpdate = Stopwatch.GetTimestamp();
-            ParseRaw(buffer, bytesReceived);
+            ParseRaw(buffer, bufferOffset, bytesReceived);
             DownloadSpeedLimit.Update(bytesReceived);
             DownloadSpeedLimitGlobal.Update(bytesReceived);
         }
@@ -473,12 +574,49 @@ namespace SharpDc.Connections
         {
         }
 
-        protected abstract void ParseRaw(byte[] buffer, int length);
+        protected abstract void ParseRaw(byte[] buffer, int offset, int length);
 
         public async Task SendAsync(string data)
         {
             var bytes = Encoding.Default.GetBytes(data);
-            await SendAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
+
+            if (bytes.Length <= _operationBufferLength)
+            {
+                // copy bytes to the big buffer...
+                var socket = _socket;
+
+                if (socket == null)
+                    return;
+
+                if (bytes.Length == 0)
+                {
+                    Logger.Warn("Skipping send of 0 bytes...");
+                    return;
+                }
+
+                var awaitable = _transferAwaitablesPool.GetObject();
+                try
+                {
+                    Buffer.BlockCopy(bytes, 0, awaitable.m_eventArgs.Buffer, awaitable.m_eventArgs.Offset, bytes.Length);
+                    awaitable.m_eventArgs.SetBuffer(awaitable.m_eventArgs.Offset, bytes.Length);
+                    var bytesSent = await socket.SendAsync(awaitable);
+                    HandleSent(bytesSent);
+                }
+                catch (Exception x)
+                {
+                    SetConnectionStatus(ConnectionStatus.Disconnected, x);
+                }
+                finally
+                {
+                    awaitable.m_eventArgs.SetBuffer(awaitable.m_eventArgs.Offset, _operationBufferLength);
+                    _transferAwaitablesPool.PutObject(awaitable);
+                }
+            }
+            else
+            {
+                Logger.Warn("Using temp buffer for string operations. This could create performance issues.");
+                await SendAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
+            }
         }
 
         public async Task SendAsync(byte[] buffer, int offset, int length)
@@ -490,6 +628,7 @@ namespace SharpDc.Connections
 
             var awaitable = _transferAwaitablesPool.GetObject();
             var previousBuffer = awaitable.m_eventArgs.Buffer;
+            var previousOffset = awaitable.m_eventArgs.Offset;
 
             try
             {
@@ -503,12 +642,12 @@ namespace SharpDc.Connections
             }
             finally
             {
-                awaitable.m_eventArgs.SetBuffer(previousBuffer, 0, previousBuffer.Length);
+                awaitable.m_eventArgs.SetBuffer(previousBuffer, previousOffset, _operationBufferLength);
                 _transferAwaitablesPool.PutObject(awaitable);
             }
         }
 
-        public async Task SendAsync(Stream stream)
+        public async Task SendAsync(Stream stream, int count = -1)
         {
             var socket = _socket;
 
@@ -517,18 +656,24 @@ namespace SharpDc.Connections
 
             var awaitable = _transferAwaitablesPool.GetObject();
             var buffer = awaitable.m_eventArgs.Buffer;
+            var offset = awaitable.m_eventArgs.Offset;
 
             try
             {
+                var sent = 0;
                 while (true)
                 {
-                    int num = await stream.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
-                    int bytesRead;
-                    if ((bytesRead = num) != 0)
+                    var bytesToRead = count == -1 ? _operationBufferLength : Math.Min(count - sent, _operationBufferLength);
+                    if (bytesToRead == 0)
+                        break;
+
+                    int bytesRead = await stream.ReadAsync(buffer, offset, bytesToRead).ConfigureAwait(false);
+                    if (bytesRead > 0)
                     {
-                        awaitable.m_eventArgs.SetBuffer(buffer, 0, bytesRead);
+                        awaitable.m_eventArgs.SetBuffer(buffer, offset, bytesRead);
                         var bytesSent = await socket.SendAsync(awaitable);
                         HandleSent(bytesSent);
+                        sent += bytesSent;
                     }
                     else
                         break;
@@ -536,13 +681,19 @@ namespace SharpDc.Connections
             }
             finally
             {
-                awaitable.m_eventArgs.SetBuffer(buffer, 0, buffer.Length);
+                awaitable.m_eventArgs.SetBuffer(buffer, offset, _operationBufferLength);
                 _transferAwaitablesPool.PutObject(awaitable);
             }
         }
 
         public async void SendQueued(string message)
         {
+            if (string.IsNullOrEmpty(message))
+            {
+                Logger.Warn("Cannot send empty string. Check your code.");
+                return;
+            }
+
             lock (_sendQueue)
             {
                 _sendQueue.Enqueue(message);
@@ -609,7 +760,7 @@ namespace SharpDc.Connections
             OnConnectionStatusChanged(ea);
 
             if (x != null)
-                Logger.Error("TcpConnection disconnected by error {0} {1}", RemoteAddress, x.Message);
+                Logger.Error("TcpConnection disconnected by error: {2} {0} {1}", RemoteAddress, x.Message, x.StackTrace);
 
             if (_connectionStatus == ConnectionStatus.Disconnected)
                 Dispose();

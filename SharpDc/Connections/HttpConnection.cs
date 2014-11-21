@@ -17,7 +17,6 @@ namespace SharpDc.Connections
     public class HttpConnection : TcpConnection
     {
         private byte[] _headerBuffer;
-        private byte[] _request;
         private bool _headerReceived;
         private int _headerBufferWritePos;
         private int _headerEnd;
@@ -48,6 +47,7 @@ namespace SharpDc.Connections
         {
             base.PrepareSocket(socket);
 
+            // we will override default buffers to maximize incoming throughput because that is the only usage of this class
             socket.SendBufferSize = 64 * 1024;
             socket.ReceiveBufferSize = 1024 * 1024 + 1024 * 4; // 1MB + 4 KB (for header)
         }
@@ -85,7 +85,7 @@ namespace SharpDc.Connections
             }
 
             sb.AppendLine();
-            _request = Encoding.UTF8.GetBytes(sb.ToString());
+            var request = sb.ToString();
 
             if (ConnectionStatus != Events.ConnectionStatus.Connected)
             {
@@ -94,7 +94,7 @@ namespace SharpDc.Connections
             
             await EnsureConnected().ConfigureAwait(false);
 
-            await SendAsync(_request, 0, _request.Length).ConfigureAwait(false);
+            await SendAsync(request).ConfigureAwait(false);
 
             int bytesReceived = 0;
             
@@ -114,7 +114,7 @@ namespace SharpDc.Connections
                     {
                         var bytesToCopy = Math.Min(args.BytesTransferred, _headerBuffer.Length - _headerBufferWritePos);
 
-                        Buffer.BlockCopy(args.Buffer, 0, _headerBuffer, _headerBufferWritePos, bytesToCopy);
+                        Buffer.BlockCopy(args.Buffer, args.Offset, _headerBuffer, _headerBufferWritePos, bytesToCopy);
 
                         var argsBufferOffset = _headerBufferWritePos;
                         _headerBufferWritePos += bytesToCopy;
@@ -159,7 +159,7 @@ namespace SharpDc.Connections
                         {
                             // send the rest part of the buffer (first real data)
                             int dataLength = args.BytesTransferred - dataStart;
-                            await transfer.SendAsync(args.Buffer, dataStart, dataLength);
+                            await transfer.SendAsync(args.Buffer, args.Offset + dataStart, dataLength);
                             bytesReceived += dataLength;
                         }
                         
@@ -167,7 +167,7 @@ namespace SharpDc.Connections
                     }
                     #endregion
 
-                    await transfer.SendAsync(args.Buffer, 0, args.BytesTransferred);
+                    await transfer.SendAsync(args.Buffer, args.Offset, args.BytesTransferred);
                     bytesReceived += args.BytesTransferred;
                 }
                 finally
@@ -192,7 +192,7 @@ namespace SharpDc.Connections
             }
         }
 
-        protected override void ParseRaw(byte[] buffer, int length)
+        protected override void ParseRaw(byte[] buffer, int offset, int length)
         {
             
         }

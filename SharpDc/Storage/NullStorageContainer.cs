@@ -14,7 +14,7 @@ namespace SharpDc.Storage
     /// </summary>
     public class NullStorageContainer : IStorageContainer
     {
-        public override bool WriteData(SegmentInfo segment, int offset, byte[] buffer, int length)
+        public override bool WriteData(SegmentInfo segment, int offset, byte[] buffer, int bufferOffset, int length)
         {
             return true;
         }
@@ -38,6 +38,7 @@ namespace SharpDc.Storage
 
         public override void Dispose()
         {
+
         }
     }
 }

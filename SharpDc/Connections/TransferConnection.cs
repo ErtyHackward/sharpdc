@@ -255,19 +255,19 @@ namespace SharpDc.Connections
             }
         }
 
-        private void ParseBinary(byte[] buffer, int length)
+        private void ParseBinary(byte[] buffer, int offset, int length)
         {
             if (_segmentInfo.Length < _segmentInfo.Position + length)
             {
                 var writeLength = (int)(_segmentInfo.Length - _segmentInfo.Position);
                 _tail = new byte[length - writeLength];
-                Buffer.BlockCopy(buffer, writeLength, _tail, 0, _tail.Length);
+                Buffer.BlockCopy(buffer, offset + writeLength, _tail, 0, _tail.Length);
                 var extra = length - writeLength;
                 length = writeLength;
                 Logger.Warn("Received extra data in parse binary len={0}", extra);
             }
 
-            if (DownloadItem.StorageContainer.WriteData(_segmentInfo, _segmentInfo.Position, buffer, length))
+            if (DownloadItem.StorageContainer.WriteData(_segmentInfo, _segmentInfo.Position, buffer, offset, length))
             {
                 _segmentInfo.Position += length;
 
@@ -406,7 +406,7 @@ namespace SharpDc.Connections
             SendAsync(msg + "|").NoWarning();
         }
         
-        protected override void ParseRaw(byte[] buffer, int length)
+        protected override void ParseRaw(byte[] buffer, int offset, int length)
         {
             if (_disposed)
                 return;
@@ -416,25 +416,26 @@ namespace SharpDc.Connections
                 var newBuffer = new byte[_tail.Length + length];
 
                 Buffer.BlockCopy(_tail, 0, newBuffer, 0, _tail.Length);
-                Buffer.BlockCopy(buffer, 0, newBuffer, _tail.Length, length);
+                Buffer.BlockCopy(buffer, offset, newBuffer, _tail.Length, length);
 
                 length = length + _tail.Length;
                 buffer = newBuffer;
+                offset = 0;
                 _tail = null;
             }
 
             if (_binaryMode)
             {
-                ParseBinary(buffer, length);
+                ParseBinary(buffer, offset, length);
                 return;
             }
             
-            int cmdEndIndex = 0;
+            int cmdEndIndex = offset;
 
             while (true)
             {
-                var prevPos = cmdEndIndex == 0 ? 0 : cmdEndIndex + 1;
-                cmdEndIndex = Array.IndexOf(buffer, (byte)'|', prevPos);
+                var prevPos = cmdEndIndex == offset ? offset : cmdEndIndex + 1;
+                cmdEndIndex = Array.IndexOf(buffer, (byte)'|', prevPos, length - (cmdEndIndex - offset));
 
                 if (cmdEndIndex == -1)
                 {
@@ -504,9 +505,9 @@ namespace SharpDc.Connections
                                 if (OnMessageAdcsnd(ref arg))
                                 {
                                     prevPos = cmdEndIndex + 1;
-                                    if (prevPos < length)
+                                    if (prevPos < length + offset)
                                     {
-                                        _tail = new byte[length - prevPos];
+                                        _tail = new byte[length - (prevPos - offset)];
                                         Buffer.BlockCopy(buffer, prevPos, _tail, 0, _tail.Length);
                                     }
 
@@ -801,7 +802,16 @@ namespace SharpDc.Connections
             if (UploadItem != null)
             {
                 var ea = new UploadItemEventArgs();
-                OnUploadItemDispose(ea);
+
+                try
+                {
+                    OnUploadItemDispose(ea);
+                }
+                catch (Exception x)
+                {
+                    Logger.Error("Exception when disposing transfer {0} {1}", x.Message, x.StackTrace);
+                }
+
                 if (!ea.Handled)
                 {
                     UploadItem.Dispose();

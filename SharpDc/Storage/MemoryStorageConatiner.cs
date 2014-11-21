@@ -83,9 +83,10 @@ namespace SharpDc.Storage
         /// <param name="segment">segment information</param>
         /// <param name="offset">segment space offset</param>
         /// <param name="buffer">data buffer to write</param>
+        /// <param name="bufferOffset"></param>
         /// <param name="length">amount of bytes to write</param>
         /// <returns></returns>
-        public override bool WriteData(SegmentInfo segment, int offset, byte[] buffer, int length)
+        public override bool WriteData(SegmentInfo segment, int offset, byte[] buffer, int bufferOffset, int length)
         {
             byte[] memorySegment;
             lock (_syncRoot)
@@ -100,7 +101,7 @@ namespace SharpDc.Storage
                 }
             }
 
-            Buffer.BlockCopy(buffer, 0, memorySegment, offset, length);
+            Buffer.BlockCopy(buffer, bufferOffset, memorySegment, offset, length);
 
             if (offset + length == segment.Length)
                 lock (_syncRoot)

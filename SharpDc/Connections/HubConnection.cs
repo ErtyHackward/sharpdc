@@ -211,9 +211,9 @@ namespace SharpDc.Connections
             }
         }
 
-        protected override void ParseRaw(byte[] buffer, int length)
+        protected override void ParseRaw(byte[] buffer, int offset, int length)
         {
-            var received = _encoding.GetString(buffer, 0, length);
+            var received = _encoding.GetString(buffer, offset, length);
 
             if (!string.IsNullOrEmpty(_dataBuffer))
             {
