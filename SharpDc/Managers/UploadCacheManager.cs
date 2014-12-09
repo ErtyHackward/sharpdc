@@ -77,7 +77,7 @@ namespace SharpDc.Managers
             CacheUseSpeed = new SpeedAverage();
         }
 
-        void HttpUploadItem_HttpSegmentNeeded(object sender, HttpSegmentEventArgs e)
+        void HttpUploadItem_HttpSegmentNeeded(object sender, UploadItemSegmentEventArgs e)
         {
             CachedItem item;
 
@@ -91,17 +91,12 @@ namespace SharpDc.Managers
 
             if (!item.IsAreaCached(e.Position, e.Length))
                 return;
-
-
-
-            FileStream fs = null;
-
+            
             try
             {
                 using (new PerfLimit(() => string.Format("Cache segment read {0}", item.CachePath), 300))
+                using (var fs = new FileStream(item.CachePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1024 * 1024))
                 {
-                    fs = item.FileStreamPool.GetObject();
-
                     var buffer = new byte[e.Length];
                     
                     fs.Position = e.Position;
@@ -115,9 +110,6 @@ namespace SharpDc.Managers
                     CacheUseSpeed.Update(e.Length);
 
                     Interlocked.Add(ref _uploadedFromCache, e.Length);
-
-                    item.FileStreamPool.PutObject(fs);
-                    fs = null;
                 }
             }
             catch (Exception exception)
@@ -128,15 +120,10 @@ namespace SharpDc.Managers
                 {
                     RemoveItemFromCache(item);
                 }
-
-                if (fs != null)
-                {
-                    fs.Dispose();
-                }
             }
         }
 
-        void HttpUploadItem_HttpSegmentDownloaded(object sender, HttpSegmentEventArgs e)
+        void HttpUploadItem_HttpSegmentDownloaded(object sender, UploadItemSegmentEventArgs e)
         {
             CachedItem item;
             
@@ -423,11 +410,6 @@ namespace SharpDc.Managers
             
             while (true)
             {
-                foreach (var pooledStream in item.FileStreamPool)
-                {
-                    pooledStream.Dispose();
-                }
-
                 try
                 {
                     File.Delete(item.CachePath);
@@ -562,8 +544,8 @@ namespace SharpDc.Managers
 
             if (!_listening)
             {
-                HttpUploadItem.HttpSegmentDownloaded += HttpUploadItem_HttpSegmentDownloaded;
-                HttpUploadItem.HttpSegmentNeeded += HttpUploadItem_HttpSegmentNeeded;
+                ProxyUploadItem.SegmentDownloaded += HttpUploadItem_HttpSegmentDownloaded;
+                ProxyUploadItem.SegmentNeeded += HttpUploadItem_HttpSegmentNeeded;
                 _listening = true;
 
                 var updateInterval = TimeSpan.FromHours(12);
@@ -631,7 +613,12 @@ namespace SharpDc.Managers
     {
         private readonly ConcurrentBag<T> _objects;
         private readonly Func<T> _objectGenerator;
-        
+
+        public int Count
+        {
+            get { return _objects.Count; }
+        }
+
         public ObjectPool(Func<T> objectGenerator)
         {
             if (objectGenerator == null) throw new ArgumentNullException("objectGenerator");

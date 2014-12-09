@@ -1,9 +1,3 @@
-// -------------------------------------------------------------
-// SharpDc project 
-// written by Vladislav Pozdnyakov (hackward@gmail.com) 2013-2013
-// licensed under the LGPL
-// -------------------------------------------------------------
-
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,20 +9,18 @@ using SharpDc.Managers;
 namespace SharpDc.Structs
 {
     /// <summary>
-    /// Allows to use http sources
+    /// Allows to use HYPER sources (high throughput connections 10Gbit +)
     /// </summary>
-    public class HttpUploadItem : ProxyUploadItem
+    public class HyperUploadItem : ProxyUploadItem
     {
         private static readonly ILogger Logger = LogManager.GetLogger();
 
-        public static HttpDownloadManager Manager = new HttpDownloadManager();
-
-        public HttpUploadItem(ContentItem item, int bufferSize = 1024 * 1024)
-            : base(item, bufferSize)
+        public static HyperDownloadManager Manager = new HyperDownloadManager();
+        
+        public HyperUploadItem(ContentItem item, int bufferSize = 1024 * 1024) : base(item, bufferSize)
         {
-
+            
         }
-
 
         public async override Task<long> SendChunkAsync(TransferConnection transfer, long filePos, long bytesRequired)
         {
@@ -57,29 +49,31 @@ namespace SharpDc.Structs
             long bytesCopied = 0;
 
             var sw = PerfTimer.StartNew();
-            using (new PerfLimit(() => string.Format("Slow http request {0} pos: {1} len: {2} filelen: {3}", SystemPath, filePos, bytesRequired, Content.Magnet.Size), 4000))
+
+            try
             {
-                try
+                byte[] buffer;
+                using (new PerfLimit(() => string.Format("Slow HYPER request {0} pos: {1} len: {2} filelen: {3}", SystemPath, filePos, bytesRequired, Content.Magnet.Size), 4000))
+                    buffer = await Manager.DownloadSegment(SystemPath, filePos, (int)bytesRequired);
+
+                if (buffer != null)
                 {
-                    // custom http connections pool
-                    await Manager.CopyChunkToTransferAsync(transfer, SystemPath, filePos, bytesRequired).ConfigureAwait(false);
-
-                    // default http connections pool
-                    //var responseStream = await HttpHelper.GetHttpChunkAsync(SystemPath, filePos, bytesRequired);
-                    //await transfer.SendAsync(responseStream);
-
-                    bytesCopied = bytesRequired;
-
-                    Interlocked.Add(ref _uploadedBytes, bytesCopied);
+                    await transfer.SendAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
+                    HyperDownloadManager.SegmentsPool.PutObject(buffer);
                 }
-                catch (Exception x)
-                {
-                    Logger.Error("DownloadChunk error: {0}", x.Message);
-                }
+                    
+                bytesCopied = bytesRequired;
+
+                Interlocked.Add(ref _uploadedBytes, bytesCopied);
             }
+            catch (Exception x)
+            {
+                Logger.Error("DownloadChunk error: {0}", x.Message);
+            }
+            
             sw.Stop();
 
-            HttpHelper.RegisterDownloadTime((int)sw.ElapsedMilliseconds);
+            //HttpHelper.RegisterDownloadTime((int)sw.ElapsedMilliseconds);
 
             if (IsSegmentDownloadedAttached)
             {
