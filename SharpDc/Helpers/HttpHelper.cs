@@ -125,6 +125,24 @@ namespace SharpDc.Helpers
             }
         }
 
+        public static async Task<long> GetFileSizeAsync(string uri)
+        {
+            var request = WebRequest.Create(new Uri(uri));
+            request.Method = "HEAD";
+            request.Timeout = 4000;
+            try
+            {
+                using (var response = await request.GetResponseAsync())
+                {
+                    return response.ContentLength;
+                }
+            }
+            catch (Exception)
+            {
+                return -1;
+            }
+        }
+
         public static long GetFileSize(string uri, out Exception exception)
         {
             exception = null;

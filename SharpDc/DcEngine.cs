@@ -32,7 +32,6 @@ namespace SharpDc
         private static readonly ILogger Logger = LogManager.GetLogger();
 
         private UdpConnection _udpConnection;
-        private string _localAddress;
         private TcpConnectionListener _tcpConnectionListener;
         private int _active;
         private Timer _updateTimer;
@@ -82,20 +81,6 @@ namespace SharpDc
         public TcpConnectionListener TcpConnectionListener
         {
             get { return _tcpConnectionListener; }
-        }
-
-        /// <summary>
-        /// Gets or sets local ip-address. This filed should contain external(router) ip to work in active mode.
-        /// </summary>
-        public string LocalAddress
-        {
-            get { return _localAddress; }
-            set
-            {
-                _localAddress = value;
-                LocalUdpAddress = string.Format("{0}:{1}", _localAddress, Settings.UdpPort);
-                LocalTcpAddress = string.Format("{0}:{1}", _localAddress, Settings.TcpPort);
-            }
         }
 
         /// <summary>
@@ -320,13 +305,11 @@ namespace SharpDc
                 {
                     if (ip.AddressFamily.ToString() == "InterNetwork")
                     {
-                        LocalAddress = ip.ToString();
+                        Settings.LocalAddress = ip.ToString();
                         break;
                     }
                 }
             }
-            else
-                LocalAddress = Settings.LocalAddress;
 
             if (Settings.HttpQueueLimit != 0)
                 HttpUploadItem.Manager.QueueLimit = Settings.HttpQueueLimit;
@@ -416,7 +399,7 @@ namespace SharpDc
                     hub.StartAsync();
                 }
             }
-
+            
             // no need to do anything before we have at least one connection
             if (!Active)
                 return;
@@ -692,6 +675,10 @@ namespace SharpDc
                 case EngineSettingType.HttpConnectionsPerServer:
                     HttpUploadItem.Manager.ConnectionsPerServer = Settings.HttpConnectionsPerServer;
                     break;
+                case EngineSettingType.LocalAddress:
+                    LocalUdpAddress = string.Format("{0}:{1}", Settings.LocalAddress, Settings.UdpPort);
+                    LocalTcpAddress = string.Format("{0}:{1}", Settings.LocalAddress, Settings.TcpPort);
+                    break;
             }
         }
 
@@ -738,7 +725,7 @@ namespace SharpDc
         private void HubOwnIpReceived(object sender, EventArgs e)
         {
             var hub = (HubConnection)sender;
-            LocalAddress = hub.CurrentUser.IP;
+            Settings.LocalAddress = hub.CurrentUser.IP;
         }
 
         private void HubPassiveSearchResult(object sender, SearchResultEventArgs e)

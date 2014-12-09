@@ -92,6 +92,7 @@ namespace SharpDc.Connections
 
                     if (!ea.Handled)
                     {
+                        Logger.Warn("Closing non-handled connection {0}", socket.RemoteEndPoint);
                         using (new PerfLimit("Tcp connection listener close"))
                             socket.Close();
                     }

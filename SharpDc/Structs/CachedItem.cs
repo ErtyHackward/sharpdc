@@ -19,8 +19,13 @@ namespace SharpDc.Structs
 {
     public class CachedItem
     {
-        public ObjectPool<FileStream> FileStreamPool { get; private set; }
-
+        public struct CachedFileStream
+        {
+            public long LastAccess { get; set; }
+            
+            public FileStream FileStream { get; set; }
+        }
+        
         public Magnet Magnet { get; private set; }
         
         public int SegmentLength { get; private set; }
@@ -35,7 +40,7 @@ namespace SharpDc.Structs
         public string CachePath { get; set; }
 
         public DateTime Created { get; set; }
-
+        
         public string BitFileldFilePath
         {
             get { return CachePath + ".bitfield"; }
@@ -53,8 +58,6 @@ namespace SharpDc.Structs
             SegmentLength = segmentLength;
             CachedSegments = segments;
             Created = DateTime.Now;
-
-            FileStreamPool = new ObjectPool<FileStream>(() => new FileStream(CachePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1024 * 128));
         }
 
         /// <summary>

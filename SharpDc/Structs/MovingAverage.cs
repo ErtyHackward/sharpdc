@@ -49,5 +49,13 @@ namespace SharpDc.Structs
                 _queue.Dequeue();
             }
         }
+
+        public int GetMax()
+        {
+            lock (_syncRoot)
+            {
+                return _queue.DefaultIfEmpty().Max(p => p.Value);
+            }
+        }
     }
 }

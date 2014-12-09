@@ -159,7 +159,7 @@ namespace SharpDc.Connections
                         {
                             // send the rest part of the buffer (first real data)
                             int dataLength = args.BytesTransferred - dataStart;
-                            await transfer.SendAsync(args.Buffer, args.Offset + dataStart, dataLength);
+                            await transfer.SendAsync(args.Buffer, args.Offset + dataStart, dataLength).ConfigureAwait(false);
                             bytesReceived += dataLength;
                         }
                         
@@ -167,7 +167,7 @@ namespace SharpDc.Connections
                     }
                     #endregion
 
-                    await transfer.SendAsync(args.Buffer, args.Offset, args.BytesTransferred);
+                    await transfer.SendAsync(args.Buffer, args.Offset, args.BytesTransferred).ConfigureAwait(false);
                     bytesReceived += args.BytesTransferred;
                 }
                 finally
@@ -246,4 +246,6 @@ namespace SharpDc.Connections
             }
         }
     }
+
+
 }

@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Diagnostics;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -114,8 +115,8 @@ namespace SharpDc.Connections
         private static int _awaitablesCount;
 
         private static byte[] _largeBuffer;
-        private static int _operationBufferLength;
-        private static int _maxConcurrentOperations;
+        private static int _operationBufferLength = 65536;
+        private static int _maxConcurrentOperations = 128;
         private static int _currentBufferOffset;
         private static int _defaultSocketReceiveBufferLength = 65536;
         private static int _defaultSocketSendBufferLength = 65536;
@@ -161,6 +162,11 @@ namespace SharpDc.Connections
         public static int AwaitablesAlive 
         {
             get { return _awaitablesCount; }
+        }
+
+        public static int IdleAwaitables
+        {
+            get { return _transferAwaitablesPool.Count; }
         }
 
         /// <summary>
@@ -467,9 +473,16 @@ namespace SharpDc.Connections
                     await socket.ConnectAsync(args);
 
                     LocalAddress = (IPEndPoint)socket.LocalEndPoint;
-                    _stream = new BufferedStream(new CounterStream(new NetworkStream(socket, FileAccess.Write), _downloadSpeed, _uploadSpeed), _operationBufferLength);
+                    _stream =
+                        new BufferedStream(
+                            new CounterStream(new NetworkStream(socket, FileAccess.Write), _downloadSpeed, _uploadSpeed),
+                            _operationBufferLength);
                     SetConnectionStatus(ConnectionStatus.Connected);
                     SendFirstMessages();
+                }
+                catch (Exception x)
+                {
+                    SetConnectionStatus(ConnectionStatus.Disconnected, x);
                 }
                 finally
                 {
@@ -634,6 +647,10 @@ namespace SharpDc.Connections
             {
                 awaitable.m_eventArgs.SetBuffer(buffer, offset, length);
                 var bytesSent = await socket.SendAsync(awaitable);
+
+                if (bytesSent != length)
+                    Debugger.Break();
+
                 HandleSent(bytesSent);
             }
             catch (Exception x)
@@ -733,7 +750,7 @@ namespace SharpDc.Connections
                 }
             }
 
-            await SendAsync(stringToSend);
+            await SendAsync(stringToSend).ConfigureAwait(false);
         }
 
 
@@ -760,7 +777,7 @@ namespace SharpDc.Connections
             OnConnectionStatusChanged(ea);
 
             if (x != null)
-                Logger.Error("TcpConnection disconnected by error: {2} {0} {1}", RemoteAddress, x.Message, x.StackTrace);
+                Logger.Error("TcpConnection disconnected by error: {0} {1} {2}", RemoteAddress, x.Message, x.StackTrace);
 
             if (_connectionStatus == ConnectionStatus.Disconnected)
                 Dispose();
