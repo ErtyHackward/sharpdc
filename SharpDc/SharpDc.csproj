@@ -135,12 +135,14 @@
     <Compile Include="Interfaces\IStorageContainer.cs" />
     <Compile Include="IThreadPoolProxy.cs" />
     <Compile Include="Logging\LogManager.cs" />
+    <Compile Include="Managers\CachePoint.cs" />
     <Compile Include="Managers\ContentItem.cs" />
     <Compile Include="Managers\DownloadManager.cs" />
     <Compile Include="Managers\FileSourceManager.cs" />
     <Compile Include="Managers\HttpDownloadManager.cs" />
     <Compile Include="Managers\HubSearchResult.cs" />
     <Compile Include="Managers\MemoryShare.cs" />
+    <Compile Include="Managers\ObjectPool.cs" />
     <Compile Include="Managers\SearchManager.cs" />
     <Compile Include="Managers\SearchQuery.cs" />
     <Compile Include="Managers\SourceManager.cs" />
@@ -193,6 +195,7 @@
     <Compile Include="Structs\Source.cs" />
     <Compile Include="Structs\SpeedAverage.cs" />
     <Compile Include="Structs\SpeedLimiter.cs" />
+    <Compile Include="Structs\StatItem.cs" />
     <Compile Include="Structs\TagInfo.cs" />
     <Compile Include="Structs\UploadItem.cs" />
     <Compile Include="Structs\UploadItemSegmentEventArgs.cs" />
