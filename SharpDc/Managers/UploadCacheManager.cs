@@ -6,7 +6,6 @@
 
 using System;
 using System.Collections;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -55,6 +54,11 @@ namespace SharpDc.Managers
         /// </summary>
         public SpeedAverage CacheUseSpeed { get; private set; }
 
+        /// <summary>
+        /// Gets average time in milliseconds of segment read from the cache storage
+        /// </summary>
+        public MovingAverage CacheReadAverage { get; private set; }
+
         public long UploadedFromCache
         {
             get { return _uploadedFromCache; }
@@ -75,6 +79,7 @@ namespace SharpDc.Managers
         {
             _engine = engine;
             CacheUseSpeed = new SpeedAverage();
+            CacheReadAverage = new MovingAverage(TimeSpan.FromSeconds(10));
         }
 
         void HttpUploadItem_HttpSegmentNeeded(object sender, UploadItemSegmentEventArgs e)
@@ -94,7 +99,8 @@ namespace SharpDc.Managers
             
             try
             {
-                using (new PerfLimit(() => string.Format("Cache segment read {0}", item.CachePath), 300))
+                var pt = PerfTimer.StartNew();
+                using (new PerfLimit(() => string.Format("Cache segment read {0}", item.CachePath), 1000))
                 using (var fs = new FileStream(item.CachePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1024 * 1024))
                 {
                     var buffer = new byte[e.Length];
@@ -108,6 +114,7 @@ namespace SharpDc.Managers
                     e.FromCache = true;
 
                     CacheUseSpeed.Update(e.Length);
+                    CacheReadAverage.Update((int)pt.ElapsedMilliseconds);
 
                     Interlocked.Add(ref _uploadedFromCache, e.Length);
                 }
@@ -566,88 +573,6 @@ namespace SharpDc.Managers
                 _engine.StatisticsManager.SetItem(item);
             }
             Logger.Info("Decreasing statistics rates done");
-        }
-    }
-
-    internal class CachePoint
-    {
-        private long _usedSpace;
-        private readonly List<CachedItem> _items = new List<CachedItem>();
-
-        public string SystemPath { get; set; }
-
-        public long TotalSpace { get; set; }
-        
-        public long FreeSpace {
-            get { return TotalSpace - _usedSpace; }
-        }
-
-        public long UsedSpace
-        {
-            get { return _usedSpace; }
-        }
-
-        public void AddItem(CachedItem item)
-        {
-            _items.Add(item);
-            _usedSpace = _items.Sum(i => i.Magnet.Size);
-        }
-
-        public void RemoveItem(CachedItem item)
-        {
-            if (_items.Remove(item))
-            {
-                if (_items.Count > 0)
-                    _usedSpace = _items.Sum(i => i.Magnet.Size);
-                else
-                {
-                    _usedSpace = 0;
-                }
-            }
-        }
-
-
-    }
-
-    public class ObjectPool<T> : IEnumerable<T>
-    {
-        private readonly ConcurrentBag<T> _objects;
-        private readonly Func<T> _objectGenerator;
-
-        public int Count
-        {
-            get { return _objects.Count; }
-        }
-
-        public ObjectPool(Func<T> objectGenerator)
-        {
-            if (objectGenerator == null) throw new ArgumentNullException("objectGenerator");
-            _objects = new ConcurrentBag<T>();
-            _objectGenerator = objectGenerator;
-        }
-
-        public T GetObject()
-        {
-            T item;
-            
-            if (_objects.TryTake(out item)) 
-                return item;
-            return _objectGenerator();
-        }
-
-        public void PutObject(T item)
-        {
-            _objects.Add(item);
-        }
-        
-        public IEnumerator<T> GetEnumerator()
-        {
-            return _objects.GetEnumerator();
-        }
-
-        IEnumerator IEnumerable.GetEnumerator()
-        {
-            return GetEnumerator();
         }
     }
 }

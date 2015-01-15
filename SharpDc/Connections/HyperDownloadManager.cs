@@ -54,6 +54,10 @@ namespace SharpDc.Connections
 
         public MovingAverage SegmentDownloadTime { get; private set; }
 
+        public SpeedAverage TimeoutSegments { get; private set; }
+
+        public SpeedAverage TimeoutFilechecks { get; private set; }
+
         public int AliveTasks
         {
             get { return _aliveTasks.Count; }
@@ -68,6 +72,8 @@ namespace SharpDc.Connections
             MissedCheckResponses = new SpeedAverage();
             MissedSegmentResponses = new SpeedAverage();
             SegmentDownloadTime = new MovingAverage(TimeSpan.FromSeconds(10));
+            TimeoutSegments = new SpeedAverage();
+            TimeoutFilechecks = new SpeedAverage();
         }
 
         public void RegisterHyperServer(string server)
@@ -146,6 +152,7 @@ namespace SharpDc.Connections
                     HyperMeta timeoutentry;
                     _aliveTasks.TryRemove(aliveTask.Key, out timeoutentry);
                     timeoutentry.SegmentAwaitable.SetResult(null);
+                    TimeoutSegments.Update(1);
                 }
 
                 if (executionTimeS > 60 && aliveTask.Value.FileCheckAwaitable != null)
@@ -153,6 +160,7 @@ namespace SharpDc.Connections
                     HyperMeta timeoutentry;
                     _aliveTasks.TryRemove(aliveTask.Key, out timeoutentry);
                     timeoutentry.FileCheckAwaitable.SetResult(-1);
+                    TimeoutFilechecks.Update(1);
                 }
             }
 

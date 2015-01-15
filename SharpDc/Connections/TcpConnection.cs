@@ -123,6 +123,7 @@ namespace SharpDc.Connections
 
         private readonly Queue<string> _sendQueue = new Queue<string>();
         private int _flushingQueue;
+        private readonly SpeedAverage _sendQueuedSkips = new SpeedAverage();
 
         /// <summary>
         /// Gets or sets async operation buffer length this value multiplied to the maxSimultaneousOperations will define socket big_memory_buffer
@@ -281,7 +282,15 @@ namespace SharpDc.Connections
         /// Allows to control this tcpConnection download speed limit
         /// </summary>
         public SpeedLimiter DownloadSpeedLimit { get; private set; }
-        
+
+        /// <summary>
+        /// Gets average messages dropped using SendQueued during last 10 seconds
+        /// </summary>
+        public SpeedAverage SendQueuedSkips
+        {
+            get { return _sendQueuedSkips; }
+        }
+
         #region Events
 
         /// <summary>
@@ -710,9 +719,15 @@ namespace SharpDc.Connections
                 Logger.Warn("Cannot send empty string. Check your code.");
                 return;
             }
-
+            
             lock (_sendQueue)
             {
+                if (_sendQueue.Count > 1000)
+                {
+                    _sendQueuedSkips.Update(1);
+                    return;
+                }
+
                 _sendQueue.Enqueue(message);
             }
 
