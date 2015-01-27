@@ -232,6 +232,17 @@ namespace SharpDc.Managers
             }
         }
 
+        public IEnumerable<DownloadItem> Enumerate()
+        {
+            lock (_synObject)
+            {
+                for (int i = 0; i < _tthList.Count; i++)
+                {
+                    yield return _tthList.Values[i];
+                }
+            }
+        }
+
         public void AddDownload(DownloadItemsGroup group)
         {
             lock (_synObject)
