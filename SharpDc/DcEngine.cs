@@ -488,10 +488,12 @@ namespace SharpDc
             if (e.DownloadItem.SaveTargets == null)
                 return;
 
-            var drive1 = Path.GetPathRoot(e.DownloadItem.SaveTargets[0]);
+            var fi = new FileInfo(e.DownloadItem.SaveTargets[0]);
 
+            var drive1 = Path.GetPathRoot(e.DownloadItem.SaveTargets[0]);
+            
             // here we should check for free space, 
-            if (!string.IsNullOrEmpty(drive1) && FileHelper.GetFreeDiskSpace(drive1) < e.DownloadItem.Magnet.Size)
+            if (!string.IsNullOrEmpty(drive1) && FileHelper.GetFreeSpace(fi.DirectoryName) < e.DownloadItem.Magnet.Size)
             {
                 throw new NoFreeSpaceException(drive1);
             }

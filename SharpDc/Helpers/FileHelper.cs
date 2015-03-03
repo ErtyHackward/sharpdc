@@ -12,7 +12,14 @@ namespace SharpDc.Helpers
 {
     public static class FileHelper
     {
+        public static readonly bool IsLinux;
         private static string _defaultPath;
+
+        static FileHelper()
+        {
+            var p = (int)Environment.OSVersion.Platform;
+            IsLinux = (p == 4) || (p == 6) || (p == 128);
+        }
 
         private static readonly string[] ReservedFileNames = new[]
                                                                  {
@@ -21,6 +28,9 @@ namespace SharpDc.Helpers
                                                                      "LPT2", "LPT3", "PRN", "NUL"
                                                                  };
 
+        /// <summary>
+        /// Returns program start folder path
+        /// </summary>
         public static string DefaultPath
         {
             get
@@ -182,23 +192,24 @@ namespace SharpDc.Helpers
         /// <returns></returns>
         public static bool FileExists(string path)
         {
-#if MONO
-            return File.Exists(path);
-#else
+            if (IsLinux)
+                return File.Exists(path);
+            
             // 10 times faster than System.IO.File.Exists()
             var s = new STAT();
             return _stat64(path, ref s) == 0;
-#endif
         }
 
-        public static bool FileExists(string path, out long size,  out DateTime lastWriteTime)
+        public static bool FileExists(string path, out long size, out DateTime lastWriteTime)
         {
-#if MONO
-            var fi = new FileInfo(path);
-            lastWriteTime = fi.LastWriteTime;
-            size = fi.Length;
-            return fi.Exists
-#else
+            if (IsLinux)
+            {
+                var fi = new FileInfo(path);
+                lastWriteTime = fi.LastWriteTime;
+                size = fi.Length;
+                return fi.Exists;
+            }
+
             // 10 times faster than System.IO.File.Exists()
             var s = new STAT();
 
@@ -206,7 +217,6 @@ namespace SharpDc.Helpers
             lastWriteTime = UnixTimeStampToDateTime(s.st_mtime);
             size = s.st_size;
             return result == 0;
-#endif
         }
 
         public static DateTime UnixTimeStampToDateTime(double unixTimeStamp)
@@ -243,7 +253,6 @@ namespace SharpDc.Helpers
             }
         }
 
-#if !MONO
         [DllImport("kernel32.dll", EntryPoint = "GetDiskFreeSpaceExA")]
         private static extern long GetDiskFreeSpaceEx(string lpDirectoryName,
                                                       out long lpFreeBytesAvailableToCaller,
@@ -269,33 +278,31 @@ namespace SharpDc.Helpers
             public long st_ctime;
         }
 
-#endif
-
         /// <summary>
-        /// Get the free diskspace of a drive
+        /// Get the free directory space
         /// by the drive' name in bytes
         /// </summary>
-        /// <param name="driveName">Drive's name like C:</param>
+        /// <param name="directoryName">Directory's name like C:\Downloads</param>
         /// <returns>Free Space in bytes as long</returns>
-        /// <exception cref="ArgumentException">
-        /// Thrown if the name of the drive can't be evaluated
-        /// </exception>
-        public static long GetFreeDiskSpace(string driveName)
+        public static long GetFreeSpace(string directoryName)
         {
-            if (!Directory.Exists(driveName))
-                throw new ArgumentException("Invalid Drive " + driveName);
+            if (!Directory.Exists(directoryName))
+                throw new ArgumentException("Invalid directory " + directoryName);
 
-#if MONO
-            var di = new DriveInfo(driveName);
-            return di.AvailableFreeSpace;
-#else
+            if (IsLinux)
+            {
+                var directory = new DirectoryInfo(directoryName);
+                return new DriveInfo(directory.Root.FullName).AvailableFreeSpace; ;
+            }
+
+            var driveName = new DirectoryInfo(directoryName).Root.FullName;
+                
             long totalBytes, freeBytes, freeBytesAvail;
             GetDiskFreeSpaceEx(driveName,
-                               out freeBytesAvail,
-                               out totalBytes,
-                               out freeBytes);
+                out freeBytesAvail,
+                out totalBytes,
+                out freeBytes);
             return freeBytesAvail;
-#endif
         }
 
         /// <summary>
