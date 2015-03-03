@@ -608,14 +608,11 @@ namespace SharpDc.Managers
 
         public void DropSource(Source source)
         {
-            lock (_synRoot)
+            using (new PerfLimit("Connection dispose", 500))
+            foreach (var transferConnection in Transfers())
             {
-                using (new PerfLimit("Connection dispose", 500))
-                foreach (var transferConnection in _connections)
-                {
-                    if (transferConnection.Source == source)
-                        transferConnection.DisconnectAsync();
-                }
+                if (transferConnection.Source == source)
+                    transferConnection.DisconnectAsync();
             }
         }
 
@@ -632,12 +629,9 @@ namespace SharpDc.Managers
 
         public void Dispose()
         {
-            lock (_synRoot)
+            foreach (var trans in Transfers())
             {
-                foreach (var transferConnection in _connections.ToList())
-                {
-                    transferConnection.Dispose();
-                }
+                trans.Dispose();
             }
         }
 
@@ -647,13 +641,16 @@ namespace SharpDc.Managers
         /// <returns></returns>
         public IEnumerable<TransferConnection> Transfers()
         {
+            List<TransferConnection> transfers;
+
             lock (_synRoot)
             {
-                using (new PerfLimit("Transfers enumeration", 300))
-                foreach (var transferConnection in _connections)
-                {
-                    yield return transferConnection;
-                }
+                transfers = _connections.ToList();
+            }
+
+            foreach (var transferConnection in transfers)
+            {
+                yield return transferConnection;
             }
         }
 

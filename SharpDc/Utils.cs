@@ -202,6 +202,9 @@ namespace SharpDc
 
         public static int[] BitArraySerialize(BitArray bitArray)
         {
+            if (bitArray == null)
+                return new int[0];
+
             var len = bitArray.Length / 32;
             if (bitArray.Length % 32 != 0)
                 len++;

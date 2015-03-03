@@ -380,7 +380,7 @@ namespace SharpDc.Connections
                                 Start = _segmentInfo.StartPosition,
                                 Length = _segmentInfo.Length,
                                 Request = "TTH/" + DownloadItem.Magnet.TTH
-                            }.Raw + "|");
+                            }.Raw);
         }
 
         /// <summary>
