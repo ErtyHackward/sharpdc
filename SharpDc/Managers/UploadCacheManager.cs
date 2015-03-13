@@ -11,6 +11,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading;
+using SharpDc.Connections;
 using SharpDc.Hash;
 using SharpDc.Helpers;
 using SharpDc.Logging;
@@ -336,8 +337,15 @@ namespace SharpDc.Managers
                         if (File.Exists(item.CachePath))
                             File.Delete(item.CachePath);
 
-                        using (var wc = new WebClient())
-                            wc.DownloadFile(httpUri, item.CachePath);
+                        if (httpUri.StartsWith("http"))
+                        {
+                            using (var wc = new WebClient())
+                                wc.DownloadFile(httpUri, item.CachePath);
+                        }
+                        else if (httpUri.StartsWith("hyp"))
+                        {
+                            HyperUploadItem.Manager.DownloadFile(httpUri, item.CachePath).RunSynchronously();
+                        }
 
                         if (CacheVerification)
                         {
