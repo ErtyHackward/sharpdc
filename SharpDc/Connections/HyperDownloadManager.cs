@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -167,6 +168,27 @@ namespace SharpDc.Connections
             foreach (var hyperClientSession in _sessions)
             {
                 hyperClientSession.ValidateConnections();
+            }
+        }
+
+        public async Task DownloadFile(string virtualPath, string systemPath)
+        {
+            var size = await GetFileSize(virtualPath);
+            long position = 0;
+            using (var fs = File.OpenWrite(systemPath))
+            {
+                while (position < size)
+                {
+                    var chunkLength = (int)Math.Min(1024 * 1024, size - position);
+                    var bytes = await DownloadSegment(virtualPath, position, chunkLength);
+
+                    if (bytes == null)
+                        throw new IOException();
+
+                    await fs.WriteAsync(bytes, 0, bytes.Length);
+
+                    position += chunkLength;
+                }
             }
         }
 
