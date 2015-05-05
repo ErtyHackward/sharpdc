@@ -7,10 +7,12 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading;
+using System.Xml.Serialization;
 using SharpDc.Connections;
 using SharpDc.Hash;
 using SharpDc.Helpers;
@@ -60,6 +62,11 @@ namespace SharpDc.Managers
         /// </summary>
         public MovingAverage CacheReadAverage { get; private set; }
 
+        /// <summary>
+        /// Defines day time ranges when download to a cache is disabled
+        /// </summary>
+        public List<DayTimeSpan> DisabledTime { get; set; }
+
         public long UploadedFromCache
         {
             get { return _uploadedFromCache; }
@@ -75,6 +82,7 @@ namespace SharpDc.Managers
                 }
             }
         }
+
 
         public UploadCacheManager(DcEngine engine)
         {
@@ -142,6 +150,13 @@ namespace SharpDc.Managers
 
             if (item == null)
             {
+                var disabled = DisabledTime;
+                if (disabled != null)
+                { 
+                    if (disabled.Any(s => s.IsMatch()))
+                        return; // it's not the time to download items...
+                }
+
                 StatItem statItem;
                 if (!_engine.StatisticsManager.TryGetValue(e.Magnet.TTH, out statItem))
                     return; // no statistics on the item, ignore
@@ -581,6 +596,40 @@ namespace SharpDc.Managers
                 _engine.StatisticsManager.SetItem(item);
             }
             Logger.Info("Decreasing statistics rates done");
+        }
+    }
+
+    [Serializable]
+    public struct DayTimeSpan
+    {
+        [XmlAttribute("Start")]
+        public string StartString
+        {
+            get { return Start.ToString(); }
+            set { Start = TimeSpan.Parse(value); }
+        }
+
+        [XmlAttribute("End")]
+        public string EndString
+        {
+            get { return End.ToString(); }
+            set { End = TimeSpan.Parse(value); }
+        }
+
+
+        [XmlIgnore]
+        public TimeSpan Start { get; set; }
+        [XmlIgnore]
+        public TimeSpan End { get; set; }
+
+        public bool IsMatch()
+        {
+            return IsMatch(DateTime.Now);
+        }
+
+        public bool IsMatch(DateTime now)
+        {
+            return now.TimeOfDay > Start && now.TimeOfDay < End;
         }
     }
 }
