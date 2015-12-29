@@ -1,6 +1,7 @@
 using System;
 using System.Net.Sockets;
 using SharpDc.Logging;
+using SharpDc.Managers;
 
 namespace SharpDc.Connections
 {
@@ -12,16 +13,14 @@ namespace SharpDc.Connections
 
         protected virtual void OnHandshake()
         {
-            var handler = Handshake;
-            if (handler != null) handler(this, EventArgs.Empty);
+            Handshake?.Invoke(this, EventArgs.Empty);
         }
 
         public event EventHandler<HyperSegmentRequestEventArgs> SegmentRequested;
 
         protected virtual void OnSegmentRequested(HyperSegmentRequestEventArgs e)
         {
-            var handler = SegmentRequested;
-            if (handler != null) handler(this, e);
+            SegmentRequested?.Invoke(this, e);
         }
         
         public HyperServerConnection(Socket socket)
@@ -91,6 +90,6 @@ namespace SharpDc.Connections
     public struct HyperSegmentDataMessage
     {
         public int Token;
-        public byte[] Buffer;
+        public ReusableObject<byte[]> Buffer;
     }
 }

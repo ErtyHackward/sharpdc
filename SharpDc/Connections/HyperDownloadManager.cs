@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using SharpDc.Helpers;
 using SharpDc.Logging;
 using SharpDc.Managers;
 using SharpDc.Structs;
@@ -16,8 +17,7 @@ namespace SharpDc.Connections
     {
         private readonly List<HyperClientSession> _sessions = new List<HyperClientSession>();
         private static readonly ILogger Logger = LogManager.GetLogger();
-        private static readonly ObjectPool<byte[]> segmentsPool = new ObjectPool<byte[]>(() => new byte[1024 * 1024]);
-        
+
         private Timer _eachSecond;
         
         private void EachSecondCallback(object state)
@@ -27,17 +27,14 @@ namespace SharpDc.Connections
 
         private struct HyperMeta
         {
-            public TaskCompletionSource<byte[]> SegmentAwaitable;
+            public TaskCompletionSource<ReusableObject<byte[]>> SegmentAwaitable;
             public TaskCompletionSource<long> FileCheckAwaitable;
             public long Created;
         }
 
         private readonly ConcurrentDictionary<int, HyperMeta> _aliveTasks = new ConcurrentDictionary<int, HyperMeta>();
 
-        public static ObjectPool<byte[]> SegmentsPool
-        {
-            get { return segmentsPool; }
-        }
+        public static ObjectPool<byte[]> SegmentsPool { get; } = new ObjectPool<byte[]>(() => new byte[1024 * 1024]);
 
         /// <summary>
         /// Gets or sets transfer connections count per session
@@ -59,10 +56,7 @@ namespace SharpDc.Connections
 
         public SpeedAverage TimeoutFilechecks { get; private set; }
 
-        public int AliveTasks
-        {
-            get { return _aliveTasks.Count; }
-        }
+        public int AliveTasks => _aliveTasks.Count;
 
         public HyperDownloadManager()
         {
@@ -104,7 +98,7 @@ namespace SharpDc.Connections
                 if (meta.FileCheckAwaitable == null)
                 {
                     if (meta.SegmentAwaitable != null)
-                        meta.SegmentAwaitable.SetResult(null);
+                        meta.SegmentAwaitable.SetResult(new ReusableObject<byte[]>());
                     
                     Logger.Error("No awaitable for file check!");
                     return;
@@ -144,6 +138,9 @@ namespace SharpDc.Connections
 
         public void Update()
         {
+            int droppedSegmentRequests = 0;
+            int droppedFileChecks = 0;
+
             foreach (var aliveTask in _aliveTasks)
             {
                 var executionTimeS = (Stopwatch.GetTimestamp() - aliveTask.Value.Created) / Stopwatch.Frequency;
@@ -151,19 +148,26 @@ namespace SharpDc.Connections
                 if (executionTimeS > 4 && aliveTask.Value.SegmentAwaitable != null)
                 {
                     HyperMeta timeoutentry;
-                    _aliveTasks.TryRemove(aliveTask.Key, out timeoutentry);
-                    timeoutentry.SegmentAwaitable.SetResult(null);
+                    if (_aliveTasks.TryRemove(aliveTask.Key, out timeoutentry))
+                        timeoutentry.SegmentAwaitable.SetResult(new ReusableObject<byte[]>());
                     TimeoutSegments.Update(1);
+
+                    droppedSegmentRequests++;
                 }
 
                 if (executionTimeS > 60 && aliveTask.Value.FileCheckAwaitable != null)
                 {
                     HyperMeta timeoutentry;
-                    _aliveTasks.TryRemove(aliveTask.Key, out timeoutentry);
-                    timeoutentry.FileCheckAwaitable.SetResult(-1);
+                    if (_aliveTasks.TryRemove(aliveTask.Key, out timeoutentry))
+                        timeoutentry.FileCheckAwaitable.SetResult(-1);
                     TimeoutFilechecks.Update(1);
+
+                    droppedFileChecks++;
                 }
             }
+
+            if (droppedFileChecks > 0 || droppedSegmentRequests > 0)
+                Logger.Warn($"Dropping timeouted requests filecheck: {droppedFileChecks} segments: {droppedSegmentRequests}");
 
             foreach (var hyperClientSession in _sessions)
             {
@@ -171,33 +175,52 @@ namespace SharpDc.Connections
             }
         }
 
-        public async Task DownloadFile(string virtualPath, string systemPath)
+        public async Task DownloadFile(string virtualPath, string systemPath, bool lowPriority = false)
         {
-            var size = await GetFileSize(virtualPath);
+            var size = await GetFileSize(virtualPath).ConfigureAwait(false);
             long position = 0;
+
+            using (lowPriority ? ThreadUtility.EnterBackgroundProcessingMode() : null)
             using (var fs = File.OpenWrite(systemPath))
             {
                 while (position < size)
                 {
                     var chunkLength = (int)Math.Min(1024 * 1024, size - position);
-                    var bytes = await DownloadSegment(virtualPath, position, chunkLength);
+                    using (var bytes = await DownloadSegment(virtualPath, position, chunkLength).ConfigureAwait(false))
+                    {
+                        if (bytes.Object == null)
+                            throw new IOException();
 
-                    if (bytes == null)
-                        throw new IOException();
-
-                    await fs.WriteAsync(bytes, 0, bytes.Length);
+                        await fs.WriteAsync(bytes.Object, 0, chunkLength).ConfigureAwait(false);
+                    }
 
                     position += chunkLength;
                 }
             }
         }
 
-        public Task<byte[]> DownloadSegment(string path, long offset, int length)
+        /// <summary>
+        /// Downloads chunk asynchronously and returns reusable object
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="offset"></param>
+        /// <param name="length"></param>
+        /// <returns></returns>
+        public Task<ReusableObject<byte[]>> DownloadSegment(string path, long offset, int length)
         {
-            var session = _sessions.First(s => path.StartsWith(s.Server));
+            var session = _sessions.FirstOrDefault(s => path.StartsWith(s.Server));
+
+            if (session == null)
+            {
+                if (_sessions.Count == 0)
+                    throw new InvalidOperationException("No hyper sessions available for the request");
+
+                session = _sessions.First();
+            }
+
             var token = session.CreateToken();
             
-            var awaitable = new TaskCompletionSource<byte[]>();
+            var awaitable = new TaskCompletionSource<ReusableObject<byte[]>>();
             
             _aliveTasks.TryAdd(token, new HyperMeta 
             {
@@ -215,11 +238,15 @@ namespace SharpDc.Connections
             var session = _sessions.FirstOrDefault(s => path.StartsWith(s.Server));
 
             if (session == null)
-                return Task.FromResult(-1L);
-
-            while (!session.IsActive)
             {
-                Thread.Sleep(1000);
+                Logger.Error("Session for the file is not found");
+                return Task.FromResult(-1L);
+            }
+
+            if (!session.IsActive)
+            {
+                Logger.Error("Session is not active yet");
+                return Task.FromResult(-1L);
             }
 
             var token = session.CreateToken();
@@ -243,6 +270,39 @@ namespace SharpDc.Connections
             {
                 yield return hyperClientSession;
             }
+        }
+
+        public async Task CopyFileTo(string path, Stream stream)
+        {
+            var size = await GetFileSize(path).ConfigureAwait(false);
+            long position = 0;
+            var segQueue = new Queue<KeyValuePair<Task<ReusableObject<byte[]>>, int>>();
+
+            int reqAhead = 10;
+
+            while (position < size || segQueue.Count > 0)
+            {
+                while (position < size && segQueue.Count < reqAhead)
+                {
+                    var chunkLength = (int)Math.Min(1024 * 1024, size - position);
+                    segQueue.Enqueue(new KeyValuePair<Task<ReusableObject<byte[]>>, int>(DownloadSegment(path, position, chunkLength), chunkLength));
+                    position += chunkLength;
+                }
+
+                var pair = segQueue.Dequeue();
+
+                using (var bytes = await pair.Key.ConfigureAwait(false))
+                {
+                    if (bytes.Object == null)
+                        throw new IOException("Can't download segment from hyper connection");
+
+                    await stream.WriteAsync(bytes.Object, 0, pair.Value).ConfigureAwait(false);
+                }
+
+                
+            }
+
+            stream.Flush();
         }
     }
 }

@@ -398,6 +398,9 @@ namespace SharpDc
                                 Settings.ReconnectTimeout);
                     hub.StartAsync();
                 }
+
+                if (hub.Active && hub.IdleSeconds > Settings.ReconnectTimeout)
+                    hub.KeepAlive();
             }
             
             // no need to do anything before we have at least one connection

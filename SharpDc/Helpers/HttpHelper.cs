@@ -62,6 +62,24 @@ namespace SharpDc.Helpers
             httpWebRequestAddRangeHelper.Invoke(request.Headers, new object[] { key, val });
         }
 
+        public static void DownloadFile(string uri, string systemPath, bool lowPriority = false)
+        {
+            var req = (HttpWebRequest)WebRequest.Create(uri);
+            req.ReadWriteTimeout = 4000;
+            req.Proxy = null;
+            req.KeepAlive = true;
+            req.Timeout = 4000;
+            req.ServicePoint.ConnectionLimit = HttpUploadItem.Manager.ConnectionsPerServer;
+            
+            using (lowPriority ? ThreadUtility.EnterBackgroundProcessingMode() : null)
+            using (var fs = File.OpenWrite(systemPath))
+            using (var response = req.GetResponse())
+            using (var stream = response.GetResponseStream())
+            {
+                stream.CopyTo(fs);
+            }
+        }
+
         public static void DownloadChunk(string uri, byte[] buffer, long filePosition, int readLength)
         {
             if (readLength > buffer.Length)

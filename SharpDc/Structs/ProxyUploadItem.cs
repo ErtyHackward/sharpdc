@@ -9,38 +9,30 @@ namespace SharpDc.Structs
     /// </summary>
     public class ProxyUploadItem : UploadItem
     {
+        protected int UploadDelay;
         private static readonly ILogger Logger = LogManager.GetLogger();
         
         public static event EventHandler<UploadItemSegmentEventArgs> SegmentDownloaded;
 
         protected static void OnSegmentDownloaded(UploadItemSegmentEventArgs e)
         {
-            var handler = SegmentDownloaded;
-            if (handler != null) handler(null, e);
+            SegmentDownloaded?.Invoke(null, e);
         }
 
         public static event EventHandler<UploadItemSegmentEventArgs> SegmentNeeded;
 
         protected static void OnSegmentNeeded(UploadItemSegmentEventArgs e)
         {
-            var handler = SegmentNeeded;
-            if (handler != null) handler(null, e);
+            SegmentNeeded?.Invoke(null, e);
         }
 
-        protected bool IsSegmentNeededAttached
+        protected bool IsSegmentNeededAttached => SegmentNeeded != null;
+
+        protected bool IsSegmentDownloadedAttached => SegmentDownloaded != null;
+
+        public ProxyUploadItem(ContentItem item, int bufferSize, int uploadDelay) : base(item, bufferSize)
         {
-            get { return SegmentNeeded != null; }
+            UploadDelay = uploadDelay;
         }
-
-        protected bool IsSegmentDownloadedAttached
-        {
-            get { return SegmentDownloaded != null; }
-        }
-        
-        public ProxyUploadItem(ContentItem item, int bufferSize) : base(item, bufferSize)
-        {
-
-        }
-
     }
 }

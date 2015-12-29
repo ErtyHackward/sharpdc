@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using SharpDc.Events;
 using SharpDc.Logging;
@@ -13,55 +12,30 @@ namespace SharpDc.Connections
     public class HyperServer
     {
         private static readonly ILogger Logger = LogManager.GetLogger();
-
-        private readonly Dictionary<string, HyperStorageManager> _cachedStorages = new Dictionary<string, HyperStorageManager>();
-
-        private readonly List<HyperStorageManager> _storages = new List<HyperStorageManager>();
-
+        
         private readonly List<HyperServerSession> _sessions = new List<HyperServerSession>(); 
-
         private TcpConnectionListener _listener;
-
         private readonly List<HyperServerConnection> _unknownConnections = new List<HyperServerConnection>(); 
 
         /// <summary>
         /// Port to accept incoming connections
         /// </summary>
         public int ListenPort { get; set; }
-
-        /// <summary>
-        /// How many threads to use for each storage
-        /// </summary>
-        public int WorkersPerStorage { get; set; }
-
+        
         public int SessionSegmentQueueSize { get; set; }
 
         public int SessionFileCheckQueueSize { get; set; }
 
+        /// <summary>
+        /// Gets or sets hyper storage instance
+        /// </summary>
+        public HyperStorageManager Storage { get; set; }
+
         public HyperServer()
         {
-            WorkersPerStorage = 32;
+            Storage = new HyperStorageManager();
         }
-
-        public void RegisterStorage(string systemPath)
-        {
-            if (!Directory.Exists(systemPath))
-            {
-                Logger.Error("Cannot register storage {0} because it is not exists", systemPath);
-                return;
-            }
-
-            _storages.Add(new HyperStorageManager(systemPath){ MaxWorkers = WorkersPerStorage });
-        }
-
-        public IEnumerable<HyperStorageManager> AllStorages()
-        {
-            foreach (var hyperStorageManager in _storages)
-            {
-                yield return hyperStorageManager;
-            }
-        }
-
+        
         public IEnumerable<HyperServerSession> AllSessions()
         {
             foreach (var session in _sessions)
@@ -80,36 +54,9 @@ namespace SharpDc.Connections
 
             _listener.ListenAsync();
 
-            foreach (var storage in _storages)
-            {
-                storage.Start();
-            }
+            Storage.StartAsync();
         }
-
-        public HyperStorageManager ResolveStorage(string path)
-        {
-            lock (_cachedStorages)
-            {
-                HyperStorageManager manager;
-                if (_cachedStorages.TryGetValue(path, out manager))
-                    return manager;
-            }
-
-            foreach (var hyperStorageManager in _storages)
-            {
-                if (File.Exists(Path.Combine(hyperStorageManager.SystemPath, path)))
-                {
-                    lock (_cachedStorages)
-                    {
-                        _cachedStorages.Add(path, hyperStorageManager);
-                        return hyperStorageManager;
-                    }
-                }
-            }
-
-            return null;
-        }
-
+        
         void _listener_IncomingConnection(object sender, IncomingConnectionEventArgs e)
         {
             Logger.Info("Incoming connection");

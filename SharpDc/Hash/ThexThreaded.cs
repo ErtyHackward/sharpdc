@@ -417,10 +417,7 @@ namespace SharpDc.Hash
 
         public static bool VerifySegment(HashAlgorithm tg, byte[] correctHash, string filePath, long start, int length)
         {
-            if (correctHash == null) return false;
-            if (correctHash.Length != 24) return false;
-
-            return HashesEquals(CompressHashBlock(tg, ReadLeafs(tg, filePath, start, start + length)), correctHash);
+            return correctHash?.Length == 24 && HashesEquals(CompressHashBlock(tg, ReadLeafs(tg, filePath, start, start + length)), correctHash);
         }
     }
 
@@ -429,12 +426,9 @@ namespace SharpDc.Hash
 	    public long Start;
         public long End;
 
-	    public int Length
-	    {
-	        get { return (int)(End - Start); }
-	    }
+	    public int Length => (int)(End - Start);
 
-	    public FileBlock(long start,long end)
+        public FileBlock(long start,long end)
 		{
 			Start = start;
 			End = end;

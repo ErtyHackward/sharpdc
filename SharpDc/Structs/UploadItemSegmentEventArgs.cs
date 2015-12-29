@@ -9,7 +9,7 @@ namespace SharpDc.Structs
         public Stream Stream { get; set; }
         public Magnet Magnet { get; set; }
         public long Position { get; set; }
-        public long Length { get; set; }
+        public int Length { get; set; }
         public bool FromCache { get; set; }
         public DateTime RequestedAt { get; set; }
         public TimeSpan DownloadingTime { get; set; }

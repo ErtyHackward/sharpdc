@@ -10,10 +10,7 @@ namespace SharpDc.Messages
     {
         public string Error;
 
-        public string Raw
-        {
-            get { return string.Format("$Error {0}", Error); }
-        }
+        public string Raw => $"$Error {Error}";
 
         public static ErrorMessage Parse(string command)
         {

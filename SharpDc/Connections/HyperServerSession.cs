@@ -1,8 +1,6 @@
 using System;
-using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
 using SharpDc.Events;
 using SharpDc.Logging;
 using SharpDc.Structs;
@@ -27,11 +25,10 @@ namespace SharpDc.Connections
 
         protected virtual void OnClosed()
         {
-            var handler = Closed;
-            if (handler != null) handler(this, EventArgs.Empty);
+            Closed?.Invoke(this, EventArgs.Empty);
         }
 
-        public long SessionToken { get; private set; }
+        public long SessionToken { get; }
 
         public int MaxQueueSize { get; set; }
 
@@ -40,16 +37,11 @@ namespace SharpDc.Connections
         public SpeedAverage SegmentReqPerSecond { get; set; }
         public SpeedAverage FileCheckReqPerSecond { get; set; }
         public SpeedAverage SkippedSegments { get; set; }
+        public SpeedAverage SkippedFileChecks { get; set; }
 
-        public int QueuedResponsesCount
-        {
-            get { return _responses.Count; }
-        }
+        public int QueuedResponsesCount => _responses.Count;
 
-        public int QueuedFileResponsesCount
-        {
-            get { return _fileCheckQueue.Count; }
-        }
+        public int QueuedFileResponsesCount => _fileCheckQueue.Count;
 
         public HyperServerSession(long sessionToken, HyperServer server)
         {
@@ -58,37 +50,37 @@ namespace SharpDc.Connections
             SegmentReqPerSecond = new SpeedAverage();
             FileCheckReqPerSecond = new SpeedAverage();
             SkippedSegments = new SpeedAverage();
+            SkippedFileChecks = new SpeedAverage();
         }
 
         public void EnqueueSend(HyperServerTask task)
         {
-            if (_responses.Count >= MaxQueueSize)
+            if (task.IsFileCheck)
             {
-                SkippedSegments.Update(1);
-                return;
+                if (_fileCheckQueue.Count >= MaxFileCheckQueueSize)
+                {
+                    SkippedFileChecks.Update(1);
+                    return;
+                }
+
+                _fileCheckQueue.Enqueue(new HyperFileResultMessage { Size = task.FileLength, Token = task.Token });
             }
-            
-            _responses.Enqueue(new HyperSegmentDataMessage { Buffer = task.Buffer, Token = task.Token });
-
-            for (int i = 0; i < _transferConnections.Count; i++)
+            else
             {
-                _transferConnections[i].FlushResponseQueueAsync();
+                if (_responses.Count >= MaxQueueSize)
+                {
+                    SkippedSegments.Update(1);
+                    return;
+                }
+
+                _responses.Enqueue(new HyperSegmentDataMessage { Buffer = task.Buffer, Token = task.Token });
             }
-        }
-
-        public void EnqueueSend(HyperFileResultMessage msg)
-        {
-            if (_fileCheckQueue.Count >= MaxFileCheckQueueSize)
+            lock (_transferConnections)
             {
-
-                return;
-            }
-
-            _fileCheckQueue.Enqueue(msg);
-
-            for (int i = 0; i < _transferConnections.Count; i++)
-            {
-                _transferConnections[i].FlushResponseQueueAsync();
+                foreach (var t in _transferConnections)
+                {
+                    t.FlushResponseQueueAsync();
+                }
             }
         }
 
@@ -111,10 +103,10 @@ namespace SharpDc.Connections
             connection.SetResponsesRovider(this);
         }
 
-        void connection_SegmentRequested(object sender, HyperSegmentRequestEventArgs e)
+        private void connection_SegmentRequested(object sender, HyperSegmentRequestEventArgs e)
         {
             //Logger.Info("Requested {0} {1}", e.Task.Length == -1 ? "file check" : "segment", e.Task.Path);
-            
+
             var task = e.Task;
 
             task.Session = this;
@@ -122,19 +114,22 @@ namespace SharpDc.Connections
             if (task.Length >= 0)
             {
                 SegmentReqPerSecond.Update(1);
-                task.Buffer = HyperDownloadManager.SegmentsPool.GetObject();
+                task.Buffer = HyperDownloadManager.SegmentsPool.UseObject();
             }
             else
             {
                 FileCheckReqPerSecond.Update(1);
             }
             
-            var storage = _server.ResolveStorage(task.Path);
+            var storage = _server.Storage.ResolveStorage(task.Path);
 
             if (storage == null)
             {
-                if (task.Buffer == null)
-                    EnqueueSend(new HyperFileResultMessage{ Token = task.Token, Size = -1});
+                if (task.IsFileCheck)
+                {
+                    task.FileLength = -1;
+                    task.Done();
+                }
                 else
                     Logger.Error("Can't resolve storage for {0}", task.Path);
                 return;
@@ -143,13 +138,14 @@ namespace SharpDc.Connections
             storage.EnqueueTask(task);
         }
 
-        void connection_ConnectionStatusChanged(object sender, Events.ConnectionStatusEventArgs e)
+
+        void connection_ConnectionStatusChanged(object sender, ConnectionStatusEventArgs e)
         {
             var connection = (HyperServerConnection)sender;
 
             if (e.Status == ConnectionStatus.Disconnected)
             {
-                Logger.Info("Session connection closed {0} {1}", this.SessionToken, connection.RemoteAddress);
+                Logger.Info("Session connection closed {0} {1}", SessionToken, connection.RemoteAddress);
 
                 lock (_controlConnections)
                     lock (_transferConnections)

@@ -488,6 +488,11 @@ namespace SharpDc.Connections
 
             _prevMessage = myInfo;
         }
+
+        public void KeepAlive()
+        {
+            SendMessage("");
+        }
     }
 
     public class ChatMessageEventArgs : EventArgs

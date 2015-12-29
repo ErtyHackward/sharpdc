@@ -7,6 +7,7 @@
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace SharpDc.Helpers
 {
@@ -251,6 +252,28 @@ namespace SharpDc.Helpers
             {
                 return false;
             }
+        }
+
+        public static void DeleteAnyway(string path)
+        {
+            while (!TryDelete(path))
+            {
+                Thread.Sleep(100);
+            }
+        }
+
+        /// <summary>
+        /// Gets total volume of the path provided
+        /// </summary>
+        /// <param name="directoryName"></param>
+        /// <returns></returns>
+        public static long GetTotalCapacity(string directoryName)
+        {
+            if (!Directory.Exists(directoryName))
+                throw new ArgumentException("Invalid directory " + directoryName);
+            
+            var directory = new DirectoryInfo(directoryName);
+            return new DriveInfo(directory.Root.FullName).TotalSize;
         }
 
         [DllImport("kernel32.dll", EntryPoint = "GetDiskFreeSpaceExA")]

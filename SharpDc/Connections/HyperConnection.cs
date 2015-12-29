@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SharpDc.Events;
 using SharpDc.Logging;
+using SharpDc.Managers;
 using SharpDc.Structs;
 
 namespace SharpDc.Connections
@@ -14,7 +15,7 @@ namespace SharpDc.Connections
     /// <summary>
     /// Provides high throughput network support (10Gbit+)
     /// 
-    /// Two types of connection exists:
+    /// Two types of connection are:
     /// 1. Control - used to transfer requests
     /// 2. Transfer - user to transfer data
     /// 
@@ -27,7 +28,7 @@ namespace SharpDc.Connections
 
         private byte[] _tail;
         
-        private byte[] _tempBuffer;
+        private ReusableObject<byte[]> _tempBuffer;
         private int _tempBufferOffset;
         private int _tempToken;
         private int _tempMessageLength;
@@ -67,7 +68,7 @@ namespace SharpDc.Connections
             SegemntSendDelay = new MovingAverage(TimeSpan.FromSeconds(10));
             ParseRawTime = new MovingAverage(TimeSpan.FromSeconds(10));
             ParseRawBufferLength = new MovingAverage(TimeSpan.FromSeconds(10));
-            this.ConnectionStatusChanged += HyperConnection_ConnectionStatusChanged;   
+            ConnectionStatusChanged += HyperConnection_ConnectionStatusChanged;   
         }
 
         protected HyperConnection()
@@ -80,27 +81,27 @@ namespace SharpDc.Connections
             Initialize();
         }
 
-        void HyperConnection_ConnectionStatusChanged(object sender, Events.ConnectionStatusEventArgs e)
+        void HyperConnection_ConnectionStatusChanged(object sender, ConnectionStatusEventArgs e)
         {
             if (e.Status == ConnectionStatus.Disconnected)
             {
                 _tail = null;
-                if (_tempBuffer != null)
+                if (_tempBuffer.Object != null)
                 {
-                    HyperDownloadManager.SegmentsPool.PutObject(_tempBuffer);
-                    _tempBuffer = null;
+                    _tempBuffer.Dispose();
+                    _tempBuffer = new ReusableObject<byte[]>();
                 }
             }
         }
 
-        protected virtual byte[] GetBuffer()
+        protected virtual ReusableObject<byte[]> GetBuffer()
         {
-            return null;
+            return new ReusableObject<byte[]>();
         }
 
         private bool CheckSegmentReceiveReady()
         {
-            if (_tempBufferOffset == _tempBuffer.Length)
+            if (_tempBufferOffset == _tempBuffer.Object.Length)
             {
                 HyperSegmentDataMessage msg;
                 msg.Token = _tempToken;
@@ -108,7 +109,7 @@ namespace SharpDc.Connections
 
                 OnMessageSegmentData(msg);
 
-                _tempBuffer = null;
+                _tempBuffer = new ReusableObject<byte[]>();
                 _tempBufferOffset = 0;
                 _tempToken = 0;
 
@@ -124,21 +125,22 @@ namespace SharpDc.Connections
 
             var sw = Stopwatch.StartNew();
 
-            ParseRawInternal(buffer, offset, length);
-
+            using (new PerfLimit("Parse raw", 1000))
+            {
+                ParseRawInternal(buffer, offset, length);
+            }
+            
             ParseRawTime.Update((int)sw.ElapsedMilliseconds);
-
         }
 
         private void ParseRawInternal(byte[] buffer, int offset, int length)
         {
-
-            if (_tempBuffer != null)
+            if (_tempBuffer.Object != null)
             {
                 // continue to receive 
 
                 var bytesToCopy = Math.Min(_tempMessageLength - _tempBufferOffset - 5, length);
-                Buffer.BlockCopy(buffer, offset, _tempBuffer, _tempBufferOffset, bytesToCopy);
+                Buffer.BlockCopy(buffer, offset, _tempBuffer.Object, _tempBufferOffset, bytesToCopy);
                 _tempBufferOffset += bytesToCopy;
 
                 if (!CheckSegmentReceiveReady())
@@ -187,7 +189,7 @@ namespace SharpDc.Connections
                     _tempToken = reader.ReadInt32();
 
                     var bytesToCopy = Math.Min(msgLen - 5, length - (int)memoryStream.Position);
-                    Buffer.BlockCopy(buffer, offset + (int)memoryStream.Position, _tempBuffer, _tempBufferOffset, bytesToCopy);
+                    Buffer.BlockCopy(buffer, offset + (int)memoryStream.Position, _tempBuffer.Object, _tempBufferOffset, bytesToCopy);
                     _tempBufferOffset += bytesToCopy;
 
                     if (!CheckSegmentReceiveReady())
@@ -298,7 +300,39 @@ namespace SharpDc.Connections
                 }
             }
         }
-        
+
+        private async Task FlushRequestQueue()
+        {
+            do
+            {
+                var ms = new MemoryStream();
+                var writer = new BinaryWriter(ms);
+                HyperRequestMessage request;
+
+                while (_requests.TryGetRequest(out request))
+                {
+                    writer.Write(0); // will replace that field to actual length
+
+                    var start = (int)writer.BaseStream.Position;
+
+                    writer.Write((byte)HyperMessage.Request);
+                    writer.Write(request.Token);
+                    writer.Write(request.Path);
+                    writer.Write(request.Offset);
+                    writer.Write(request.Length);
+
+                    var length = (int)writer.BaseStream.Position - start;
+
+                    ms.Seek(-length - 4, SeekOrigin.Current);
+                    writer.Write(length);
+                    ms.Seek(length, SeekOrigin.Current);
+                }
+
+                var bytes = ms.ToArray();
+                await SendAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
+
+            } while (_requests.HasRequests());
+        }
 
         private async Task FlushResponseQueue()
         {
@@ -326,43 +360,31 @@ namespace SharpDc.Connections
                 }
 
                 HyperSegmentDataMessage response;
-                long startSend = 0;
                 var hasSegmentResult = _responses.TryGetSegmentResponse(out response);
                 if (hasSegmentResult)
                 {
-                    
-
                     ms.Position = 0;
                     ms.SetLength(9);
 
-                    writer.Write(5 + response.Buffer.Length);
+                    writer.Write(5 + response.Buffer.Object.Length);
                     writer.Write((byte)HyperMessage.SegmentData);
                     writer.Write(response.Token);
-
                     
-
                     try
                     {
                         var bytes = ms.ToArray();
 
-                        startSend = Stopwatch.GetTimestamp();
+                        var startSend = Stopwatch.GetTimestamp();
 
                         await SendAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
-                        
-                        await SendAsync(response.Buffer, 0, response.Buffer.Length).ConfigureAwait(false);
-                        
-                        //using (var dataStream = new MemoryStream(response.Buffer))
-                        //    await SendAsync(dataStream).ConfigureAwait(false);
+                        await SendAsync(response.Buffer.Object, 0, response.Buffer.Object.Length).ConfigureAwait(false);
                         
                         SegemntSendDelay.Update((int)((Stopwatch.GetTimestamp() - startSend) / (Stopwatch.Frequency / 1000)));
-                        
                     }
                     finally
                     {
-                        HyperDownloadManager.SegmentsPool.PutObject(response.Buffer);
+                        response.Buffer.Dispose();
                     }
-
-                    
                 }
 
                 if (!hasSegmentResult)
@@ -370,35 +392,6 @@ namespace SharpDc.Connections
             }
         }
 
-        private async Task FlushRequestQueue()
-        {
-            var ms = new MemoryStream();
-            var writer = new BinaryWriter(ms);
-            HyperRequestMessage request;
-            
-            while (_requests.TryGetRequest(out request))
-            {
-                writer.Write(0); // will replace that field to actual length
-
-                var start = (int)writer.BaseStream.Position;
-
-                writer.Write((byte)HyperMessage.Request);
-                writer.Write(request.Token);
-                writer.Write(request.Path);
-                writer.Write(request.Offset);
-                writer.Write(request.Length);
-
-                var length = (int)writer.BaseStream.Position - start;
-
-                ms.Seek(-length -4, SeekOrigin.Current);
-                writer.Write(length);
-                ms.Seek(length, SeekOrigin.Current);
-            }
-
-            var bytes = ms.ToArray();
-            await SendAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
-        }
-        
         protected virtual void OnMessageHandshake(HyperHandshakeMessge message)
         {
 
@@ -429,6 +422,8 @@ namespace SharpDc.Connections
     public interface IHyperRequestsProvider
     {
         bool TryGetRequest(out HyperRequestMessage request);
+
+        bool HasRequests();
     }
 
     public struct HyperUrl
@@ -439,7 +434,7 @@ namespace SharpDc.Connections
 
         public HyperUrl(string url)
         {
-            // hyp://127.0.0.1:88/1/test.avi
+            // hyp://127.0.0.1:9100/1/test.avi
 
             if (!url.StartsWith("hyp://"))
                 throw new ArgumentException();
