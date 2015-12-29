@@ -3,6 +3,7 @@ using System.IO;
 using System.Net.Sockets;
 using SharpDc.Helpers;
 using SharpDc.Logging;
+using SharpDc.Managers;
 
 namespace SharpDc.Connections
 {
@@ -14,16 +15,14 @@ namespace SharpDc.Connections
 
         protected virtual void OnSegmentReceived(HyperSegmentEventArgs e)
         {
-            var handler = SegmentReceived;
-            if (handler != null) handler(this, e);
+            SegmentReceived?.Invoke(this, e);
         }
 
         public event EventHandler<HyperFileCheckEventArgs> FileFound;
 
         protected virtual void OnFileFound(HyperFileCheckEventArgs e)
         {
-            var handler = FileFound;
-            if (handler != null) handler(this, e);
+            FileFound?.Invoke(this, e);
         }
 
         public HyperClientConnection(HyperUrl url, bool isControl, long sessionToken)
@@ -33,9 +32,9 @@ namespace SharpDc.Connections
             SessionToken = sessionToken;
         }
 
-        protected override byte[] GetBuffer()
+        protected override ReusableObject<byte[]> GetBuffer()
         {
-            return HyperDownloadManager.SegmentsPool.GetObject();
+            return HyperDownloadManager.SegmentsPool.UseObject();
         }
 
         protected override void OnMessageSegmentData(HyperSegmentDataMessage message)

@@ -33,19 +33,13 @@ namespace SharpDc.Managers
         /// Gets total amount of bytes in the share
         /// </summary>
         [XmlIgnore]
-        public long TotalShared
-        {
-            get { return _totalShared; }
-        }
+        public long TotalShared => _totalShared;
 
         /// <summary>
         /// Gets total amount of files in the share
         /// </summary>
         [XmlIgnore]
-        public int TotalFiles
-        {
-            get { return _totalFiles; }
-        }
+        public int TotalFiles => _totalFiles;
 
         /// <summary>
         /// Don't use reserved for serialization/deserialization
@@ -71,8 +65,7 @@ namespace SharpDc.Managers
         protected virtual void OnTotalSharedChanged()
         {
             IsDirty = true;
-            var handler = TotalSharedChanged;
-            if (handler != null) handler(this, EventArgs.Empty);
+            TotalSharedChanged?.Invoke(this, EventArgs.Empty);
         }
 
         public void AddFiles(IEnumerable<ContentItem> items)
@@ -128,7 +121,10 @@ namespace SharpDc.Managers
         {
             lock (_tthIndex)
             {
-                return _tthIndex.Values;
+                foreach (var value in _tthIndex.Values)
+                {
+                    yield return value;
+                }
             }
         }
 
@@ -136,7 +132,10 @@ namespace SharpDc.Managers
         {
             lock (_tthIndex)
             {
-                return _tthIndex.Values.OrderBy(i => i.CreateDate);
+                foreach (var value in _tthIndex.Values.OrderBy(i => i.CreateDate))
+                {
+                    yield return value;
+                }
             }
         }
 

@@ -1,122 +1,84 @@
-using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
-using System.Threading;
+using SharpDc.Interfaces;
 using SharpDc.Logging;
-using SharpDc.Structs;
+using SharpDc.Managers;
 
 namespace SharpDc.Connections
 {
-    /// <summary>
-    /// Provides work distribution across workers
-    /// </summary>
     public class HyperStorageManager
     {
         private static readonly ILogger Logger = LogManager.GetLogger();
 
-        private readonly ConcurrentQueue<HyperServerTask> _tasks = new ConcurrentQueue<HyperServerTask>();
+        private readonly Dictionary<string, IHyperStorage> _cachedStorages = new Dictionary<string, IHyperStorage>();
+        private readonly List<IHyperStorage> _storages = new List<IHyperStorage>();
 
-        public MovingAverage SegmentService { get; private set; }
+        /// <summary>
+        /// How many threads to use for each storage
+        /// </summary>
+        public int WorkersPerStorage { get; set; }
 
-        public SpeedAverage SegmentsPerSecond { get; private set; }
-
-        public int QueueSize
+        public HyperStorageManager()
         {
-            get { return _tasks.Count; }
+            WorkersPerStorage = 32;
         }
 
-        public string SystemPath { get; private set; }
-
-        public int MaxWorkers { get; set; }
-
-        public bool IsEnabled { get; set; }
-
-        public HyperStorageManager(string systemPath)
+        public void RegisterFileStorage(string systemPath, bool isAsync = false)
         {
-            SystemPath = systemPath;
-            IsEnabled = true;
-
-            SegmentService = new MovingAverage(TimeSpan.FromSeconds(10));
-            SegmentsPerSecond = new SpeedAverage(TimeSpan.FromSeconds(10));
-        }
-
-        public void EnqueueTask(HyperServerTask task)
-        {
-            _tasks.Enqueue(task);
-        }
-
-        private readonly List<Thread> _workers = new List<Thread>(); 
-
-        public void Start()
-        {
-            Logger.Info("Starting {1} workers for {0}", SystemPath, MaxWorkers);
-            foreach (var worker in _workers)
+            if (!Directory.Exists(systemPath))
             {
-                worker.Abort();
+                Logger.Error("Cannot register storage {0} because it is not exists", systemPath);
+                return;
             }
 
-            _workers.Clear();
+            _storages.Add(isAsync ? 
+                (IHyperStorage)new HyperAsyncDriveReader(systemPath) : 
+                new HyperDriveReader(systemPath) { MaxWorkers = WorkersPerStorage });
 
-            for (int i = 0; i < MaxWorkers; i++)
-            {
-                _workers.Add(new Thread(Worker));
-            }
+            Logger.Info($"Registered {(isAsync ? "async" : "")} file storage {systemPath}");
+        }
 
-            foreach (var worker in _workers)
+        public void RegisterRelayStorage(HyperDownloadManager downloadManager, UploadCacheManager cacheManager, IShare share, List<string> baseList)
+        {
+            _storages.Add(new HyperRelayReader(downloadManager, cacheManager, share, baseList));
+        }
+
+        public IEnumerable<IHyperStorage> AllStorages()
+        {
+            foreach (var hyperStorageManager in _storages)
             {
-                worker.Start();
+                yield return hyperStorageManager;
             }
         }
 
-        private void Worker()
+        public IHyperStorage ResolveStorage(string path)
         {
-            while (IsEnabled)
+            lock (_cachedStorages)
             {
-                HyperServerTask task;
-                while (_tasks.TryDequeue(out task))
+                IHyperStorage manager;
+                if (_cachedStorages.TryGetValue(path, out manager))
+                    return manager;
+            }
+            lock (_cachedStorages)
+            {
+                foreach (var hyperStorageManager in _storages)
                 {
-                    try
+                    if (hyperStorageManager.Contains(path))
                     {
-                        var path = Path.Combine(SystemPath, task.Path);
-
-                        if (task.Length > 0)
-                        {
-                            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,task.Length))
-                            {
-                                fs.Position = task.Offset;
-
-                                var read = fs.Read(task.Buffer, 0, task.Length);
-
-                                if (read != task.Length)
-                                {
-                                    Logger.Error("Can't read all bytes {0}/{1} {2}", read, task.Length, task.Path);
-                                    continue;
-                                }
-                                
-                                SegmentService.Update((int)((Stopwatch.GetTimestamp() - task.Created) / (Stopwatch.Frequency / 1000)));
-                                SegmentsPerSecond.Update(1);
-
-                                task.Session.EnqueueSend(task);
-                            }
-                        }
-                        else
-                        {
-                            var msg = new HyperFileResultMessage();
-
-                            msg.Token = task.Token;
-                            msg.Size = new FileInfo(path).Length;
-                            
-                            task.Session.EnqueueSend(msg);
-                        }
-                    }
-                    catch (Exception x)
-                    {
-                        Logger.Error("Error during reading of data {0} {1}", task.Path, x.Message);
+                        _cachedStorages.Add(path, hyperStorageManager);
+                        return hyperStorageManager;
                     }
                 }
-                Thread.Sleep(10);
+            }
+
+            return null;
+        }
+
+        public void StartAsync()
+        {
+            foreach (var storage in _storages)
+            {
+                storage.StartAsync();
             }
         }
     }

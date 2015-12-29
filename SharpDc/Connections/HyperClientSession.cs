@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,6 +6,7 @@ using System.Security.Cryptography;
 using System.Threading;
 using SharpDc.Events;
 using SharpDc.Logging;
+using SharpDc.Managers;
 
 namespace SharpDc.Connections
 {
@@ -23,7 +23,7 @@ namespace SharpDc.Connections
         private readonly ConcurrentQueue<HyperRequestMessage> _requests = new ConcurrentQueue<HyperRequestMessage>();
 
         private int _currentToken;
-        private HyperUrl _serverUrl;
+        private readonly HyperUrl _serverUrl;
 
         /// <summary>
         /// Gets or sets transfer connections count
@@ -55,25 +55,20 @@ namespace SharpDc.Connections
             }
         }
 
-        public int QueuedRequestsCount
-        {
-            get { return _requests.Count; }
-        }
+        public int QueuedRequestsCount => _requests.Count;
 
         public event EventHandler<HyperSegmentEventArgs> SegmentReceived;
 
         protected virtual void OnSegmentReceived(HyperSegmentEventArgs e)
         {
-            var handler = SegmentReceived;
-            if (handler != null) handler(this, e);
+            SegmentReceived?.Invoke(this, e);
         }
 
         public event EventHandler<HyperFileCheckEventArgs> FileFound;
 
         protected virtual void OnFileFound(HyperFileCheckEventArgs e)
         {
-            var handler = FileFound;
-            if (handler != null) handler(this, e);
+            FileFound?.Invoke(this, e);
         }
 
         public HyperClientSession(string server)
@@ -200,6 +195,10 @@ namespace SharpDc.Connections
             _transferConnections.Clear();
         }
 
+        /// <summary>
+        /// Creates unique operation token
+        /// </summary>
+        /// <returns></returns>
         internal int CreateToken()
         {
             return Interlocked.Add(ref _currentToken, 1);
@@ -207,14 +206,14 @@ namespace SharpDc.Connections
 
         public int RequestSegment(string path, long offset, int length, int token)
         {
-            var req = new HyperRequestMessage();
-
-            req.Token = token;
-            req.Path = path;
-            req.Offset = offset;
-            req.Length = length;
+            var req = new HyperRequestMessage
+            {
+                Token = token,
+                Path = path,
+                Offset = offset,
+                Length = length
+            };
             
-
             _requests.Enqueue(req);
             
             for (int i = 0; i < _controlConnections.Count; i++)
@@ -246,11 +245,16 @@ namespace SharpDc.Connections
         {
             return _requests.TryDequeue(out request);
         }
+
+        public bool HasRequests()
+        {
+            return !_requests.IsEmpty;
+        }
     }
 
     public class HyperSegmentEventArgs : EventArgs
     {
-        public byte[] Buffer { get; set; }
+        public ReusableObject<byte[]> Buffer { get; set; }
         public int Token { get; set; }
 
     }

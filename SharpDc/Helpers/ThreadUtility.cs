@@ -76,6 +76,16 @@ namespace SharpDc.Helpers
             return Scope.Empty;
         }
 
+        public static bool InBackgorundMode()
+        {
+            Thread.BeginThreadAffinity();
+            IntPtr hThread = NativeMethods.GetCurrentThread();
+            var background = (NativeMethods.GetThreadPriority(hThread) & ThreadPriority.THREAD_MODE_BACKGROUND_BEGIN) == ThreadPriority.THREAD_MODE_BACKGROUND_BEGIN;
+
+            Thread.EndThreadAffinity();
+            return background;
+        }
+
         public static Scope EnterBackgroundProcessingMode(this Thread thread)
         {
             return EnterBackgroundProcessingMode();

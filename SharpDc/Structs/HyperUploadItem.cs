@@ -2,7 +2,6 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using SharpDc.Connections;
-using SharpDc.Helpers;
 using SharpDc.Logging;
 using SharpDc.Managers;
 
@@ -17,12 +16,12 @@ namespace SharpDc.Structs
 
         public static HyperDownloadManager Manager = new HyperDownloadManager();
         
-        public HyperUploadItem(ContentItem item, int bufferSize = 1024 * 1024) : base(item, bufferSize)
+        public HyperUploadItem(ContentItem item, int bufferSize = 1024 * 1024, int uploadDelay = 0) : base(item, bufferSize, uploadDelay)
         {
             
         }
 
-        public async override Task<long> SendChunkAsync(TransferConnection transfer, long filePos, long bytesRequired)
+        public async override Task<long> SendChunkAsync(TransferConnection transfer, long filePos, int bytesRequired)
         {
             var startTime = DateTime.UtcNow;
 
@@ -52,16 +51,19 @@ namespace SharpDc.Structs
 
             try
             {
-                byte[] buffer;
-                using (new PerfLimit(() => string.Format("Slow HYPER request {0} pos: {1} len: {2} filelen: {3}", SystemPath, filePos, bytesRequired, Content.Magnet.Size), 4000))
-                    buffer = await Manager.DownloadSegment(SystemPath, filePos, (int)bytesRequired);
-
-                if (buffer != null)
+                if (UploadDelay != 0)
                 {
-                    await transfer.SendAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
-                    HyperDownloadManager.SegmentsPool.PutObject(buffer);
+                    await Task.Delay(UploadDelay);
                 }
-                    
+
+                using (new PerfLimit(() => $"Slow HYPER request {SystemPath} pos: {filePos} len: {bytesRequired} filelen: {Content.Magnet.Size}", 4000))
+                using (var buffer = await Manager.DownloadSegment(SystemPath, filePos, (int)bytesRequired))
+                {
+                    if (buffer.Object != null)
+                    {
+                        await transfer.SendAsync(buffer.Object, 0, buffer.Object.Length).ConfigureAwait(false);
+                    }
+                }
                 bytesCopied = bytesRequired;
 
                 Interlocked.Add(ref _uploadedBytes, bytesCopied);

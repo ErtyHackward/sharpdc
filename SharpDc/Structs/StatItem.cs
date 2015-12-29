@@ -20,10 +20,7 @@ namespace SharpDc.Structs
         /// <summary>
         /// Gets how many times the file was uploaded completely
         /// </summary>
-        public double Rate
-        {
-            get { return (double)TotalUploaded / Magnet.Size; }
-        }
+        public double Rate => (double)TotalUploaded / Magnet.Size;
 
         /// <summary>
         /// Returns the cache effectivity calculated as (in Gb) TotalUploaded ^ 2 / FileSize
@@ -37,6 +34,21 @@ namespace SharpDc.Structs
 
                 return uploadedGb * uploadedGb / sizeGb; 
             }
+        }
+
+        public static StatItem operator +(StatItem one, StatItem two)
+        {
+            if (one.Magnet.TTH != two.Magnet.TTH)
+                throw new InvalidOperationException("Can't sum StatItems with different magnets");
+
+            var res = new StatItem
+            {
+                Magnet = one.Magnet,
+                LastUsage = one.LastUsage > two.LastUsage ? two.LastUsage : one.LastUsage, // takign the newest time
+                TotalUploaded = one.TotalUploaded + two.TotalUploaded
+            };
+            
+            return res;
         }
     }
 }

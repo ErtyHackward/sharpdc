@@ -626,7 +626,7 @@ namespace SharpDc.Connections
                 if (_disposed)
                     return;
 
-                await uploadItem.SendChunkAsync(this, adcgetMessage.Start, adcgetMessage.Length).ConfigureAwait(false);
+                await uploadItem.SendChunkAsync(this, adcgetMessage.Start, (int)adcgetMessage.Length).ConfigureAwait(false);
                 Stream.Flush();
                 sw.Stop();
                 _isResponding = false;
@@ -814,7 +814,11 @@ namespace SharpDc.Connections
 
                 if (!ea.Handled)
                 {
-                    UploadItem.Dispose();
+                    var ui = UploadItem;
+
+                    if (ui != null)
+                        ui.Dispose();
+
                     UploadItem = null;
                 }
             }

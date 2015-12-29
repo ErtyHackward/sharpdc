@@ -7,13 +7,10 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Threading;
 using System.Xml.Serialization;
-using SharpDc.Connections;
 using SharpDc.Hash;
 using SharpDc.Helpers;
 using SharpDc.Logging;
@@ -55,22 +52,19 @@ namespace SharpDc.Managers
         /// <summary>
         /// Gets current cache read speed
         /// </summary>
-        public SpeedAverage CacheUseSpeed { get; private set; }
+        public SpeedAverage CacheUseSpeed { get; }
 
         /// <summary>
         /// Gets average time in milliseconds of segment read from the cache storage
         /// </summary>
-        public MovingAverage CacheReadAverage { get; private set; }
+        public MovingAverage CacheReadAverage { get; }
 
         /// <summary>
         /// Defines day time ranges when download to a cache is disabled
         /// </summary>
-        public List<DayTimeSpan> DisabledTime { get; set; }
+        public JobController DisabledTime { get; } = new JobController();
 
-        public long UploadedFromCache
-        {
-            get { return _uploadedFromCache; }
-        }
+        public long UploadedFromCache => _uploadedFromCache;
 
         public IEnumerable<CachedItem> CachedItems()
         {
@@ -82,8 +76,7 @@ namespace SharpDc.Managers
                 }
             }
         }
-
-
+        
         public UploadCacheManager(DcEngine engine)
         {
             _engine = engine;
@@ -91,42 +84,42 @@ namespace SharpDc.Managers
             CacheReadAverage = new MovingAverage(TimeSpan.FromSeconds(10));
         }
 
-        void HttpUploadItem_HttpSegmentNeeded(object sender, UploadItemSegmentEventArgs e)
+        public CachedItem FindSegment(string tth, long position, int length)
         {
             CachedItem item;
 
             lock (_syncRoot)
             {
-                _items.TryGetValue(e.Magnet.TTH, out item);
+                _items.TryGetValue(tth, out item);
             }
 
             if (item == null)
-                return;
+                return null;
 
-            if (!item.IsAreaCached(e.Position, e.Length))
-                return;
-            
+            if (!item.IsAreaCached(position, length))
+                return null;
+
+            return item;
+        }
+
+        public bool ReadCacheSegment(string tth, long position, int length, byte[] buffer, int offset)
+        {
+            var item = FindSegment(tth, position, length);
+
+            if (item == null)
+                return false;
+
             try
             {
-                var pt = PerfTimer.StartNew();
-                using (new PerfLimit(() => string.Format("Cache segment read {0}", item.CachePath), 1000))
+                using (new PerfLimit(() => $"Cache segment read {item.CachePath}", 1000))
                 using (var fs = new FileStream(item.CachePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1024 * 1024))
                 {
-                    var buffer = new byte[e.Length];
-                    
-                    fs.Position = e.Position;
-                    if (fs.Read(buffer, 0, buffer.Length) != e.Length)
-                        return;
-
-                    e.Stream = new MemoryStream(buffer);
-
-                    e.FromCache = true;
-
-                    CacheUseSpeed.Update(e.Length);
-                    CacheReadAverage.Update((int)pt.ElapsedMilliseconds);
-
-                    Interlocked.Add(ref _uploadedFromCache, e.Length);
+                    fs.Position = position;
+                    if (fs.Read(buffer, 0, buffer.Length) != length)
+                        return false;
                 }
+
+                return true;
             }
             catch (Exception exception)
             {
@@ -136,6 +129,26 @@ namespace SharpDc.Managers
                 {
                     RemoveItemFromCache(item);
                 }
+
+                return false;
+            }
+        }
+
+        void HttpUploadItem_HttpSegmentNeeded(object sender, UploadItemSegmentEventArgs e)
+        {
+            var segment = FindSegment(e.Magnet.TTH, e.Position, e.Length);
+
+            if (segment == null)
+                return;
+
+            var buffer = new byte[e.Length];
+
+            var pt = PerfTimer.StartNew();
+            if (ReadCacheSegment(e.Magnet.TTH, e.Position, e.Length, buffer, 0))
+            {
+                CacheUseSpeed.Update(e.Length);
+                CacheReadAverage.Update((int)pt.ElapsedMilliseconds);
+                Interlocked.Add(ref _uploadedFromCache, e.Length);
             }
         }
 
@@ -150,13 +163,9 @@ namespace SharpDc.Managers
 
             if (item == null)
             {
-                var disabled = DisabledTime;
-                if (disabled != null)
-                { 
-                    if (disabled.Any(s => s.IsMatch()))
-                        return; // it's not the time to download items...
-                }
-
+                if (DisabledTime.ShouldStop())
+                    return;
+                
                 StatItem statItem;
                 if (!_engine.StatisticsManager.TryGetValue(e.Magnet.TTH, out statItem))
                     return; // no statistics on the item, ignore
@@ -258,7 +267,7 @@ namespace SharpDc.Managers
                             if (!FileHelper.AllocateFile(item.CachePath, e.Magnet.Size, out ex))
                             {
                                 Logger.Error("Cannot allocate file {0} {1} {2}", item.CachePath,
-                                    Utils.FormatBytes(e.Magnet.Size), ex == null ? "" : ex.Message);
+                                    Utils.FormatBytes(e.Magnet.Size), ex?.Message ?? "");
                                 return;
                             }
                         }
@@ -296,14 +305,12 @@ namespace SharpDc.Managers
             //            ms.CopyTo(fs);
             //        }
             //    }
-
             //    lock (_syncRoot)
             //    {
             //        item.CachedSegments.Set(DownloadItem.GetSegmentIndex(e.Position, item.SegmentLength), true);
             //        if (item.CachedSegments.FirstFalse() == -1)
             //            item.Complete = true;
             //    }
-
             //    WriteBitfieldFile(item);
             //}
         }
@@ -352,16 +359,20 @@ namespace SharpDc.Managers
                         if (File.Exists(item.CachePath))
                             File.Delete(item.CachePath);
 
+                        var timer = PerfTimer.StartNew();
+                        
                         if (httpUri.StartsWith("http"))
                         {
-                            using (var wc = new WebClient())
-                                wc.DownloadFile(httpUri, item.CachePath);
+                            HttpHelper.DownloadFile(httpUri, item.CachePath, true);
                         }
                         else if (httpUri.StartsWith("hyp"))
                         {
-                            HyperUploadItem.Manager.DownloadFile(httpUri, item.CachePath).RunSynchronously();
+                            HyperUploadItem.Manager.DownloadFile(httpUri, item.CachePath, true).Wait();
                         }
 
+                        timer.Stop();
+                        Logger.Info("Download finished at {0}/s", Utils.FormatBytes(item.Magnet.Size / timer.Elapsed.TotalSeconds));
+                        
                         if (CacheVerification)
                         {
                             Logger.Info("Verifying the data");
@@ -597,6 +608,11 @@ namespace SharpDc.Managers
             }
             Logger.Info("Decreasing statistics rates done");
         }
+
+        public bool Contains(string tth)
+        {
+            return _items.ContainsKey(tth);
+        }
     }
 
     [Serializable]
@@ -630,6 +646,57 @@ namespace SharpDc.Managers
         public bool IsMatch(DateTime now)
         {
             return now.TimeOfDay > Start && now.TimeOfDay < End;
+        }
+    }
+
+    public class JobController : IEnumerable<DayTimeSpan>
+    {
+        private List<DayTimeSpan> _disabledTime = new List<DayTimeSpan>();
+
+        public void AddDisabledTime(DayTimeSpan doNotWorkAt)
+        {
+            lock (_disabledTime)
+            {
+                _disabledTime.Add(doNotWorkAt);
+            }
+        }
+
+        public void AddDisabledTime(IEnumerable<DayTimeSpan> doNotWorkAt)
+        {
+            lock (_disabledTime)
+            {
+                _disabledTime.AddRange(doNotWorkAt);
+            }
+        }
+
+        public void Clear()
+        {
+            lock (_disabledTime)
+            {
+                _disabledTime.Clear();
+            }
+        }
+
+        public bool ShouldStop()
+        {
+            lock (_disabledTime)
+                return _disabledTime.Count > 0 && _disabledTime.Any(s => s.IsMatch());
+        }
+
+        public IEnumerator<DayTimeSpan> GetEnumerator()
+        {
+            lock (_disabledTime)
+            {
+                foreach (var dayTimeSpan in _disabledTime)
+                {
+                    yield return dayTimeSpan;
+                }
+            }
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
         }
     }
 }

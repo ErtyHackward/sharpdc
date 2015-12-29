@@ -23,14 +23,14 @@ namespace SharpDc.Structs
 
         public static HttpDownloadManager Manager = new HttpDownloadManager();
 
-        public HttpUploadItem(ContentItem item, int bufferSize = 1024 * 1024)
-            : base(item, bufferSize)
+        public HttpUploadItem(ContentItem item, int bufferSize = 1024 * 1024, int uploadDelay = 0)
+            : base(item, bufferSize, uploadDelay)
         {
 
         }
 
 
-        public async override Task<long> SendChunkAsync(TransferConnection transfer, long filePos, long bytesRequired)
+        public async override Task<long> SendChunkAsync(TransferConnection transfer, long filePos, int bytesRequired)
         {
             var startTime = DateTime.UtcNow;
 
@@ -41,7 +41,7 @@ namespace SharpDc.Structs
                     UploadItem = this,
                     Magnet = Content.Magnet,
                     Position = filePos,
-                    Length = (int)bytesRequired
+                    Length = bytesRequired
                 };
 
                 OnSegmentNeeded(ea);
@@ -56,8 +56,14 @@ namespace SharpDc.Structs
 
             long bytesCopied = 0;
 
+            if (UploadDelay != 0)
+            {
+                await Task.Delay(UploadDelay).ConfigureAwait(false);
+            }
+
             var sw = PerfTimer.StartNew();
-            using (new PerfLimit(() => string.Format("Slow http request {0} pos: {1} len: {2} filelen: {3}", SystemPath, filePos, bytesRequired, Content.Magnet.Size), 4000))
+            using (new PerfLimit(() =>
+                $"Slow http request {SystemPath} pos: {filePos} len: {bytesRequired} filelen: {Content.Magnet.Size}", 4000))
             {
                 try
                 {
@@ -65,8 +71,8 @@ namespace SharpDc.Structs
                     await Manager.CopyChunkToTransferAsync(transfer, SystemPath, filePos, bytesRequired).ConfigureAwait(false);
 
                     // default http connections pool
-                    //var responseStream = await HttpHelper.GetHttpChunkAsync(SystemPath, filePos, bytesRequired);
-                    //await transfer.SendAsync(responseStream);
+                    //var responseStream = await HttpHelper.GetHttpChunkAsync(SystemPath, filePos, bytesRequired).ConfigureAwait(false);
+                    //await transfer.SendAsync(responseStream).ConfigureAwait(false);
 
                     bytesCopied = bytesRequired;
 

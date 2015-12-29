@@ -6,7 +6,6 @@
 
 using System;
 using System.IO;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using SharpDc.Connections;
@@ -29,10 +28,7 @@ namespace SharpDc.Structs
         /// <summary>
         /// Gets total amount of FileSteam objects exists
         /// </summary>
-        public static int TotalFileStreamsCount
-        {
-            get { return _fileStreamsCount; }
-        }
+        public static int TotalFileStreamsCount => _fileStreamsCount;
 
         #endregion
 
@@ -57,18 +53,14 @@ namespace SharpDc.Structs
 
         public int FileStreamReadBufferSize { get; private set; }
 
-        public long UploadedBytes
-        {
-            get { return _uploadedBytes; }
-        }
+        public long UploadedBytes => _uploadedBytes;
 
         public event EventHandler<UploadItemEventArgs> Error;
 
         protected void OnError(UploadItemEventArgs e)
         {
             e.UploadItem = this;
-            var handler = Error;
-            if (handler != null) handler(this, e);
+            Error?.Invoke(this, e);
         }
 
         public event EventHandler<UploadItemEventArgs> Request;
@@ -76,17 +68,14 @@ namespace SharpDc.Structs
         protected virtual void OnRequest(UploadItemEventArgs e)
         {
             e.UploadItem = this;
-            var handler = Request;
-            if (handler != null) handler(this, e);
+            Request?.Invoke(this, e);
         }
-
-
+        
         public event EventHandler Disposed;
 
         private void OnDisposed()
         {
-            var handler = Disposed;
-            if (handler != null) handler(this, EventArgs.Empty);
+            Disposed?.Invoke(this, EventArgs.Empty);
         }
 
         public UploadItem(ContentItem item, int bufferSize = 1024 * 100)
@@ -110,7 +99,7 @@ namespace SharpDc.Structs
             OnDisposed();
         }
 
-        private async Task<long> InternalCopyChunk(Stream stream, long filePos, long bytesRequired)
+        private async Task<long> InternalCopyChunk(Stream stream, long filePos, int bytesRequired)
         {
             if (_fileStream == null)
             {
@@ -137,34 +126,37 @@ namespace SharpDc.Structs
             _fileStream.Position = filePos;
 
             long readSoFar = 0L;
-            var buffer = new byte[64 * 1024];
+            var buffer = new byte[FileStreamReadBufferSize];
             do
             {
                 var toRead = Math.Min(bytesRequired - readSoFar, buffer.Length);
-                var readNow = await _fileStream.ReadAsync(buffer, 0, (int)toRead);
+                var readNow = await _fileStream.ReadAsync(buffer, 0, (int)toRead).ConfigureAwait(false);
                 if (readNow == 0)
                     break; // End of stream
-                await stream.WriteAsync(buffer, 0, readNow);
+                await stream.WriteAsync(buffer, 0, readNow).ConfigureAwait(false);
                 readSoFar += readNow;
                 Interlocked.Add(ref _uploadedBytes, readNow);
             } while (readSoFar < bytesRequired);
             return readSoFar;
         }
 
-        public virtual async Task<long> SendChunkAsync(TransferConnection transfer, long filePos, long bytesRequired)
+        public virtual async Task<long> SendChunkAsync(TransferConnection transfer, long filePos, int bytesRequired)
         {
             if (EnableRequestEventFire)
                 OnRequest(new UploadItemEventArgs());
 
-            try
+            using (new PerfLimit("Send fs chunk time", 2000))
             {
-                return await InternalCopyChunk(transfer.Stream, filePos, bytesRequired);
-            }
-            catch (Exception x)
-            {
-                OnError(new UploadItemEventArgs { Exception = x });
-                Logger.Error("Unable to read the data for upload: " + x.Message);
-                return 0;
+                try
+                {
+                    return await InternalCopyChunk(transfer.Stream, filePos, bytesRequired).ConfigureAwait(false);
+                }
+                catch (Exception x)
+                {
+                    OnError(new UploadItemEventArgs { Exception = x });
+                    Logger.Error("Unable to read the data for upload: " + x.Message);
+                    return 0;
+                }
             }
         }
     }

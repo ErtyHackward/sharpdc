@@ -15,10 +15,7 @@ namespace SharpDc.Managers
         /// <summary>
         /// Returns count of items in the pool right now
         /// </summary>
-        public int Count
-        {
-            get { return _objects.Count; }
-        }
+        public int Count => _objects.Count;
 
         /// <summary>
         /// Gets amount of items were totally created by this pool
@@ -39,8 +36,8 @@ namespace SharpDc.Managers
         public T GetObject()
         {
             T item;
-            
-            if (_objects.TryTake(out item)) 
+
+            if (_objects.TryTake(out item))
                 return item;
 
             var newItem = _objectGenerator();
@@ -52,7 +49,7 @@ namespace SharpDc.Managers
         {
             _objects.Add(item);
         }
-        
+
         public IEnumerator<T> GetEnumerator()
         {
             return _objects.GetEnumerator();
@@ -61,6 +58,40 @@ namespace SharpDc.Managers
         IEnumerator IEnumerable.GetEnumerator()
         {
             return GetEnumerator();
+        }
+
+        /// <summary>
+        /// Helper method to use in using () construct
+        /// Automatically returns the object when the ReusableObject is disposed
+        /// </summary>
+        /// <returns></returns>
+        public ReusableObject<T> UseObject()
+        {
+            return new ReusableObject<T>(this, GetObject());
+        }
+    }
+
+    public struct ReusableObject<T> : IDisposable
+    {
+        private readonly T _object;
+        private readonly ObjectPool<T> _pool;
+        private bool _isDisposed;
+        public T Object => _object;
+
+        public ReusableObject(ObjectPool<T> pool, T obj)
+        {
+            _object = obj;
+            _pool = pool;
+            _isDisposed = false;
+        }
+
+        public void Dispose()
+        {
+            if (_isDisposed)
+                return;
+
+            _isDisposed = true;
+            _pool?.PutObject(_object);
         }
     }
 }

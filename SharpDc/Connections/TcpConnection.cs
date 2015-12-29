@@ -1,6 +1,6 @@
 ﻿// -------------------------------------------------------------
 // SharpDc project 
-// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2016
 // licensed under the LGPL
 // -------------------------------------------------------------
 
@@ -60,7 +60,7 @@ namespace SharpDc.Connections
 
             public override int Read(byte[] buffer, int offset, int count)
             {
-                var read =  _baseStream.Read(buffer, offset, count);
+                var read = _baseStream.Read(buffer, offset, count);
                 _rederSpeedAverage.Update(read);
                 return read;
             }
@@ -71,25 +71,13 @@ namespace SharpDc.Connections
                 _writeSpeedAverage.Update(count);
             }
 
-            public override bool CanRead
-            {
-                get { return _baseStream.CanRead; }
-            }
+            public override bool CanRead => _baseStream.CanRead;
 
-            public override bool CanSeek
-            {
-                get { return _baseStream.CanSeek; }
-            }
+            public override bool CanSeek => _baseStream.CanSeek;
 
-            public override bool CanWrite
-            {
-                get { return _baseStream.CanWrite; }
-            }
+            public override bool CanWrite => _baseStream.CanWrite;
 
-            public override long Length
-            {
-                get { return _baseStream.Length; }
-            }
+            public override long Length => _baseStream.Length;
 
             public override long Position {
                 get { return _baseStream.Position; }
@@ -99,11 +87,8 @@ namespace SharpDc.Connections
 
         private Socket _socket;
         protected IPEndPoint RemoteEndPoint;
-        private ConnectionStatus _connectionStatus;
         private long _lastUpdate = Stopwatch.GetTimestamp();
         protected bool _closingSocket;
-        private int _receiveTimeout;
-        private int _sendTimeout = 1000;
 
         private Stream _stream;
 
@@ -114,10 +99,8 @@ namespace SharpDc.Connections
         private static readonly ObjectPool<VoidSocketAwaitable> _voidAwaitablesPool;
         private static int _awaitablesCount;
 
-        private static byte[] _largeBuffer;
+        private static bool _bufferInitialized;
         private static int _operationBufferLength = 65536;
-        private static int _maxConcurrentOperations = 128;
-        private static int _currentBufferOffset;
         private static int _defaultSocketReceiveBufferLength = 65536;
         private static int _defaultSocketSendBufferLength = 65536;
 
@@ -135,40 +118,19 @@ namespace SharpDc.Connections
             get { return _operationBufferLength; }
             set
             {
-                if (_largeBuffer != null)
-                    throw new InvalidOperationException(string.Format("TcpConnection BufferLength is already initialized to {0} and cannot be changed", _operationBufferLength));
+                if (_bufferInitialized)
+                    throw new InvalidOperationException(
+                        $"TcpConnection BufferLength is already initialized to {_operationBufferLength} and cannot be changed");
                 _operationBufferLength = value;
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets how many simultaneous socket operation could be performed
-        /// You can set this value before any network operation
-        /// Default is 128
-        /// </summary>
-        public static int MaxConcurrentOperations 
-        {
-            get { return _maxConcurrentOperations; }
-            set 
-            {
-                if (_largeBuffer != null)
-                    throw new InvalidOperationException(string.Format("TcpConnection MaxConcurrentOperations is already initialized to {0} and cannot be changed", _maxConcurrentOperations));
-                _maxConcurrentOperations = value;
             }
         }
 
         /// <summary>
         /// Gets number of objects alive for the transfer operations
         /// </summary>
-        public static int AwaitablesAlive 
-        {
-            get { return _awaitablesCount; }
-        }
+        public static int AwaitablesAlive => _awaitablesCount;
 
-        public static int IdleAwaitables
-        {
-            get { return _transferAwaitablesPool.Count; }
-        }
+        public static int IdleAwaitables => _transferAwaitablesPool.Count;
 
         /// <summary>
         /// Defines system-level receive buffer length
@@ -193,85 +155,56 @@ namespace SharpDc.Connections
         /// <summary>
         /// Gets network stream. Provides alternative way of communicating with the socket
         /// </summary>
-        public Stream Stream
-        {
-            get { return _stream; }
-        }
+        public Stream Stream => _stream;
 
         /// <summary>
         /// Gets the socket
         /// </summary>
-        public Socket Socket
-        {
-            get { return _socket; }
-        }
+        public Socket Socket => _socket;
 
         /// <summary>
         /// Gets or sets a socket receive timeout in milliseconds
         /// </summary>
-        public int ReceiveTimeout
-        {
-            get { return _receiveTimeout; }
-            set { _receiveTimeout = value; }
-        }
+        public int ReceiveTimeout { get; set; }
 
         /// <summary>
         /// Gets or sets a socket send timeout in milliseconds
         /// </summary>
-        public int SendTimeout
-        {
-            get { return _sendTimeout; }
-            set { _sendTimeout = value; }
-        }
+        public int SendTimeout { get; set; } = 1000;
 
         /// <summary>
         /// Gets current connection status
         /// </summary>
-        public ConnectionStatus ConnectionStatus
-        {
-            get { return _connectionStatus; }
-        }
+        public ConnectionStatus ConnectionStatus { get; private set; }
 
         /// <summary>
         /// Gets seconds passed from the last network event
         /// </summary>
-        public int IdleSeconds
-        {
-            get { return (int)((Stopwatch.GetTimestamp() - _lastUpdate) / Stopwatch.Frequency); }
-        }
+        public int IdleSeconds => (int)((Stopwatch.GetTimestamp() - _lastUpdate) / Stopwatch.Frequency);
 
         public IPEndPoint LocalAddress { get; set; }
 
-        public IPEndPoint RemoteAddress
-        {
-            get { return RemoteEndPoint; }
-        }
+        public IPEndPoint RemoteAddress => RemoteEndPoint;
 
         /// <summary>
         /// Gets an object to obtain upload speed
         /// </summary>
-        public SpeedAverage UploadSpeed
-        {
-            get { return _uploadSpeed; }
-        }
+        public SpeedAverage UploadSpeed => _uploadSpeed;
 
         /// <summary>
         /// Gets an object to obtain download speed
         /// </summary>
-        public SpeedAverage DownloadSpeed
-        {
-            get { return _downloadSpeed; }
-        }
+        public SpeedAverage DownloadSpeed => _downloadSpeed;
 
         /// <summary>
         /// Allows to control global tcpConnection upload speed limit
         /// </summary>
-        public static SpeedLimiter UploadSpeedLimitGlobal { get; private set; }
+        public static SpeedLimiter UploadSpeedLimitGlobal { get; }
 
         /// <summary>
         /// Allows to control global tcpConnection download speed limit
         /// </summary>
-        public static SpeedLimiter DownloadSpeedLimitGlobal { get; private set; }
+        public static SpeedLimiter DownloadSpeedLimitGlobal { get; }
 
         /// <summary>
         /// Allows to control this tcpConnection upload speed limit
@@ -286,10 +219,7 @@ namespace SharpDc.Connections
         /// <summary>
         /// Gets average messages dropped using SendQueued during last 10 seconds
         /// </summary>
-        public SpeedAverage SendQueuedSkips
-        {
-            get { return _sendQueuedSkips; }
-        }
+        public SpeedAverage SendQueuedSkips => _sendQueuedSkips;
 
         #region Events
 
@@ -300,8 +230,7 @@ namespace SharpDc.Connections
 
         public void OnConnectionStatusChanged(ConnectionStatusEventArgs e)
         {
-            var handler = ConnectionStatusChanged;
-            if (handler != null) handler(this, e);
+            ConnectionStatusChanged?.Invoke(this, e);
         }
 
         #endregion
@@ -313,41 +242,28 @@ namespace SharpDc.Connections
 
             _transferAwaitablesPool = new ObjectPool<TransferSocketAwaitable>(() =>
             {
-                // we will initialize large buffer when first network operation is performed
-                if (_largeBuffer == null)
+                if (!_bufferInitialized)
                 {
                     // lock to avoid multiple initialization
                     lock (_transferAwaitablesPool)
                     {
-                        if (_largeBuffer == null)
+                        if (!_bufferInitialized)
                         {
-                            if (_maxConcurrentOperations <= 0)
-                                _maxConcurrentOperations = 128;
                             if (_operationBufferLength <= 0)
+                            {
                                 _operationBufferLength = 64 * 1024;
-
-                            if (_maxConcurrentOperations * _operationBufferLength > int.MaxValue)
-                                throw new ConstraintException("Resulting big_socket_buffer is more than 4Gb, reduce maxSimultaneousOperations or operationBufferLength. Buffer sizes larger than 4Gb are not supported.");
-
-                            _largeBuffer = new byte[_maxConcurrentOperations * _operationBufferLength];
-
-                            Logger.Info("Large socket buffer is initialized to {1} ({0} bytes) buf length: {2} max operations: {3}",
-                                _largeBuffer.Length, 
-                                Utils.FormatBytes(_largeBuffer.Length), 
-                                _operationBufferLength, 
-                                _maxConcurrentOperations);
+                                Logger.Info("Using default operation buffer length");
+                            }
                         }
+
+                        _bufferInitialized = true;
                     }
                 }
-
-                if (_awaitablesCount >= _maxConcurrentOperations)
-                    throw new OverflowException("Too many awaitables were created. Consider to increase big socket buffer or reduce simultaneous connections count");
 
                 Interlocked.Increment(ref _awaitablesCount);
                 
                 var arg = new SocketAsyncEventArgs();
-                var bufferOffset = Interlocked.Add(ref _currentBufferOffset, _operationBufferLength) - _operationBufferLength;
-                arg.SetBuffer(_largeBuffer, bufferOffset, _operationBufferLength);
+                arg.SetBuffer(new byte[_operationBufferLength], 0, _operationBufferLength);
                 
                 return new TransferSocketAwaitable(arg); 
             });
@@ -376,18 +292,18 @@ namespace SharpDc.Connections
         protected TcpConnection(IPEndPoint remoteEndPoint) : this()
         {
             RemoteEndPoint = remoteEndPoint;
-            _connectionStatus = ConnectionStatus.Disconnected;
+            ConnectionStatus = ConnectionStatus.Disconnected;
         }
 
         protected TcpConnection(Socket socket) : this()
         {
             if (socket == null)
-                throw new ArgumentNullException("socket");
+                throw new ArgumentNullException(nameof(socket));
 
             _socket = socket;
             PrepareSocket(_socket);
             LocalAddress = (IPEndPoint)_socket.LocalEndPoint;
-            _connectionStatus = _socket.Connected ? ConnectionStatus.Connected : ConnectionStatus.Disconnected;
+            ConnectionStatus = _socket.Connected ? ConnectionStatus.Connected : ConnectionStatus.Disconnected;
             try
             {
                 RemoteEndPoint = socket.RemoteEndPoint as IPEndPoint;
@@ -397,7 +313,7 @@ namespace SharpDc.Connections
                 Logger.Error("When trying to get the remote address: " + x.Message);
             }
 
-            if (_connectionStatus == ConnectionStatus.Disconnected)
+            if (ConnectionStatus == ConnectionStatus.Disconnected)
             {
                 Logger.Error("Added socket is disconnected!");
             }
@@ -416,8 +332,8 @@ namespace SharpDc.Connections
 
         public void DisconnectAsync()
         {
-            if (_connectionStatus == ConnectionStatus.Disconnected ||
-                _connectionStatus == ConnectionStatus.Disconnecting)
+            if (ConnectionStatus == ConnectionStatus.Disconnected ||
+                ConnectionStatus == ConnectionStatus.Disconnecting)
                 return;
 
             SetConnectionStatus(ConnectionStatus.Disconnecting);
@@ -430,6 +346,11 @@ namespace SharpDc.Connections
             {
                 SetConnectionStatus(ConnectionStatus.Disconnected);
             }
+        }
+
+        public void Disconnect()
+        {
+            Dispose();
         }
 
         private void SocketDisconnected(IAsyncResult ar)
@@ -641,6 +562,11 @@ namespace SharpDc.Connections
             }
         }
 
+        public Task SendAsync(byte[] buffer)
+        {
+            return SendAsync(buffer, 0, buffer.Length);
+        }
+
         public async Task SendAsync(byte[] buffer, int offset, int length)
         {
             var socket = _socket;
@@ -723,12 +649,9 @@ namespace SharpDc.Connections
             lock (_sendQueue)
             {
                 if (_sendQueue.Count > 1000)
-                {
                     _sendQueuedSkips.Update(1);
-                    return;
-                }
-
-                _sendQueue.Enqueue(message);
+                else
+                    _sendQueue.Enqueue(message);
             }
 
             if (Interlocked.Exchange(ref _flushingQueue, 1) == 0)
@@ -776,8 +699,8 @@ namespace SharpDc.Connections
         /// <param name="x"></param>
         protected void SetConnectionStatus(ConnectionStatus status, Exception x = null)
         {
-            var old = _connectionStatus;
-            if (_connectionStatus == status)
+            var old = ConnectionStatus;
+            if (ConnectionStatus == status)
                 return;
 
             var ea = new ConnectionStatusEventArgs
@@ -787,14 +710,14 @@ namespace SharpDc.Connections
                              Exception = x
                          };
 
-            _connectionStatus = status;
+            ConnectionStatus = status;
 
             OnConnectionStatusChanged(ea);
 
             if (x != null)
                 Logger.Error("TcpConnection disconnected by error: {0} {1} {2}", RemoteAddress, x.Message, x.StackTrace);
 
-            if (_connectionStatus == ConnectionStatus.Disconnected)
+            if (ConnectionStatus == ConnectionStatus.Disconnected)
                 Dispose();
         }
 
