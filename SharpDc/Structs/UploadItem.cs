@@ -106,8 +106,8 @@ namespace SharpDc.Structs
                 FileStream fs;
                 using (new PerfLimit("Slow open " + Content.SystemPath, 4000))
                 {
-                    fs = new FileStream(SystemPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
-                                        FileStreamReadBufferSize, true);
+                    fs = FileStreamFactory.CreateFileStream(SystemPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
+                                        FileStreamReadBufferSize, FileOptions.Asynchronous);
                 }
 
                 lock (_syncRoot)

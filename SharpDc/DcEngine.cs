@@ -1,6 +1,6 @@
 ﻿// -------------------------------------------------------------
 // SharpDc project 
-// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2016
 // licensed under the LGPL
 // -------------------------------------------------------------
 
@@ -10,7 +10,6 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading;
-using System.Diagnostics;
 using SharpDc.Collections;
 using SharpDc.Connections;
 using SharpDc.Events;
@@ -170,8 +169,7 @@ namespace SharpDc
 
         private void OnIncomingMessage(MessageEventArgs e)
         {
-            var handler = IncomingMessage;
-            if (handler != null) handler(this, e);
+            IncomingMessage?.Invoke(this, e);
         }
 
         /// <summary>
@@ -182,8 +180,7 @@ namespace SharpDc
 
         private void OnOutgoingMessage(MessageEventArgs e)
         {
-            var handler = OutgoingMessage;
-            if (handler != null) handler(this, e);
+            OutgoingMessage?.Invoke(this, e);
         }
 
         /// <summary>
@@ -193,8 +190,7 @@ namespace SharpDc
 
         public void OnActiveStatusChanged()
         {
-            var handler = ActiveStatusChanged;
-            if (handler != null) handler(this, EventArgs.Empty);
+            ActiveStatusChanged?.Invoke(this, EventArgs.Empty);
         }
 
         /// <summary>
@@ -204,8 +200,7 @@ namespace SharpDc
 
         public void OnConnectionRequest(ConnectionRequestEventArgs e)
         {
-            var handler = ConnectionRequest;
-            if (handler != null) handler(this, e);
+            ConnectionRequest?.Invoke(this, e);
         }
 
         /// <summary>
@@ -215,8 +210,7 @@ namespace SharpDc
 
         private void OnSearchRequest(EngineSearchRequestEventArgs e)
         {
-            var handler = SearchRequest;
-            if (handler != null) handler(this, e);
+            SearchRequest?.Invoke(this, e);
         }
 
         #endregion
@@ -391,15 +385,15 @@ namespace SharpDc
         {
             foreach (var hub in Hubs)
             {
-                if (Settings.ReconnectTimeout != 0 && hub.ConnectionStatus == ConnectionStatus.Disconnected &&
-                    hub.IdleSeconds > Settings.ReconnectTimeout)
+                if (Settings.ReconnectTimeout != 0 && hub.IdleSeconds > Settings.ReconnectTimeout)
                 {
                     Logger.Info("{0}: Hub inactivity timeout reached [{1}]. Reconnecting", hub.Settings.HubName,
                                 Settings.ReconnectTimeout);
+                    hub.Disconnect();
                     hub.StartAsync();
                 }
 
-                if (hub.Active && hub.IdleSeconds > Settings.ReconnectTimeout)
+                if (Settings.KeepAliveTimeout != 0 && hub.Active && hub.IdleSeconds > Settings.KeepAliveTimeout)
                     hub.KeepAlive();
             }
             
@@ -415,7 +409,7 @@ namespace SharpDc
 
             try
             {
-                using (new PerfLimit("EngineUpdate requests",300)) 
+                using (new PerfLimit("EngineUpdate requests", 300))
                 foreach (var downloadItem in DownloadManager.EnumeratesItemsForProcess())
                 {
                     if (downloadItem.Priority == DownloadPriority.Pause)
@@ -541,16 +535,10 @@ namespace SharpDc
             {
                 var stream = _streams.FirstOrDefault(s => s.Magnet.TTH == e.DownloadItem.Magnet.TTH);
 
-                if (stream != null)
-                {
-                    stream.ReplaceDownloadItemWithFile(e.DownloadItem.SaveTargets[0]);
-                }
+                stream?.ReplaceDownloadItemWithFile(e.DownloadItem.SaveTargets[0]);
             }
 
-            if (Share != null)
-            {
-                Share.AddFile(new ContentItem(e.DownloadItem));
-            }
+            Share?.AddFile(new ContentItem(e.DownloadItem));
         }
 
         private void TcpConnectionListenerIncomingConnection(object sender, IncomingConnectionEventArgs e)

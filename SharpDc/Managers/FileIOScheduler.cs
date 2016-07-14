@@ -13,7 +13,7 @@ namespace SharpDc.Managers
     {
         public static bool UsePriorityFileStreams { get; set; }
 
-        public static FileStream CreateFileStream(string path, FileMode mode, FileAccess access, FileShare share, int bufferSize, FileOptions options)
+        public static FileStream CreateFileStream(string path, FileMode mode, FileAccess access, FileShare share, int bufferSize = 4096, FileOptions options = FileOptions.None)
         {
             if (UsePriorityFileStreams)
             {
@@ -96,16 +96,6 @@ namespace SharpDc.Managers
         {
             throw new NotSupportedException("Use Async methods instead");
         }
-
-        public override int EndRead(IAsyncResult asyncResult)
-        {
-            throw new NotSupportedException("Use Async methods instead");
-        }
-
-        public override void EndWrite(IAsyncResult asyncResult)
-        {
-            throw new NotSupportedException("Use Async methods instead");
-        }
     }
 
 
@@ -151,6 +141,15 @@ namespace SharpDc.Managers
         private readonly Queue<FileIOOperation> _backgroundQueue = new Queue<FileIOOperation>();
 
         private int _activeOperations = 0;
+
+        /// <summary>
+        /// Gets how much opertions are active at this moment (simultaneous)
+        /// </summary>
+        public int ActiveOperations => _activeOperations;
+
+        public int DefaultQueueSize => _defaultQueue.Count;
+
+        public int BackgroundQueueSize => _backgroundQueue.Count;
 
         public DriveIOScheduler()
         {

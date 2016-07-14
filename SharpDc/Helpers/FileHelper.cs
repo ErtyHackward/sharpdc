@@ -5,14 +5,18 @@
 // -------------------------------------------------------------
 
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
+using SharpDc.Logging;
 
 namespace SharpDc.Helpers
 {
     public static class FileHelper
     {
+        private static readonly ILogger Logger = LogManager.GetLogger();
+
         public static readonly bool IsLinux;
         private static string _defaultPath;
 
@@ -256,9 +260,17 @@ namespace SharpDc.Helpers
 
         public static void DeleteAnyway(string path)
         {
+            var ts = Stopwatch.StartNew();
+
             while (!TryDelete(path))
             {
                 Thread.Sleep(100);
+
+                if (ts.Elapsed.TotalSeconds > 30)
+                {
+                    Logger.Error($"Failed to delete file {path} in 30 sec. Skip");
+                    return;
+                }
             }
         }
 

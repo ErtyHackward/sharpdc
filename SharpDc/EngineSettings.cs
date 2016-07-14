@@ -1,6 +1,6 @@
 // -------------------------------------------------------------
 // SharpDc project 
-// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2013
+// written by Vladislav Pozdnyakov (hackward@gmail.com) 2012-2016
 // licensed under the LGPL
 // -------------------------------------------------------------
 
@@ -23,6 +23,7 @@ namespace SharpDc
         private int _maxDownloadThreads;
         private int _maxUploadThreads;
         private int _reconnectTimeout;
+        private int _keepAliveTimeout;
         private bool _activeMode;
         private int _maxFiles;
         private bool _verifyFiles;
@@ -50,8 +51,7 @@ namespace SharpDc
         
         protected void OnChanged(EngineSettingType st)
         {
-            EventHandler<EngineSettingsEventArgs> handler = Changed;
-            if (handler != null) handler(this, new EngineSettingsEventArgs(st));
+            Changed?.Invoke(this, new EngineSettingsEventArgs(st));
         }
 
         /// <summary>
@@ -178,6 +178,22 @@ namespace SharpDc
                 {
                     _reconnectTimeout = value;
                     OnChanged(EngineSettingType.ReconnectTimeout);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Seconds between hub keep alive attempts, 0 - don't send keep alive messages. Keep alive is just an empty message.
+        /// </summary>
+        public int KeepAliveTimeout
+        {
+            get { return _keepAliveTimeout; }
+            set
+            {
+                if (_keepAliveTimeout != value)
+                {
+                    _keepAliveTimeout = value;
+                    OnChanged(EngineSettingType.KeepAliveTimeout);
                 }
             }
         }
@@ -479,35 +495,30 @@ namespace SharpDc
         /// <summary>
         /// Gets default settings
         /// </summary>
-        public static EngineSettings Default
+        public static EngineSettings Default => new EngineSettings
         {
-            get
-            {
-                return new EngineSettings
-                           {
-                               _pathDownload = string.IsNullOrEmpty(AppDomain.CurrentDomain.BaseDirectory) ? "Downloads" : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Downloads"),
-                               _pathFileLists = string.IsNullOrEmpty(AppDomain.CurrentDomain.BaseDirectory) ? "FileLists" : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "FileLists"),
-                               _tcpPort = 10853,
-                               _udpPort = 6308,
-                               _maxDownloadThreads = 20,
-                               _maxUploadThreads = 0,
-                               _reconnectTimeout = 10,
-                               _maxFiles = 2,
-                               _activeMode = true,
-                               _instantAllocate = false,
-                               _getUsersList = true,
-                               _dumpHubMessages = false,
-                               _searchAlternativesInterval = 5,
-                               _tcpBackLog = 10,
-                               _fileReadBufferSize = 64 * 1024,
-                               _netInterface = null,
-                               _useSparse = false,
-                               _backgroundSeedMode = true,
-                               _measureUploadSourceQuality = false,
-                               _httpQueueLimit = 0,
-                               _httpConnectionsPerServer = 0
-                           };
-            }
-        }
+            _pathDownload = string.IsNullOrEmpty(AppDomain.CurrentDomain.BaseDirectory) ? "Downloads" : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Downloads"),
+            _pathFileLists = string.IsNullOrEmpty(AppDomain.CurrentDomain.BaseDirectory) ? "FileLists" : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "FileLists"),
+            _tcpPort = 10853,
+            _udpPort = 6308,
+            _maxDownloadThreads = 20,
+            _maxUploadThreads = 0,
+            _reconnectTimeout = 120,
+            _keepAliveTimeout = 60,
+            _maxFiles = 2,
+            _activeMode = true,
+            _instantAllocate = false,
+            _getUsersList = true,
+            _dumpHubMessages = false,
+            _searchAlternativesInterval = 5,
+            _tcpBackLog = 10,
+            _fileReadBufferSize = 64 * 1024,
+            _netInterface = null,
+            _useSparse = false,
+            _backgroundSeedMode = true,
+            _measureUploadSourceQuality = false,
+            _httpQueueLimit = 0,
+            _httpConnectionsPerServer = 0
+        };
     }
 }

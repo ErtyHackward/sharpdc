@@ -33,7 +33,6 @@ namespace SharpDc.Managers
 
         private long _uploadedFromCache;
         private bool _listening;
-        private Timer _updateTimer;
         private const float CacheGap = 10f;
         private const float RemoveThresold = 3f;
         
@@ -112,7 +111,7 @@ namespace SharpDc.Managers
             try
             {
                 using (new PerfLimit(() => $"Cache segment read {item.CachePath}", 1000))
-                using (var fs = new FileStream(item.CachePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1024 * 1024))
+                using (var fs = FileStreamFactory.CreateFileStream(item.CachePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1024 * 1024))
                 {
                     fs.Position = position;
                     if (fs.Read(buffer, 0, buffer.Length) != length)
@@ -378,6 +377,7 @@ namespace SharpDc.Managers
                             Logger.Info("Verifying the data");
                             var hasher = new ThexThreaded<TigerNative>();
                             hasher.LowPriority = true;
+                            hasher.FileStreamBufferLength = 1024 * 1024;
                             var tth = Base32Encoding.ToString(hasher.GetTTHRoot(item.CachePath));
 
                             if (tth == item.Magnet.TTH)
@@ -588,25 +588,7 @@ namespace SharpDc.Managers
                 ProxyUploadItem.SegmentDownloaded += HttpUploadItem_HttpSegmentDownloaded;
                 ProxyUploadItem.SegmentNeeded += HttpUploadItem_HttpSegmentNeeded;
                 _listening = true;
-
-                var updateInterval = TimeSpan.FromHours(12);
-                _updateTimer = new Timer(PeriodicAction, null, updateInterval, updateInterval);
             }
-        }
-
-        private void PeriodicAction(object state)
-        {
-            Logger.Info("Decreasing statistics rates...");
-            var items = _engine.StatisticsManager.AllItems().ToList();
-
-            foreach (var statItem in items)
-            {
-                var item = statItem;
-
-                item.TotalUploaded -= item.TotalUploaded / 2;
-                _engine.StatisticsManager.SetItem(item);
-            }
-            Logger.Info("Decreasing statistics rates done");
         }
 
         public bool Contains(string tth)

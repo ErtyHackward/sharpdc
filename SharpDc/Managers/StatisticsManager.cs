@@ -10,21 +10,49 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Security;
+using System.Threading;
 using System.Xml.Serialization;
 using SharpDc.Connections;
+using SharpDc.Logging;
 using SharpDc.Structs;
 
 namespace SharpDc.Managers
 {
     public class StatisticsManager
     {
+        private static readonly ILogger Logger = LogManager.GetLogger();
+
         private readonly Dictionary<string, StatItem> _items = new Dictionary<string, StatItem>();
         private readonly object _synRoot = new object();
-        
-        public StatisticsManager(DcEngine engine)
+        private readonly Timer _updateTimer;
+        private readonly DcEngine _engine;
+
+        public StatisticsManager(DcEngine engine, bool decayRates = true)
         {
+            _engine = engine;
             engine.TransferManager.TransferAdded += TransferManager_TransferAdded;
             engine.TransferManager.TransferRemoved += TransferManager_TransferRemoved;
+
+            if (decayRates)
+            {
+                var updateInterval = TimeSpan.FromHours(12);
+                _updateTimer = new Timer(PeriodicAction, null, updateInterval, updateInterval);
+            }
+        }
+
+        private void PeriodicAction(object state)
+        {
+            Logger.Info("Decreasing statistics rates...");
+            var items = _engine.StatisticsManager.AllItems().ToList();
+
+            foreach (var statItem in items)
+            {
+                var item = statItem;
+
+                item.TotalUploaded -= item.TotalUploaded / 2;
+                _engine.StatisticsManager.SetItem(item);
+            }
+            Logger.Info("Decreasing statistics rates done");
         }
 
         void TransferManager_TransferRemoved(object sender, TransferEventArgs e)

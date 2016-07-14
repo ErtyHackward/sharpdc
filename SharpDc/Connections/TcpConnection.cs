@@ -324,7 +324,15 @@ namespace SharpDc.Connections
             var socket = _socket;
             if (socket != null)
             {
-                socket.Close();
+                try
+                {
+                    socket.Close();
+                }
+                catch (Exception x)
+                {
+                    Logger.Error("Failed to close the socket {0}", x.Message);
+                }
+                
                 _socket = null;
             }
             SetConnectionStatus(ConnectionStatus.Disconnected);

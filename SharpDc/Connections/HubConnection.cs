@@ -7,9 +7,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Text;
-using System.Threading.Tasks;
 using SharpDc.Events;
-using SharpDc.Helpers;
 using SharpDc.Logging;
 using SharpDc.Messages;
 using SharpDc.Structs;
@@ -84,16 +82,14 @@ namespace SharpDc.Connections
 
         private void OnActiveStatusChanged()
         {
-            var handler = ActiveStatusChanged;
-            if (handler != null) handler(this, EventArgs.Empty);
+            ActiveStatusChanged?.Invoke(this, EventArgs.Empty);
         }
 
         public event EventHandler<MessageEventArgs> IncomingMessage;
 
         private void OnIncomingMessage(MessageEventArgs e)
         {
-            var handler = IncomingMessage;
-            if (handler != null) handler(this, e);
+            IncomingMessage?.Invoke(this, e);
         }
 
         public event EventHandler<MessageEventArgs> OutgoingMessage;
@@ -105,16 +101,14 @@ namespace SharpDc.Connections
 
         public void OnOutgoingMessage(MessageEventArgs e)
         {
-            var handler = OutgoingMessage;
-            if (handler != null) handler(this, e);
+            OutgoingMessage?.Invoke(this, e);
         }
 
         public event EventHandler<SearchRequestEventArgs> SearchRequest;
 
         private void OnSearchRequest(SearchRequestEventArgs e)
         {
-            var handler = SearchRequest;
-            if (handler != null) handler(this, e);
+            SearchRequest?.Invoke(this, e);
         }
 
         /// <summary>
@@ -125,8 +119,7 @@ namespace SharpDc.Connections
 
         private void OnIncomingConnectionRequest(IncomingConnectionRequestEventArgs e)
         {
-            var handler = IncomingConnectionRequest;
-            if (handler != null) handler(this, e);
+            IncomingConnectionRequest?.Invoke(this, e);
         }
 
         /// <summary>
@@ -137,8 +130,7 @@ namespace SharpDc.Connections
 
         private void OnOutgoingConnectionRequest(OutgoingConnectionRequestEventArgs e)
         {
-            var handler = OutgoingConnectionRequest;
-            if (handler != null) handler(this, e);
+            OutgoingConnectionRequest?.Invoke(this, e);
         }
 
         /// <summary>
@@ -148,16 +140,14 @@ namespace SharpDc.Connections
 
         private void OnPasswordRequired(PasswordRequiredEventArgs e)
         {
-            var handler = PasswordRequired;
-            if (handler != null) handler(this, e);
+            PasswordRequired?.Invoke(this, e);
         }
 
         public event EventHandler<SearchResultEventArgs> PassiveSearchResult;
 
         protected void OnPassiveSearchResult(SearchResultEventArgs e)
         {
-            var handler = PassiveSearchResult;
-            if (handler != null) handler(this, e);
+            PassiveSearchResult?.Invoke(this, e);
         }
 
         /// <summary>
@@ -168,8 +158,7 @@ namespace SharpDc.Connections
 
         protected void OnOwnIpReceived()
         {
-            var handler = OwnIpReceived;
-            if (handler != null) handler(this, EventArgs.Empty);
+            OwnIpReceived?.Invoke(this, EventArgs.Empty);
         }
 
         /// <summary>
@@ -179,8 +168,7 @@ namespace SharpDc.Connections
 
         protected virtual void OnChatMessage(ChatMessageEventArgs e)
         {
-            var handler = ChatMessage;
-            if (handler != null) handler(this, e);
+            ChatMessage?.Invoke(this, e);
         }
 
         #endregion
