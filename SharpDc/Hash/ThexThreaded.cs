@@ -50,6 +50,7 @@ using System.IO;
 using System.Threading.Tasks;
 using SharpDc.Helpers;
 using SharpDc.Logging;
+using SharpDc.Managers;
 using ThreadPriority = System.Threading.ThreadPriority;
 
 namespace SharpDc.Hash
@@ -82,17 +83,13 @@ namespace SharpDc.Hash
 
         public bool LowPriority { get; set; }
 
+        public int FileStreamBufferLength { get; set; } = 4096;
+
         private long _processedBytes = 0;
 
-        public float Progress
-        {
-            get { return (float)_processedBytes / _filePtr.Length; }
-        }
+        public float Progress => (float)_processedBytes / _filePtr.Length;
 
-        public HashAlgorithm Hasher
-        {
-            get { return new T(); }
-        }
+        public HashAlgorithm Hasher => new T();
 
         public byte[] GetTTHRoot(string filename)
 		{
@@ -127,8 +124,7 @@ namespace SharpDc.Hash
 				StopThreads();
 			}
 
-			if (_filePtr != null) 
-                _filePtr.Close();
+		    _filePtr?.Close();
 		}
 		
 		void Dispose()
@@ -144,7 +140,7 @@ namespace SharpDc.Hash
 			if (!File.Exists(_filename))
 				throw new Exception("file doesn't exists!");
 
-		    _filePtr = new FileStream(_filename, FileMode.Open, FileAccess.Read, FileShare.Read);
+		    _filePtr = FileStreamFactory.CreateFileStream(_filename, FileMode.Open, FileAccess.Read, FileShare.Read, FileStreamBufferLength);
 		    _processedBytes = 0;
 		}
 
@@ -222,7 +218,7 @@ namespace SharpDc.Hash
 		void ProcessLeafs(object threadId)
 		{
             using (LowPriority ? ThreadUtility.EnterBackgroundProcessingMode() : null)
-            using (var threadFilePtr = new FileStream(_filename, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var threadFilePtr = FileStreamFactory.CreateFileStream(_filename, FileMode.Open, FileAccess.Read, FileShare.Read, FileStreamBufferLength))
 		    {
 		        var threadFileBlock = _fileParts[(int)threadId];
 		        var tg = new T();
@@ -272,32 +268,35 @@ namespace SharpDc.Hash
         
 		void CompressTree()
 		{
-		    int level = 0;
+            int level = 0;
 
-		    while (level + 1 < LevelCount)
-			{
-				int leafIndex = 0;
-				var internalLeafCount = (_leafCount / 2) + (_leafCount % 2);
-				TTH[level + 1] = new byte[internalLeafCount][];
+		    using (LowPriority ? ThreadUtility.EnterBackgroundProcessingMode() : null)
+		    {
+		        while (level + 1 < LevelCount)
+		        {
+		            int leafIndex = 0;
+		            var internalLeafCount = (_leafCount / 2) + (_leafCount % 2);
+		            TTH[level + 1] = new byte[internalLeafCount][];
 
-			    if (_leafCount > 128)
-			    {
-			        Parallel.For(0, _leafCount / 2,
-			                     ind => ProcessInternalLeaf(level + 1, ind, TTH[level][ind*2], TTH[level][ind*2+1]));
-			        leafIndex = _leafCount / 2;
-			    }
-			    else
-			    {
-			        for (var i = 1; i < _leafCount; i += 2)
-			            ProcessInternalLeaf(level + 1, leafIndex++, TTH[level][i - 1], TTH[level][i]);
-			    }
+		            if (!LowPriority && _leafCount > 128)
+		            {
+		                Parallel.For(0, _leafCount / 2,
+		                    ind => ProcessInternalLeaf(level + 1, ind, TTH[level][ind * 2], TTH[level][ind * 2 + 1]));
+		                leafIndex = _leafCount / 2;
+		            }
+		            else
+		            {
+		                for (var i = 1; i < _leafCount; i += 2)
+		                    ProcessInternalLeaf(level + 1, leafIndex++, TTH[level][i - 1], TTH[level][i]);
+		            }
 
-			    if (leafIndex < internalLeafCount) 
-					TTH[level + 1][leafIndex] = TTH[level][_leafCount - 1];
+		            if (leafIndex < internalLeafCount)
+		                TTH[level + 1][leafIndex] = TTH[level][_leafCount - 1];
 
-				level++;
-				_leafCount = internalLeafCount;
-			}
+		            level++;
+		            _leafCount = internalLeafCount;
+		        }
+		    }
 		}
 
         private void ProcessInternalLeaf(int level, int index, byte[] leafA, byte[] leafB)
@@ -365,7 +364,7 @@ namespace SharpDc.Hash
         private static byte[][] ReadLeafs(HashAlgorithm tg, string filePath, long start, long end)
         {
             using (ThreadUtility.EnterBackgroundProcessingMode())
-            using (var threadFilePtr = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var threadFilePtr = FileStreamFactory.CreateFileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 128 * 1024))
             {
                 var threadFileBlock = new FileBlock(start, end);
                 var LeafSize = 1024;

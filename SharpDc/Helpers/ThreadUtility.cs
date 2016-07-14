@@ -48,19 +48,21 @@ namespace SharpDc.Helpers
 
             Thread.BeginThreadAffinity();
             IntPtr hThread = NativeMethods.GetCurrentThread();
+            ThreadPriority previous = NativeMethods.GetThreadPriority(hThread);
+
             if (IsWindowsVista() && NativeMethods.SetThreadPriority(hThread,
-                ThreadPriority.THREAD_MODE_BACKGROUND_BEGIN))
+                ThreadPriority.THREAD_PRIORITY_IDLE | ThreadPriority.THREAD_MODE_BACKGROUND_BEGIN))
             {
+
                 // OS supports background processing; return Scope that exits this mode
                 return Scope.Create(() =>
                 {
-                    NativeMethods.SetThreadPriority(hThread, ThreadPriority.THREAD_MODE_BACKGROUND_END);
+                    NativeMethods.SetThreadPriority(hThread, previous | ThreadPriority.THREAD_MODE_BACKGROUND_END);
                     Thread.EndThreadAffinity();
                 });
             }
 
 
-            ThreadPriority previous = NativeMethods.GetThreadPriority(hThread);
             // try to set idle cpu priority at least
             if (NativeMethods.SetThreadPriority(hThread, ThreadPriority.THREAD_PRIORITY_IDLE))
             {

@@ -15,6 +15,7 @@ namespace SharpDc
         MaxDownloadThreads,
         MaxUploadThreads,
         ReconnectTimeout,
+        KeepAliveTimeout,
         ActiveMode,
         MaxFiles,
         VerifyFiles,
