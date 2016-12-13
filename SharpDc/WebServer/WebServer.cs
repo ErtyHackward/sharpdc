@@ -21,10 +21,7 @@ namespace SharpDc.WebServer
 
         public int Port { get; set; }
 
-        public bool Alive
-        {
-            get { return _listener != null; }
-        }
+        public bool Alive => _listener != null;
 
         public string LocalIPAddress
         {
@@ -67,8 +64,7 @@ namespace SharpDc.WebServer
 
         protected void OnConnected(WebServerConnectedEventArgs e)
         {
-            var handler = Connected;
-            if (handler != null) handler(this, e);
+            Connected?.Invoke(this, e);
         }
 
         /// <summary>
@@ -78,8 +74,7 @@ namespace SharpDc.WebServer
 
         protected void OnRequest(WebServerRequestEventArgs e)
         {
-            var handler = Request;
-            if (handler != null) handler(this, e);
+            Request?.Invoke(this, e);
         }
 
         public WebServer()

@@ -101,15 +101,20 @@ namespace SharpDc.Connections
                                     continue;
                                 }
                                 
-                                SegmentService.Update((int)((Stopwatch.GetTimestamp() - task.Created) / (Stopwatch.Frequency / 1000)));
+                                SegmentService.Update(task.SinceCreatedMs);
                                 SegmentsPerSecond.Update(1);
                             }
                         }
                         else
                         {
-                            task.FileLength = new FileInfo(path).Length;
-                        }
+                            var fi = new FileInfo(path);
 
+                            if (!fi.Exists)
+                                task.FileLength = -1;
+                            else
+                                task.FileLength = fi.Length;
+                        }
+                        
                         task.Done();
                     }
                     catch (Exception x)

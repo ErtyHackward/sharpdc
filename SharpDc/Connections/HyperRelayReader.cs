@@ -186,17 +186,16 @@ namespace SharpDc.Connections
                             throw new InvalidOperationException("Not supported source type " + ci.Value.SystemPath);
                         }
 
-                        SegmentServiceProxy.Update((int)((Stopwatch.GetTimestamp() - task.Created) / (Stopwatch.Frequency / 1000)));
+                        SegmentServiceProxy.Update(task.SinceCreatedMs);
                         SegmentsPerSecondProxy.Update(1);
                     }
                     else
                     {
-                        SegmentServiceCached.Update((int)((Stopwatch.GetTimestamp() - task.Created) / (Stopwatch.Frequency / 1000)));
+                        SegmentServiceCached.Update(task.SinceCreatedMs);
                         SegmentsPerSecondCached.Update(1);
                     }
 
-                    SegmentService.Update(
-                        (int)((Stopwatch.GetTimestamp() - task.Created) / (Stopwatch.Frequency / 1000)));
+                    SegmentService.Update(task.SinceCreatedMs);
                     SegmentsPerSecond.Update(1);
                 }
                 else

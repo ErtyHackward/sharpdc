@@ -26,6 +26,7 @@ namespace SharpDc.Logging
         void Warn(string message, params object[] args);
         void Error(string message, params object[] args);
         void Fatal(string message, params object[] args);
+        void Trace(string message, params object[] args);
     }
 
     /// <summary>
@@ -48,6 +49,10 @@ namespace SharpDc.Logging
         public void Fatal(string message, params object[] args)
         {
         }
+
+        public void Trace(string message, params object[] args)
+        {
+        }
     }
 
     /// <summary>
@@ -57,22 +62,27 @@ namespace SharpDc.Logging
     {
         public void Info(string message, params object[] args)
         {
-            Trace.TraceInformation(string.Format(message, args));
+            System.Diagnostics.Trace.TraceInformation(string.Format(message, args));
         }
 
         public void Warn(string message, params object[] args)
         {
-            Trace.TraceWarning(string.Format(message, args));
+            System.Diagnostics.Trace.TraceWarning(string.Format(message, args));
         }
 
         public void Error(string message, params object[] args)
         {
-            Trace.TraceError(string.Format(message, args));
+            System.Diagnostics.Trace.TraceError(string.Format(message, args));
         }
 
         public void Fatal(string message, params object[] args)
         {
-            Trace.TraceError(string.Format(message, args));
+            System.Diagnostics.Trace.TraceError(string.Format(message, args));
+        }
+
+        public void Trace(string message, params object[] args)
+        {
+            System.Diagnostics.Trace.TraceInformation(string.Format(message, args));
         }
     }
 
