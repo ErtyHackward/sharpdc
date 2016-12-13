@@ -59,6 +59,7 @@ namespace SharpDc.Connections
             {
                 if (_fileCheckQueue.Count >= MaxFileCheckQueueSize)
                 {
+                    Logger.Trace("Skip fchk send because of queue size is exceeded {0}", task.Token);
                     SkippedFileChecks.Update(1);
                     return;
                 }
@@ -69,6 +70,7 @@ namespace SharpDc.Connections
             {
                 if (_responses.Count >= MaxQueueSize)
                 {
+                    Logger.Trace("Skip seg send because of queue size is exceeded {0}", task.Token);
                     SkippedSegments.Update(1);
                     return;
                 }
@@ -128,6 +130,7 @@ namespace SharpDc.Connections
                 if (task.IsFileCheck)
                 {
                     task.FileLength = -1;
+                    Logger.Trace("Task chk file is not found {0}", task.Token);
                     task.Done();
                 }
                 else

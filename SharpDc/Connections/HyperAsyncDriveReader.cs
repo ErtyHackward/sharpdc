@@ -57,8 +57,7 @@ namespace SharpDc.Connections
                             return;
                         }
 
-                        SegmentService.Update(
-                            (int)((Stopwatch.GetTimestamp() - task.Created) / (Stopwatch.Frequency / 1000)));
+                        SegmentService.Update(task.SinceCreatedMs);
                         SegmentsPerSecond.Update(1);
                     }
                 }

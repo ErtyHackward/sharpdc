@@ -151,7 +151,13 @@ namespace SharpDc.WebServer
         public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback,
                                                 object state)
         {
-            throw new Exception("The method or operation is not implemented.");
+            if (!isHeaderSent)
+            {
+                WriteHttpHeader();
+                isHeaderSent = true;
+            }
+
+            return stream.BeginWrite(buffer, offset, count, callback, state);
         }
     }
 }

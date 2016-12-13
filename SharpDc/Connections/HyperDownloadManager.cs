@@ -152,15 +152,19 @@ namespace SharpDc.Connections
                         timeoutentry.SegmentAwaitable.SetResult(new ReusableObject<byte[]>());
                     TimeoutSegments.Update(1);
 
+                    Logger.Warn($"Timeout request token:{aliveTask.Key}");
+
                     droppedSegmentRequests++;
                 }
 
-                if (executionTimeS > 60 && aliveTask.Value.FileCheckAwaitable != null)
+                if (executionTimeS > 300 && aliveTask.Value.FileCheckAwaitable != null)
                 {
                     HyperMeta timeoutentry;
                     if (_aliveTasks.TryRemove(aliveTask.Key, out timeoutentry))
                         timeoutentry.FileCheckAwaitable.SetResult(-1);
                     TimeoutFilechecks.Update(1);
+
+                    Logger.Warn($"Timeout f-chk-request token:{aliveTask.Key}");
 
                     droppedFileChecks++;
                 }
@@ -272,19 +276,24 @@ namespace SharpDc.Connections
             }
         }
 
-        public async Task CopyFileTo(string path, Stream stream)
+        public async Task CopyFileTo(string path, Stream stream, long offset = 0, long length = -1, int reqAhead = 10)
         {
-            var size = await GetFileSize(path).ConfigureAwait(false);
-            long position = 0;
+            var endPosition = await GetFileSize(path).ConfigureAwait(false);
+            var position = offset;
             var segQueue = new Queue<KeyValuePair<Task<ReusableObject<byte[]>>, int>>();
 
-            int reqAhead = 10;
-
-            while (position < size || segQueue.Count > 0)
+            if (length != -1)
+                endPosition = position + length;
+            else if (position != 0)
             {
-                while (position < size && segQueue.Count < reqAhead)
+                endPosition -= position;
+            }
+
+            while (position < endPosition || segQueue.Count > 0)
+            {
+                while (position < endPosition && segQueue.Count < reqAhead)
                 {
-                    var chunkLength = (int)Math.Min(1024 * 1024, size - position);
+                    var chunkLength = (int)Math.Min(1024 * 1024, endPosition - position);
                     segQueue.Enqueue(new KeyValuePair<Task<ReusableObject<byte[]>>, int>(DownloadSegment(path, position, chunkLength), chunkLength));
                     position += chunkLength;
                 }
@@ -298,8 +307,6 @@ namespace SharpDc.Connections
 
                     await stream.WriteAsync(bytes.Object, 0, pair.Value).ConfigureAwait(false);
                 }
-
-                
             }
 
             stream.Flush();

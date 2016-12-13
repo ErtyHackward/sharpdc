@@ -69,6 +69,8 @@ namespace SharpDc.Connections
                         return hyperStorageManager;
                     }
                 }
+
+                _cachedStorages.Add(path, null);
             }
 
             return null;
