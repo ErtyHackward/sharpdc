@@ -31,3 +31,4 @@ _ReSharper*/
 *.resharper
 *.ReSharper
 packages\*
+.vs\*

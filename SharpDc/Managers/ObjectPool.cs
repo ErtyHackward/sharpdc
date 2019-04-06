@@ -20,24 +20,17 @@ namespace SharpDc.Managers
         /// <summary>
         /// Gets amount of items were totally created by this pool
         /// </summary>
-        public int TotallyItemsCreated
-        {
-            get { return _totallyItemsCreated; }
-            private set { _totallyItemsCreated = value; }
-        }
+        public int TotallyItemsCreated => _totallyItemsCreated;
 
         public ObjectPool(Func<T> objectGenerator)
         {
-            if (objectGenerator == null) throw new ArgumentNullException("objectGenerator");
             _objects = new ConcurrentBag<T>();
-            _objectGenerator = objectGenerator;
+            _objectGenerator = objectGenerator ?? throw new ArgumentNullException(nameof(objectGenerator));
         }
 
         public T GetObject()
         {
-            T item;
-
-            if (_objects.TryTake(out item))
+            if (_objects.TryTake(out var item))
                 return item;
 
             var newItem = _objectGenerator();

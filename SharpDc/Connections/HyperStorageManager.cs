@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using SharpDc.Interfaces;
 using SharpDc.Logging;
 using SharpDc.Managers;
@@ -26,13 +27,10 @@ namespace SharpDc.Connections
         public void RegisterFileStorage(string systemPath, bool isAsync = false)
         {
             if (!Directory.Exists(systemPath))
-            {
-                Logger.Error("Cannot register storage {0} because it is not exists", systemPath);
-                return;
-            }
+                throw new DirectoryNotFoundException($"Cannot register storage {systemPath} because it is not exists");
 
-            _storages.Add(isAsync ? 
-                (IHyperStorage)new HyperAsyncDriveReader(systemPath) : 
+            AddStorage(isAsync ?
+                (IHyperStorage)new HyperAsyncDriveReader(systemPath) :
                 new HyperDriveReader(systemPath) { MaxWorkers = WorkersPerStorage });
 
             Logger.Info($"Registered {(isAsync ? "async" : "")} file storage {systemPath}");
@@ -40,7 +38,24 @@ namespace SharpDc.Connections
 
         public void RegisterRelayStorage(HyperDownloadManager downloadManager, UploadCacheManager cacheManager, IShare share, List<string> baseList)
         {
-            _storages.Add(new HyperRelayReader(downloadManager, cacheManager, share, baseList));
+            AddStorage(new HyperRelayReader(downloadManager, cacheManager, share, baseList));
+            Logger.Info($"Registered relay file storage {string.Join(", ", downloadManager.Sessions().Select(s => s.Server))}");
+        }
+
+        private void AddStorage(IHyperStorage storage)
+        {
+            _storages.Add(storage);
+
+            storage.FileGone += Storage_FileGone;
+        }
+
+        private void Storage_FileGone(object sender, FileGoneEventArgs e)
+        {
+            lock (_cachedStorages)
+            {
+                if (_cachedStorages.ContainsKey(e.RelativePath))
+                    _cachedStorages.Remove(e.RelativePath);
+            }
         }
 
         public IEnumerable<IHyperStorage> AllStorages()
@@ -55,9 +70,8 @@ namespace SharpDc.Connections
         {
             lock (_cachedStorages)
             {
-                IHyperStorage manager;
-                if (_cachedStorages.TryGetValue(path, out manager))
-                    return manager;
+                if (_cachedStorages.TryGetValue(path, out var storage))
+                    return storage;
             }
             lock (_cachedStorages)
             {

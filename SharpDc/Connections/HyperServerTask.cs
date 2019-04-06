@@ -17,6 +17,12 @@ namespace SharpDc.Connections
         public long Created;
         public long Completed;
         public string TTH;
+
+        /// <summary>
+        /// File size in bytes
+        /// -1 = File not found
+        /// -2 = Too many requests, retry later
+        /// </summary>
         public long FileLength;
 
         public bool IsFileCheck => Length == -1;

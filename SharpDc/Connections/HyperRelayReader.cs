@@ -63,6 +63,11 @@ namespace SharpDc.Connections
         public int QueueSize => _activeOperations;
 
         /// <summary>
+        /// Never occurs in this implementation
+        /// </summary>
+        public event EventHandler<FileGoneEventArgs> FileGone;
+
+        /// <summary>
         /// 
         /// </summary>
         /// <param name="manager"></param>
@@ -213,7 +218,7 @@ namespace SharpDc.Connections
                 task.Done();
             }
         }
-
+        
         public bool Contains(string path)
         {
             lock (_pathIndex)

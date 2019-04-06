@@ -249,6 +249,14 @@ namespace SharpDc.Connections
                             OnMessageSegmentRequest(msg);
                         }
                         break;
+                    case HyperMessage.Error:
+                        {
+                            HyperErrorMessage msg;
+                            msg.Token = reader.ReadInt32();
+                            msg.ErrorCode = reader.ReadInt32();
+                            OnMessageError(msg);
+                        }
+                        break;
                     default:
                         throw new ArgumentOutOfRangeException();
                 }
@@ -307,9 +315,8 @@ namespace SharpDc.Connections
             {
                 var ms = new MemoryStream();
                 var writer = new BinaryWriter(ms);
-                HyperRequestMessage request;
 
-                while (_requests.TryGetRequest(out request))
+                while (_requests.TryGetRequest(out var request))
                 {
                     writer.Write(0); // will replace that field to actual length
 
@@ -341,9 +348,24 @@ namespace SharpDc.Connections
 
             while (true)
             {
-                HyperFileResultMessage fileCheckResult;
-                var hasFileResult = _responses.TryGetFileCheckResponse(out fileCheckResult);
-                if (hasFileResult)
+                if (_responses.TryGetErrorResponse(out var errorMessage))
+                {
+                    ms.Position = 0;
+                    ms.SetLength(13);
+
+                    writer.Write(9);
+                    writer.Write((byte)HyperMessage.FileCheckResult);
+                    writer.Write(errorMessage.Token);
+                    writer.Write(errorMessage.ErrorCode);
+
+                    var bytes = ms.ToArray();
+                    await SendAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
+
+                    // first send all errors
+                    continue;
+                }
+
+                if (_responses.TryGetFileCheckResponse(out var fileCheckResult))
                 {
                     ms.Position = 0;
                     ms.SetLength(17);
@@ -356,12 +378,11 @@ namespace SharpDc.Connections
                     var bytes = ms.ToArray();
                     await SendAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
 
+                    // then send all file checks and then segments
                     continue;
                 }
 
-                HyperSegmentDataMessage response;
-                var hasSegmentResult = _responses.TryGetSegmentResponse(out response);
-                if (hasSegmentResult)
+                if (_responses.TryGetSegmentResponse(out var response))
                 {
                     ms.Position = 0;
                     ms.SetLength(9);
@@ -386,9 +407,11 @@ namespace SharpDc.Connections
                         response.Buffer.Dispose();
                     }
                 }
-
-                if (!hasSegmentResult)
+                else
+                {
+                    // we have sent everything, chill
                     break;
+                }
             }
         }
 
@@ -411,12 +434,18 @@ namespace SharpDc.Connections
         {
 
         }
+
+        protected virtual void OnMessageError(HyperErrorMessage msg)
+        {
+            
+        }
     }
 
     public interface IHyperResponseProvider
     {
         bool TryGetSegmentResponse(out HyperSegmentDataMessage response);
         bool TryGetFileCheckResponse(out HyperFileResultMessage response);
+        bool TryGetErrorResponse(out HyperErrorMessage response);
     }
 
     public interface IHyperRequestsProvider

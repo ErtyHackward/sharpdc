@@ -147,8 +147,7 @@ namespace SharpDc.Connections
 
                 if (executionTimeS > 4 && aliveTask.Value.SegmentAwaitable != null)
                 {
-                    HyperMeta timeoutentry;
-                    if (_aliveTasks.TryRemove(aliveTask.Key, out timeoutentry))
+                    if (_aliveTasks.TryRemove(aliveTask.Key, out var timeoutentry))
                         timeoutentry.SegmentAwaitable.SetResult(new ReusableObject<byte[]>());
                     TimeoutSegments.Update(1);
 
@@ -157,10 +156,9 @@ namespace SharpDc.Connections
                     droppedSegmentRequests++;
                 }
 
-                if (executionTimeS > 300 && aliveTask.Value.FileCheckAwaitable != null)
+                if (executionTimeS > 60 && aliveTask.Value.FileCheckAwaitable != null)
                 {
-                    HyperMeta timeoutentry;
-                    if (_aliveTasks.TryRemove(aliveTask.Key, out timeoutentry))
+                    if (_aliveTasks.TryRemove(aliveTask.Key, out var timeoutentry))
                         timeoutentry.FileCheckAwaitable.SetResult(-1);
                     TimeoutFilechecks.Update(1);
 
@@ -183,6 +181,9 @@ namespace SharpDc.Connections
         {
             var size = await GetFileSize(virtualPath).ConfigureAwait(false);
             long position = 0;
+
+            if (size < 0)
+                throw new FileNotFoundException($"There is no {virtualPath} on the server");
 
             using (lowPriority ? ThreadUtility.EnterBackgroundProcessingMode() : null)
             using (var fs = File.OpenWrite(systemPath))
@@ -242,16 +243,10 @@ namespace SharpDc.Connections
             var session = _sessions.FirstOrDefault(s => path.StartsWith(s.Server));
 
             if (session == null)
-            {
-                Logger.Error("Session for the file is not found");
-                return Task.FromResult(-1L);
-            }
+                throw new IOException("Session for the file is not found");
 
             if (!session.IsActive)
-            {
-                Logger.Error("Session is not active yet");
-                return Task.FromResult(-1L);
-            }
+                throw new IOException("Session is not active yet");
 
             var token = session.CreateToken();
             
@@ -288,6 +283,8 @@ namespace SharpDc.Connections
             {
                 endPosition -= position;
             }
+
+            int tries = 0;
 
             while (position < endPosition || segQueue.Count > 0)
             {

@@ -71,6 +71,13 @@ namespace SharpDc.Connections
             FileFound?.Invoke(this, e);
         }
 
+        public event EventHandler<HyperErrorEventArgs> RequestError;
+
+        protected virtual void OnRequestError(HyperErrorEventArgs e)
+        {
+            RequestError?.Invoke(this, e);
+        }
+
         public HyperClientSession(string server)
         {
             TransferConnections = 2;
@@ -117,6 +124,7 @@ namespace SharpDc.Connections
                     var connection = _transferConnections.Last();
                     connection.SegmentReceived -= connection_SegmentReceived;
                     connection.FileFound -= ConnectionOnFileFound;
+                    connection.Error -= ConnectionError;
                     connection.DisconnectAsync();
                     _transferConnections.RemoveAt(_transferConnections.Count - 1);
                 }
@@ -139,6 +147,7 @@ namespace SharpDc.Connections
                     _transferConnections.Add(connection);
                     connection.SegmentReceived += connection_SegmentReceived;
                     connection.FileFound += ConnectionOnFileFound;
+                    connection.Error += ConnectionError;
                     connection.StartAsync();
                 }
 
@@ -166,6 +175,11 @@ namespace SharpDc.Connections
             {
                 Logger.Error("Validate connection error: {0}", x.Message);
             }
+        }
+
+        private void ConnectionError(object sender, HyperErrorEventArgs e)
+        {
+            OnRequestError(e);    
         }
 
         private void ConnectionOnFileFound(object sender, HyperFileCheckEventArgs e)
@@ -264,5 +278,10 @@ namespace SharpDc.Connections
         public int Token { get; set; }
 
         public long FileSize { get; set; }
+    }
+
+    public class HyperErrorEventArgs : EventArgs
+    {
+        public HyperErrorMessage ErrorMessage { get; set; }
     }
 }

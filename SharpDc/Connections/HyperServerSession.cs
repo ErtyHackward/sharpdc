@@ -20,6 +20,7 @@ namespace SharpDc.Connections
 
         private readonly ConcurrentQueue<HyperSegmentDataMessage> _responses = new ConcurrentQueue<HyperSegmentDataMessage>();
         private readonly ConcurrentQueue<HyperFileResultMessage> _fileCheckQueue = new ConcurrentQueue<HyperFileResultMessage>();
+        private readonly ConcurrentQueue<HyperErrorMessage> _errorQueue = new ConcurrentQueue<HyperErrorMessage>();
 
         public event EventHandler Closed;
 
@@ -59,7 +60,7 @@ namespace SharpDc.Connections
             {
                 if (_fileCheckQueue.Count >= MaxFileCheckQueueSize)
                 {
-                    Logger.Trace("Skip fchk send because of queue size is exceeded {0}", task.Token);
+                    Logger.Trace("Skip fchk send because of send queue size is exceeded {0}", task.Token);
                     SkippedFileChecks.Update(1);
                     return;
                 }
@@ -70,7 +71,7 @@ namespace SharpDc.Connections
             {
                 if (_responses.Count >= MaxQueueSize)
                 {
-                    Logger.Trace("Skip seg send because of queue size is exceeded {0}", task.Token);
+                    Logger.Trace("Skip seg send because of send queue size is exceeded {0}", task.Token);
                     SkippedSegments.Update(1);
                     return;
                 }
@@ -193,6 +194,11 @@ namespace SharpDc.Connections
         public bool TryGetFileCheckResponse(out HyperFileResultMessage response)
         {
             return _fileCheckQueue.TryDequeue(out response);
+        }
+
+        public bool TryGetErrorResponse(out HyperErrorMessage response)
+        {
+            return _errorQueue.TryDequeue(out response);
         }
     }
 }

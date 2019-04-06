@@ -56,7 +56,11 @@ namespace SharpDc.Connections
         Handshake,
         FileCheckResult,
         Request,
-        SegmentData
+        SegmentData,
+        /// <summary>
+        /// Can't execute the request because of queue limit (performance bottleneck on read or send)
+        /// </summary>
+        Error
     }
 
     public struct HyperHandshakeMessge
@@ -87,9 +91,17 @@ namespace SharpDc.Connections
         public long Size;
     }
 
+    public struct HyperErrorMessage
+    {
+        public int Token;
+        public int ErrorCode;
+    }
+
     public struct HyperSegmentDataMessage
     {
         public int Token;
         public ReusableObject<byte[]> Buffer;
     }
+
+
 }

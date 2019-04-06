@@ -26,6 +26,14 @@ namespace SharpDc.Connections
         
         public bool IsEnabled { get; set; }
 
+        /// <inheritdoc />
+        public event EventHandler<FileGoneEventArgs> FileGone;
+
+        protected virtual void OnFileGone(FileGoneEventArgs e)
+        {
+            FileGone?.Invoke(this, e);
+        }
+
         public HyperAsyncDriveReader(string systemPath)
         {
             SystemPath = systemPath;
@@ -37,11 +45,11 @@ namespace SharpDc.Connections
 
         public async void EnqueueTask(HyperServerTask task)
         {
+            var path = Path.Combine(SystemPath, task.Path);
             try
             {
                 Interlocked.Increment(ref _activeOperations);
-                var path = Path.Combine(SystemPath, task.Path);
-
+                
                 if (task.IsSegmentRequest)
                 {
 
@@ -50,7 +58,7 @@ namespace SharpDc.Connections
                             FileOptions.Asynchronous))
                     {
                         fs.Position = task.Offset;
-                        var read = await fs.ReadAsync(task.Buffer.Object, 0, task.Length);
+                        var read = await fs.ReadAsync(task.Buffer.Object, 0, task.Length).ConfigureAwait(false);
                         if (read != task.Length)
                         {
                             Logger.Error("Can't read all bytes {0}/{1} {2}", read, task.Length, task.Path);
@@ -70,6 +78,14 @@ namespace SharpDc.Connections
             }
             catch (Exception x)
             {
+                if (x is FileNotFoundException)
+                {
+                    OnFileGone(new FileGoneEventArgs {
+                        RelativePath = task.Path,
+                        SystemPath = path
+                    });
+                }
+
                 Logger.Error($"Error when reading the file {task.Path} {x.Message}");
             }
             finally
@@ -77,7 +93,7 @@ namespace SharpDc.Connections
                 Interlocked.Decrement(ref _activeOperations);
             }
         }
-
+        
         public bool Contains(string path)
         {
             return File.Exists(Path.Combine(SystemPath, path));
@@ -88,10 +104,14 @@ namespace SharpDc.Connections
             return $"AStorage {SystemPath} SVC: {(int)SegmentService.GetAverage()} RPS: {(int)SegmentsPerSecond.GetSpeed()} Q: {QueueSize}";
         }
 
+        /// <summary>
+        /// Does noting
+        /// </summary>
         public void StartAsync()
         {
 
         }
-        
+
+
     }
 }
