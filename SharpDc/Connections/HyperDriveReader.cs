@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using SharpDc.Logging;
@@ -31,6 +30,13 @@ namespace SharpDc.Connections
 
         public bool IsEnabled { get; set; }
 
+        public event EventHandler<FileGoneEventArgs> FileGone;
+
+        protected virtual void OnFileGone(FileGoneEventArgs e)
+        {
+            FileGone?.Invoke(this, e);
+        }
+
         public HyperDriveReader(string systemPath)
         {
             SystemPath = systemPath;
@@ -44,6 +50,8 @@ namespace SharpDc.Connections
         {
             _tasks.Enqueue(task);
         }
+
+        
 
         public bool Contains(string path)
         {
@@ -80,16 +88,15 @@ namespace SharpDc.Connections
         {
             while (IsEnabled)
             {
-                HyperServerTask task;
-                while (_tasks.TryDequeue(out task))
+                while (_tasks.TryDequeue(out var task))
                 {
+                    var path = Path.Combine(SystemPath, task.Path);
+
                     try
                     {
-                        var path = Path.Combine(SystemPath, task.Path);
-
                         if (task.Length > 0)
                         {
-                            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,task.Length))
+                            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, task.Length))
                             {
                                 fs.Position = task.Offset;
 
@@ -119,11 +126,22 @@ namespace SharpDc.Connections
                     }
                     catch (Exception x)
                     {
+                        if (x is FileNotFoundException)
+                        {
+                            OnFileGone(new FileGoneEventArgs
+                            {
+                                RelativePath = task.Path,
+                                SystemPath = path
+                            });
+                        }
+
                         Logger.Error("Error during reading of data {0} {1}", task.Path, x.Message);
                     }
                 }
-                Thread.Sleep(10);
+                Thread.Yield();
             }
         }
+
+
     }
 }

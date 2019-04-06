@@ -25,6 +25,13 @@ namespace SharpDc.Connections
             FileFound?.Invoke(this, e);
         }
 
+        public event EventHandler<HyperErrorEventArgs> Error;
+
+        protected virtual void OnError(HyperErrorEventArgs e)
+        {
+            Error?.Invoke(this, e);
+        }
+
         public HyperClientConnection(HyperUrl url, bool isControl, long sessionToken)
         {
             RemoteEndPoint = ParseAddress(url.Server, url.Port);
@@ -52,6 +59,14 @@ namespace SharpDc.Connections
             {
                 Token = message.Token,
                 FileSize = message.Size
+            });
+        }
+
+        protected override void OnMessageError(HyperErrorMessage msg)
+        {
+            OnError(new HyperErrorEventArgs
+            {
+                ErrorMessage = msg
             });
         }
 
@@ -87,5 +102,7 @@ namespace SharpDc.Connections
 
             base.SendFirstMessages();
         }
+
+
     }
 }
